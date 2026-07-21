@@ -240,10 +240,14 @@ async function safeJson(path) {
 }
 
 function initializeLiveMounts() {
-  const loading = '<article class="empty-card"><h3>Loading current live coverage…</h3></article>';
-  ['.trending-row.in-column','.card-grid','.story-list','.social-scroll','.district-scroll','.journalist-scroll','.district-feature-list'].forEach((selector) => {
-    document.querySelectorAll(`#panel-home ${selector}`).forEach((mount) => { mount.innerHTML = loading; });
-  });
+  const skeleton = (className, count) => Array.from({ length: count }, () => `<article class="${className} loading-card" aria-label="Loading current live coverage"><div class="loading-media"></div><div class="loading-line wide"></div><div class="loading-line"></div></article>`).join('');
+  document.querySelectorAll('#panel-home .trending-row.in-column').forEach((mount) => { mount.innerHTML = skeleton('cluster-card', 4); });
+  document.querySelectorAll('#panel-home .card-grid').forEach((mount) => { mount.innerHTML = skeleton('grid-card', 6); });
+  document.querySelectorAll('#panel-home .story-list').forEach((mount) => { mount.innerHTML = skeleton('story-card', 2); });
+  document.querySelectorAll('#panel-home .social-scroll').forEach((mount) => { mount.innerHTML = skeleton('social-card', 6); });
+  document.querySelectorAll('#panel-home .district-scroll').forEach((mount) => { mount.innerHTML = skeleton('district-card', 6); });
+  document.querySelectorAll('#panel-home .journalist-scroll').forEach((mount) => { mount.innerHTML = skeleton('journalist-card', 4); });
+  document.querySelectorAll('#panel-home .district-feature-list').forEach((mount) => { mount.innerHTML = skeleton('district-feature-loading', 4); });
   const citizen = document.querySelector('.citizens-scroll');
   if (citizen) citizen.innerHTML = '<label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label><article class="empty-card"><h3>Loading current community coverage…</h3></article>';
   const ecosystem = document.querySelector('.eco-teaser-box');
@@ -447,16 +451,21 @@ function domainFromLink(url) {
 function setEcosystem(items) {
   const mount = document.querySelector('.eco-teaser-box');
   if (!mount) return;
-  if (!items?.length) {
-    mount.innerHTML = '<div class="sidebar-title">256 AI Systems</div><p class="eco-empty">No verified platform updates are available right now.</p>';
-    return;
-  }
-  mount.innerHTML = '<div class="sidebar-title">256 AI Systems</div>' + items.slice(0, 7).map((item) => `
+  const platforms = items?.length ? items : [
+    { platform:'256 AI', description:'AI infrastructure and automation', link:'https://ai.256.co.ug' },
+    { platform:'256 Mall', description:'Commerce and verified marketplace services', link:'https://256mall.com' },
+    { platform:'256 Express', description:'Transport, delivery and logistics', link:'https://256express.com' },
+    { platform:'256 Heart', description:'Dating and matchmaking platform', link:'https://256heart.com' },
+    { platform:'256 Corporate', description:'Business, talent and technology services', link:'https://enterprise.256.co.ug' },
+    { platform:'256Shield', description:'Cybersecurity and digital protection', link:'https://shield.256.co.ug' },
+    { platform:'256LinkShield', description:'Link and website reputation checking', link:'https://linkshield.256.co.ug' },
+  ];
+  mount.innerHTML = '<div class="sidebar-title">256 AI Systems Ecosystem</div>' + platforms.slice(0, 7).map((item) => `
     <a class="eco-teaser-item" href="${safeHref(item.link) !== '#' ? safeHref(item.link) : '/#ecosystem'}" target="_blank" rel="noopener">
       <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
       <div><b>${escapeHtml(item.platform)}</b><p>${escapeHtml(item.description || item.summary)}</p><span class="eco-domain">${escapeHtml(domainFromLink(item.link))}</span></div>
     </a>
-  `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">VIEW ALL 256 AI SYSTEMS NEWS -></a>';
+  `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">EXPLORE THE COMPLETE ECOSYSTEM →</a>';
 }
 
 function setEcosystemGrid(items, officialItems = []) {
@@ -478,7 +487,6 @@ function setEcosystemGrid(items, officialItems = []) {
       </div>
     </article>
   `).join('');
-    section.hidden = false;
     return;
   }
   if (!officialItems?.length) { section.hidden = true; return; }
@@ -503,7 +511,6 @@ function setEcosystemGrid(items, officialItems = []) {
     </article>
   `;
   }).join('');
-  section.hidden = false;
 }
 
 function setSocialLatest(items) {
