@@ -72,7 +72,6 @@ router.get('/sitemap.xml', async (_req, res, next) => {
         and a.internal_url is not null
         and a.summary_is_original = true
         and array_length(regexp_split_to_array(trim(coalesce(a.seo_summary, a.summary, '')), '\\s+'), 1) between 60 and 150
-        and (select count(distinct a2.source_id) from articles a2 where a2.cluster_id = a.cluster_id and a2.hidden = false and a2.status = 'published') >= 2
       order by a.updated_at desc
       limit 50000
     `);
@@ -117,8 +116,10 @@ router.get('/news/:slug', async (req, res, next) => {
     ]);
 
     const summary = String(story.seo_summary || story.summary || '').trim();
-    const sourcesInCluster = new Set([story.publisher_name, ...coverageResult.rows.map((item) => item.publisher_name)]).size;
-    const substantive = story.summary_is_original && wordCount(summary) >= 60 && wordCount(summary) <= 150 && sourcesInCluster >= 2;
+    // Breaking-news publishers should not be penalized while they are still the
+    // only source covering an event. A validated, independently worded digest is
+    // sufficient for indexing; additional publishers enhance the page later.
+    const substantive = story.summary_is_original && wordCount(summary) >= 60 && wordCount(summary) <= 150;
     const internalCanonical = `${SITE}${story.internal_url}`;
     const canonical = substantive ? internalCanonical : story.original_url;
     const description = summary.slice(0, 160) || `${story.title} — report attributed to ${story.publisher_name}.`;
@@ -148,7 +149,7 @@ router.get('/news/:slug', async (req, res, next) => {
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
 <section class="summary"><h2>What the report says</h2><p>${escapeHtml(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</p></section>
-${!substantive ? '<aside class="quality-note">This page is excluded from search indexing until a sufficiently detailed, independently written multi-source summary is available.</aside>' : ''}
+    ${!substantive ? '<aside class="quality-note">This page is excluded from search indexing until a sufficiently detailed, independently written and fact-checked summary is available.</aside>' : ''}
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
