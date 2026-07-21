@@ -14,6 +14,7 @@ function showTab(which) {
 }
 tabLogin.addEventListener('click', () => showTab('login'));
 tabRegister.addEventListener('click', () => showTab('register'));
+showTab(new URLSearchParams(window.location.search).get('mode') === 'register' ? 'register' : 'login');
 
 function redirectToDashboard() {
   const params = new URLSearchParams(window.location.search);
