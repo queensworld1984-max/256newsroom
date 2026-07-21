@@ -71,6 +71,26 @@ function setupStoryNavigation() {
   });
 }
 
+function setupSearch() {
+  const form = document.getElementById('site-search-form');
+  const input = document.getElementById('site-search-input');
+  const results = document.getElementById('site-search-results');
+  if (!form || !input || !results) return;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const q = input.value.trim();
+    if (q.length < 2) return;
+    results.hidden = false;
+    results.innerHTML = '<p>Searching…</p>';
+    try {
+      const data = await getJson(`/search?q=${encodeURIComponent(q)}`);
+      const people = (data.journalists || []).map((j) => `<a class="search-person" href="${safeHref(j.profile_url)}"><b>${escapeHtml(j.name)}</b><span>${escapeHtml(j.beat || 'Journalist')}</span></a>`).join('');
+      const stories = (data.stories || []).map((s) => `<a class="search-story" href="${safeHref(s.internalUrl)}"><b>${escapeHtml(s.title)}</b><span>${escapeHtml(s.source?.name || '')} · ${escapeHtml(s.category?.name || 'News')}</span></a>`).join('');
+      results.innerHTML = `${people ? `<h3>Journalists</h3>${people}` : ''}${stories ? `<h3>News</h3>${stories}` : ''}${!people && !stories ? '<p>No matching news or journalists found.</p>' : ''}`;
+    } catch (_) { results.innerHTML = '<p>Search is temporarily unavailable.</p>'; }
+  });
+}
+
 function imageClass(item) {
   return item.district?.slug || item.category?.slug || 'trade';
 }
@@ -451,27 +471,20 @@ function setCitizenLatest(items) {
   `;
 }
 
-function setJournalists(items, articles = []) {
+function setJournalists(items) {
   const mount = document.querySelector('.journalist-scroll');
   if (!mount) return;
-  const articleProfiles = articles.slice(0, 6).map((article, index) => ({
-    name: article.author || article.source?.name || '256 Newsroom',
-    beat: `${article.category?.name || 'News'} · ${formatTime(article.publishedAt)}`,
-    profile_url: article.url,
-    imageUrl: article.imageUrl,
-    reads: Math.round(Number(article.score || 0)),
-    views: 0,
-    sourceName: article.source?.name,
-    index,
-  }));
-  const profiles = articleProfiles.length ? articleProfiles : (items || []);
-  if (!profiles.length) return;
+  const profiles = items || [];
+  if (!profiles.length) {
+    mount.innerHTML = '<a class="journalist-card featured" href="/dashboard/login.html"><span class="journalist-photo"><span>+</span></span><h3>Create your journalist profile</h3><p>Independent journalists and newsroom teams</p><b>Join 256 Newsroom →</b></a><a class="journalist-card" href="/journalists/"><span class="journalist-photo"><span>⌕</span></span><h3>Journalist directory</h3><p>Search by name, beat or location</p><b>Find journalists →</b></a>';
+    return;
+  }
   mount.innerHTML = profiles.slice(0, 6).map((item, index) => `
     <a href="${safeHref(item.profile_url || '#')}" class="journalist-card ${index === 0 ? 'featured' : ''}">
-      <span class="journalist-photo jp-${index + 1}"${item.imageUrl ? imageStyle({ imageUrl: item.imageUrl }) : ''}><span>${escapeHtml(sourceInitials(item.name))}</span></span>
+      <span class="journalist-photo jp-${index + 1}"${item.image_url ? imageStyle({ imageUrl: item.image_url }) : ''}><span>${escapeHtml(sourceInitials(item.name))}</span></span>
       <h3>${escapeHtml(item.name)}</h3>
       <p>${escapeHtml(item.beat || 'Journalist')}</p>
-      <b>${item.sourceName ? 'Latest live byline/source' : `${Number(item.reads || 0).toLocaleString()} reads · ${Number(item.views || 0).toLocaleString()} views`}</b>
+      <b>${Number(item.published_story_count || 0).toLocaleString()} published stories</b>
     </a>
   `).join('');
 }
@@ -570,6 +583,7 @@ function setupCitizenReportForm() {
 }
 
 async function bootLiveNews() {
+  setupSearch();
   setupCitizenReportForm();
   setupInterestTracking();
   setupStoryNavigation();
@@ -634,7 +648,7 @@ async function bootLiveNews() {
     setCitizenLatest(latestStories);
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
-    setJournalists(journalists.items, latestStories);
+    setJournalists(journalists.items);
     await setCategoryTabs(districtStories);
     startCarouselRotation();
   } catch (err) {

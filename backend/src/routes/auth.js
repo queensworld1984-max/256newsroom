@@ -127,4 +127,39 @@ router.post('/become-independent-journalist', requireAuth, async (req, res, next
   }
 });
 
+router.get('/journalist-profile', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'select id, name, slug, beat, bio, location, website_url, image_url, verified from journalists where user_id = $1',
+      [req.user.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Activate your independent journalist account first.' });
+    res.json({ item: rows[0] });
+  } catch (err) { next(err); }
+});
+
+router.patch('/journalist-profile', requireAuth, async (req, res, next) => {
+  try {
+    const cleanUrl = (value) => {
+      const url = String(value || '').trim().slice(0, 1000);
+      return !url || /^https?:\/\//i.test(url) ? (url || null) : false;
+    };
+    const websiteUrl = cleanUrl(req.body.websiteUrl);
+    const imageUrl = cleanUrl(req.body.imageUrl);
+    if (websiteUrl === false || imageUrl === false) return res.status(400).json({ error: 'Website and photo must use a valid http(s) URL.' });
+    const name = String(req.body.name || '').trim().slice(0, 200);
+    if (!name) return res.status(400).json({ error: 'Name is required.' });
+    const { rows } = await pool.query(
+      `update journalists set name=$2, beat=$3, bio=$4, location=$5, website_url=$6, image_url=$7,
+       profile_url='/journalists/profile.html?slug=' || slug, updated_at=now()
+       where user_id=$1 returning id, name, slug, beat, bio, location, website_url, image_url, profile_url, verified`,
+      [req.user.id, name, String(req.body.beat || '').trim().slice(0, 160) || null,
+        String(req.body.bio || '').trim().slice(0, 2000) || null, String(req.body.location || '').trim().slice(0, 160) || null,
+        websiteUrl, imageUrl],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Activate your independent journalist account first.' });
+    res.json({ item: rows[0] });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

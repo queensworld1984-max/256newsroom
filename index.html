@@ -29,8 +29,14 @@
     <div class="masthead-meta">
       <div class="date" id="masthead-date"></div>
       <div id="masthead-status">Connecting to live sources...</div>
+      <div class="account-links"><a href="/journalists/">Find journalists</a><a href="/dashboard/login.html">Journalist login / Join</a></div>
     </div>
   </header>
+
+  <section class="site-search" aria-label="Search 256 Newsroom">
+    <form id="site-search-form"><label class="sr-only" for="site-search-input">Search news or journalists</label><input id="site-search-input" type="search" minlength="2" placeholder="Search news, topics, districts or journalists…" autocomplete="off"><button type="submit">Search</button></form>
+    <div id="site-search-results" class="search-results" hidden></div>
+  </section>
 
   <div class="top-sources" aria-label="Top sources today">
     <span class="ts-label">Top Sources Today</span>
@@ -118,15 +124,15 @@
               <a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">VIEW ALL 256 AI SYSTEMS NEWS -></a>
             </section>
             <section class="sidebar-block journalist-week-box">
-              <div class="sidebar-title">Journalist of the Week</div>
-              <a href="/journalists/sarah-atwine/" class="journalist-week-card">
-                <span class="jw-photo"><span>SA</span></span>
+              <div class="sidebar-title">Journalists on 256 Newsroom</div>
+              <a href="/journalists/" class="journalist-week-card">
+                <span class="jw-photo"><span>⌕</span></span>
                 <span class="jw-body">
-                  <span class="jw-kicker">Top verified journalist</span>
-                  <span class="jw-name">Sarah Atwine</span>
-                  <span class="jw-role">Politics & Government · Kampala</span>
-                  <span class="jw-summary">Led this week's most-read election roadmap coverage and parliamentary reporting.</span>
-                  <span class="jw-stats"><b>312K</b> reads this week · <b>4,820</b> shares · Trust Score 94</span>
+                  <span class="jw-kicker">Public directory</span>
+                  <span class="jw-name">Find a journalist</span>
+                  <span class="jw-role">Search by name, beat or location</span>
+                  <span class="jw-summary">Open public profiles and read the latest stories linked to each journalist.</span>
+                  <span class="jw-stats"><b>Journalists:</b> create and manage your profile from the dashboard.</span>
                 </span>
               </a>
             </section>
@@ -257,7 +263,7 @@
         </section>
 
         <section>
-          <div class="section-header"><h2>Most Read Journalist Profiles</h2><a href="/journalists/sarah-atwine/">VIEW ALL JOURNALISTS -></a></div>
+          <div class="section-header"><h2>Most Read Journalist Profiles</h2><a href="/journalists/">VIEW ALL JOURNALISTS -></a></div>
           <div class="journalist-scroll">
             <a href="/journalists/sarah-atwine/" class="journalist-card featured"><span class="journalist-photo jp-sarah"><span>SA</span></span><h3>Sarah Atwine</h3><p>Politics & Government</p><b>312K reads · 4.8K shares</b></a>
             <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-david"><span>DK</span></span><h3>David Kato</h3><p>Business & Markets</p><b>284K reads · 1.6M views</b></a>

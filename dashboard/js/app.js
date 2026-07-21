@@ -16,6 +16,7 @@ import * as orgProfile from './sections/orgProfile.js';
 import * as verification from './sections/verification.js';
 import * as rssDistribution from './sections/rssDistribution.js';
 import * as settings from './sections/settings.js';
+import * as journalistProfile from './sections/journalistProfile.js';
 
 import * as adminOverview from './sections/admin/overview.js';
 import * as adminPlatforms from './sections/admin/platforms.js';
@@ -61,6 +62,7 @@ const INDEPENDENT_NAV = [
     { path: '/stories/scheduled', label: 'Scheduled Stories' },
   ] },
   { section: 'Account', items: [
+    { path: '/journalist-profile', label: 'My Public Profile' },
     { path: '/taxonomy', label: 'Categories & Districts' },
     { path: '/settings', label: 'Settings' },
   ] },
@@ -96,6 +98,7 @@ const ROUTES = [
   { pattern: /^\/verification$/, render: (m, c) => verification.render(contentEl, c) },
   { pattern: /^\/rss-distribution$/, render: (m, c) => rssDistribution.render(contentEl, c) },
   { pattern: /^\/settings$/, render: (m, c) => settings.render(contentEl, c) },
+  { pattern: /^\/journalist-profile$/, render: () => journalistProfile.render(contentEl) },
   { pattern: /^\/admin\/ecosystem\/overview$/, render: (m, c) => adminOverview.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms$/, render: (m, c) => adminPlatforms.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms\/(\d+)$/, render: (m, c) => adminPlatformDetail.render(contentEl, c, { orgId: m[1] }) },

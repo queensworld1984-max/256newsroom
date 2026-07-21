@@ -300,13 +300,54 @@ app.get('/api/journalists/top', async (req, res, next) => {
       from journalists j
       left join articles a on a.journalist_id = j.id and a.status = 'published'
       group by j.id
+      having j.user_id is not null or count(a.id) > 0
       order by published_story_count desc, most_recent_published_at desc nulls last, j.name asc
       limit $1
     `, [limit]);
-    res.json({ items: rows });
+    res.json({ items: rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
   } catch (err) {
     next(err);
   }
+});
+
+app.get('/api/journalists', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 40, 100);
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    const { rows } = await pool.query(`
+      select j.id, j.name, j.slug, j.beat, j.bio, j.location, j.website_url, j.image_url, j.verified,
+        count(a.id)::int as published_story_count
+      from journalists j left join articles a on a.journalist_id=j.id and a.status='published' and a.hidden=false
+      where ($1 = '' or concat_ws(' ', j.name, j.beat, j.bio, j.location) ilike '%' || $1 || '%')
+      group by j.id having j.user_id is not null or count(a.id) > 0
+      order by published_story_count desc, j.name limit $2`, [q, limit]);
+    res.json({ items: rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/journalists/profile/:slug', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select j.id, j.name, j.slug, j.beat, j.bio, j.location, j.website_url, j.image_url, j.verified,
+        count(a.id)::int as published_story_count
+      from journalists j left join articles a on a.journalist_id=j.id and a.status='published' and a.hidden=false
+      where j.slug=$1 group by j.id`, [req.params.slug]);
+    if (!rows.length) return res.status(404).json({ error: 'Journalist not found.' });
+    const stories = await pool.query(`${articleSelect} and a.journalist_id=$1 order by a.published_at desc nulls last limit 20`, [rows[0].id]);
+    res.json({ item: rows[0], stories: normalizeRows(stories.rows) });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/search', async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q.length < 2) return res.json({ stories: [], journalists: [] });
+    const [storyRows, journalistRows] = await Promise.all([
+      pool.query(`${articleSelect} and concat_ws(' ', a.title, a.summary, a.seo_summary, a.author, s.name, c.name, d.name) ilike '%' || $1 || '%' order by a.published_at desc nulls last limit 30`, [q]),
+      pool.query(`select j.id,j.name,j.slug,j.beat,j.image_url,j.verified from journalists j where concat_ws(' ',j.name,j.beat,j.bio,j.location) ilike '%' || $1 || '%' and (j.user_id is not null or exists(select 1 from articles a where a.journalist_id=j.id and a.status='published' and a.hidden=false)) order by j.name limit 12`, [q]),
+    ]);
+    res.json({ stories: normalizeRows(storyRows.rows), journalists: journalistRows.rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
+  } catch (err) { next(err); }
 });
 
 // Real published stories from the internally-seeded 256 Ecosystem organization and its
