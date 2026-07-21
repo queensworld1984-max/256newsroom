@@ -7,6 +7,8 @@ const pool = require('./db');
 const { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics } = require('../scripts/crawl');
 const { loadSessionUser, requireRole } = require('./auth');
 const authRoutes = require('./routes/auth');
+const publisherApplicationRoutes = require('./routes/publisherApplications');
+const publisherProfileRoutes = require('./routes/publishers');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -21,6 +23,9 @@ app.use(cookieParser());
 app.use(loadSessionUser);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/publisher-applications', publisherApplicationRoutes);
+app.use('/api/admin/publisher-applications', publisherApplicationRoutes.adminRouter);
+app.use('/api/publishers', publisherProfileRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only
