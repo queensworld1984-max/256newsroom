@@ -3,6 +3,7 @@ const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
 let trendingRotationTimer = null;
 let carouselRotationTimer = null;
+const storyIndex = new Map();
 
 const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -38,6 +39,70 @@ function sourceBadges(item) {
     badges.push(`<span class="source-type-badge">${escapeHtml(sourceTypeLabel(source.type))}</span>`);
   }
   return badges.join(' ');
+}
+
+function rememberStories(items = []) {
+  items.forEach((item) => {
+    if (item?.id != null) storyIndex.set(String(item.id), item);
+  });
+}
+
+function storyAttributes(item) {
+  return `class="story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item?.id || '')}" data-category="${escapeHtml(item?.category?.slug || '')}" data-district="${escapeHtml(item?.district?.slug || '')}"`;
+}
+
+function openStoryReader(storyId) {
+  const item = storyIndex.get(String(storyId));
+  const modal = document.getElementById('story-reader');
+  if (!item || !modal) return;
+  const media = modal.querySelector('.story-reader-media');
+  modal.querySelector('.story-reader-kicker').textContent = `${item.category?.name || 'News'} · ${item.district?.name || 'Uganda'}`;
+  modal.querySelector('.story-reader-title').textContent = item.title;
+  modal.querySelector('.story-reader-summary').textContent = item.summary || 'A summary is not available from this source. Continue to the publisher to read the full report.';
+  modal.querySelector('.story-reader-source').textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
+  const fullLink = modal.querySelector('.story-reader-full-link');
+  const fullUrl = String(item.url || '').trim();
+  fullLink.href = /^https?:\/\//i.test(fullUrl) ? fullUrl : '#';
+  fullLink.textContent = `Read full article at ${item.source?.name || 'source'} →`;
+  if (item.imageUrl) {
+    media.hidden = false;
+    media.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
+  } else {
+    media.hidden = true;
+    media.removeAttribute('style');
+  }
+  modal.classList.add('is-open');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.querySelector('.story-reader-close').focus();
+}
+
+function closeStoryReader() {
+  const modal = document.getElementById('story-reader');
+  if (!modal) return;
+  modal.classList.remove('is-open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function setupStoryReader() {
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.story-reader-close') || event.target.classList.contains('story-reader-overlay')) {
+      closeStoryReader();
+      return;
+    }
+    if (event.target.closest('.story-reader-full-link')) return;
+    const target = event.target.closest('.story-clickable, [data-open-story]');
+    if (!target?.dataset.storyId) return;
+    event.preventDefault();
+    openStoryReader(target.dataset.storyId);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') return closeStoryReader();
+    if (!['Enter', ' '].includes(event.key)) return;
+    const target = event.target.closest('.story-clickable');
+    if (!target?.dataset.storyId) return;
+    event.preventDefault();
+    openStoryReader(target.dataset.storyId);
+  });
 }
 
 function imageClass(item) {
@@ -192,7 +257,7 @@ function setTicker(items) {
     return;
   }
   mount.innerHTML = items.slice(0, 6).map((item, index) => `
-    <span>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</span>
+    <span ${storyAttributes(item)}>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</span>
   `).join('');
 }
 
@@ -211,13 +276,12 @@ function setTopSources(items) {
 
 function articleCard(item) {
   const initials = sourceInitials(item.source?.name);
-  const tracking = `data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}"`;
   return `
-    <article class="grid-card">
+    <article class="grid-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="thumb ${imageClass(item)}"${imageStyle(item)}></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(initials)}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span> · ${formatTime(item.publishedAt)}</p>
-      <a href="${safeHref(item.url)}" class="read-link" ${tracking} target="_blank" rel="noopener">Click to read</a>
+      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `;
 }
@@ -232,6 +296,12 @@ function setHero(item) {
   const cap = hero.querySelector('.hero-img span');
   const meta = hero.querySelector('.story-meta');
   const eyebrow = hero.querySelector('.eyebrow');
+  hero.classList.add('story-clickable');
+  hero.setAttribute('role', 'link');
+  hero.setAttribute('tabindex', '0');
+  hero.dataset.storyId = item.id;
+  hero.dataset.category = item.category?.slug || '';
+  hero.dataset.district = item.district?.slug || '';
   if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
   if (title) title.textContent = item.title;
   if (excerpt) excerpt.textContent = item.summary || 'Latest developing story from monitored Ugandan news sources.';
@@ -243,7 +313,7 @@ function setHero(item) {
       ${sourceBadges(item)}
       <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span>
       <span class="cluster-note">${item.source?.official ? 'Direct official source' : 'Live from approved source feed'}</span>
-      <a href="${safeHref(item.url)}" class="read-link" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}" target="_blank" rel="noopener">Click to read</a>
+      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     `;
   }
 }
@@ -273,13 +343,13 @@ function setTrending(items) {
   const mount = document.querySelector('.trending-row.in-column');
   if (!mount || !items?.length) return;
   mount.innerHTML = items.slice(0, 4).map((item) => `
-    <article class="cluster-card">
+    <article class="cluster-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="trend-thumb ${imageClass(item)}"${imageStyle(item)}></div>
       <span class="cat-tag">${escapeHtml(item.category?.name || 'News')}</span>
       <h3>${escapeHtml(item.title)}</h3>
       <div class="cmeta">${sourceBadges(item)}<span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></div>
       <div class="trend-tag">updated ${formatTime(item.publishedAt)}</div>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `).join('');
 }
@@ -350,7 +420,7 @@ function setEcosystemGrid(items, officialItems = []) {
   if (!mount) return;
   if (items?.length) {
     mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="eco-card">
+    <article class="eco-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <a class="eco-card-media" href="${safeHref(item.url)}" target="_blank" rel="noopener">
         <div class="eco-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       </a>
@@ -391,11 +461,11 @@ function setSocialLatest(items) {
   const mount = document.querySelector('.social-scroll');
   if (!mount || !items?.length) return;
   mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="social-card">
+    <article class="social-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="social-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} ${escapeHtml(item.category?.name || 'News')} · ${formatTime(item.publishedAt)}</p>
-      <b><a href="${safeHref(item.url)}" target="_blank" rel="noopener">Click to read</a></b>
+      <b><a href="#" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a></b>
     </article>
   `).join('');
 }
@@ -406,7 +476,7 @@ function setCitizenLatest(items) {
   mount.innerHTML = `
     <label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share what's happening near you</b></label>
     ${items.slice(0, 5).map((item) => `
-      <article class="citizen-card">
+      <article class="citizen-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
         <div class="citizen-thumb ${imageClass(item)}"${imageStyle(item)}><span>LIVE NEWS</span></div>
         <h3>${escapeHtml(item.title)}</h3>
         <p>${escapeHtml(item.source?.name || '256 Newsroom')} · ${escapeHtml(item.district?.name || item.category?.name || 'Uganda')} · ${formatTime(item.publishedAt)}</p>
@@ -448,7 +518,7 @@ function setDistricts(items) {
     return;
   }
   mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="district-card">
+    <article class="district-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="district-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.district?.name || 'UGANDA')}</span></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></p>
@@ -477,6 +547,7 @@ async function setCategoryTabs(districtItems = []) {
     try {
       const data = await getJson(path);
       await preloadArticleImages(data.items || []);
+      rememberStories(data.items || []);
       setCategoryTab(slug, data.items || []);
     } catch (err) {
       setCategoryTab(slug, []);
@@ -535,6 +606,7 @@ function setupCitizenReportForm() {
 async function bootLiveNews() {
   setupCitizenReportForm();
   setupInterestTracking();
+  setupStoryReader();
   setMastheadDate();
   try {
     const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
@@ -555,6 +627,16 @@ async function bootLiveNews() {
     const topStories = personalizeItems(top.items || [], readerProfile);
     const latestStories = personalizeItems(latest.items || [], readerProfile);
     const districtStories = personalizeItems(districtNews.items || [], readerProfile);
+    rememberStories([
+      ...heroStories,
+      ...topStories,
+      ...latestStories,
+      ...(national.items || []),
+      ...(world.items || []),
+      ...(sports.items || []),
+      ...districtStories,
+      ...(ecosystemNews.items || []),
+    ]);
 
     // Warm every image used by the initial live view before replacing the
     // matching article text. Because the cards use CSS background images,
