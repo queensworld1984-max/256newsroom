@@ -390,6 +390,8 @@ async function crawlSource(source) {
           district_id = excluded.district_id,
           score = greatest(articles.score, excluded.score),
           updated_at = now()
+        where lower(regexp_replace(articles.title, '[^a-z0-9]+', '', 'g')) =
+              lower(regexp_replace(excluded.title, '[^a-z0-9]+', '', 'g'))
         returning (xmax = 0) as inserted
       `, [source.id, clusterId, categoryId, districtId, title, summary, url, url, imageCandidates[itemIndex].imageUrl, item.creator || item.author || null, publishedAt, score]);
 
@@ -482,6 +484,8 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
           district_id = excluded.district_id,
           score = greatest(articles.score, excluded.score),
           updated_at = now()
+        where lower(regexp_replace(articles.title, '[^a-z0-9]+', '', 'g')) =
+              lower(regexp_replace(excluded.title, '[^a-z0-9]+', '', 'g'))
         returning (xmax = 0) as inserted
       `, [sourceId, clusterId, categoryId, districtId, title, summary, url, item.originalUrl || url, item.imageUrl || null, item.author || null, publishedAt, score]);
 

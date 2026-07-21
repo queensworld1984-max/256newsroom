@@ -106,45 +106,34 @@ function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
   if (!/^https?:\/\//i.test(raw)) return '';
   const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
-  return ` style="background-image:linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${cssSafe}'); background-size:cover; background-position:center;"`;
+  return ` data-bg-image="${cssSafe}"`;
 }
 
-const imagePreloadCache = new Map();
-
-function preloadImage(url, timeoutMs = 4000) {
-  const src = String(url ?? '').trim();
-  if (!/^https?:\/\//i.test(src)) return Promise.resolve();
-  if (imagePreloadCache.has(src)) return imagePreloadCache.get(src);
-
-  const request = new Promise((resolve) => {
-    const img = new Image();
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(finish, timeoutMs);
-    img.onload = async () => {
-      try {
-        if (typeof img.decode === 'function') await img.decode();
-      } catch (_) {
-        // A loaded image is still usable when decode() is unsupported or rejects.
-      }
-      finish();
-    };
-    img.onerror = finish;
-    img.src = src;
-  });
-
-  imagePreloadCache.set(src, request);
-  return request;
+function loadBackgroundImage(element) {
+  const url = element?.dataset.bgImage;
+  if (!url) return;
+  element.style.backgroundImage = `linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${url}')`;
+  element.style.backgroundSize = 'cover';
+  element.style.backgroundPosition = 'center';
+  delete element.dataset.bgImage;
 }
 
-function preloadArticleImages(items = []) {
-  const urls = [...new Set(items.map((item) => item?.imageUrl).filter(Boolean))];
-  return Promise.all(urls.map((url) => preloadImage(url)));
+let backgroundImageObserver = null;
+
+function loadVisibleImages() {
+  const images = document.querySelectorAll('[data-bg-image]');
+  if (!('IntersectionObserver' in window)) {
+    images.forEach(loadBackgroundImage);
+    return;
+  }
+  backgroundImageObserver ||= new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      loadBackgroundImage(entry.target);
+      backgroundImageObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: '300px 0px' });
+  images.forEach((image) => backgroundImageObserver.observe(image));
 }
 
 function readReaderProfile() {
@@ -326,8 +315,14 @@ function setHero(item) {
   if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
   if (title) title.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a>`;
   if (excerpt) excerpt.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.summary || 'Latest developing story from monitored Ugandan news sources.')}</a>`;
-  if (image && item.imageUrl) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
-  if (image && !item.imageUrl) image.removeAttribute('style');
+  if (image && item.imageUrl) {
+    image.dataset.bgImage = String(item.imageUrl).replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+    loadBackgroundImage(image);
+  }
+  if (image && !item.imageUrl) {
+    image.removeAttribute('style');
+    delete image.dataset.bgImage;
+  }
   if (cap) cap.textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
   if (meta) {
     meta.innerHTML = `
@@ -398,6 +393,7 @@ function setTrending(items) {
       <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `).join('');
+  loadVisibleImages();
 }
 
 function startTrendingRotation(items = []) {
@@ -463,7 +459,7 @@ function setEcosystem(items) {
   const platforms = directory.map((entry) => ({ ...entry, ...(items || []).find((item) => item.platform === entry.platform) }));
   mount.innerHTML = '<div class="sidebar-title">256 AI Systems Ecosystem</div>' + platforms.slice(0, 7).map((item) => `
     <a class="eco-teaser-item" href="${safeHref(item.articleUrl || item.link) !== '#' ? safeHref(item.articleUrl || item.link) : '/#ecosystem'}"${item.articleUrl ? '' : ' target="_blank" rel="noopener"'}>
-      <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
+      <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo" loading="lazy" decoding="async">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
       <div><b>${escapeHtml(item.platform)}</b>${item.title ? `<strong>${escapeHtml(item.title)}</strong>` : ''}<p>${escapeHtml(item.title ? (item.summary || 'Read the latest official platform update.') : (item.description || item.summary))}</p><span class="eco-domain">${item.publishedAt ? `Published ${formatTime(item.publishedAt)} · Read summary` : escapeHtml(domainFromLink(item.link))}</span></div>
     </a>
   `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">EXPLORE THE COMPLETE ECOSYSTEM →</a>';
@@ -624,7 +620,6 @@ async function setCategoryTabs(districtItems = []) {
   await Promise.all(Object.entries(categoryMap).map(async ([slug, path]) => {
     try {
       const data = await getJson(path);
-      await preloadArticleImages(data.items || []);
       rememberStories(data.items || []);
       setCategoryTab(slug, data.items || []);
     } catch (err) {
@@ -632,6 +627,7 @@ async function setCategoryTabs(districtItems = []) {
     }
   }));
   setCategoryTab('district', districtItems || []);
+  loadVisibleImages();
 }
 
 function setupCitizenReportForm() {
@@ -718,21 +714,6 @@ async function bootLiveNews() {
       ...(ecosystemNews.items || []),
     ]);
 
-    // Warm every image used by the initial live view before replacing the
-    // matching article text. Because the cards use CSS background images,
-    // preloading here ensures the browser already has the image when the text
-    // and card markup are revealed. Missing image URLs keep their fallback.
-    await preloadArticleImages([
-      ...heroStories,
-      ...topStories,
-      ...latestStories,
-      ...(national.items || []),
-      ...(world.items || []),
-      ...(sports.items || []),
-      ...districtStories,
-      ...(ecosystemNews.items || []),
-    ]);
-
     setTicker(topStories);
     setMastheadStatus((sources.items || []).length);
     setTrending(rotatedWindow(topStories, 0, 4));
@@ -750,6 +731,7 @@ async function bootLiveNews() {
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
     setJournalists(journalists.items);
+    loadVisibleImages();
     await setCategoryTabs(districtStories);
     startCarouselRotation();
   } catch (err) {

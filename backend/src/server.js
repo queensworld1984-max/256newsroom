@@ -126,7 +126,9 @@ function normalizeRows(rows) {
     summary: row.summary,
     url: row.url,
     originalUrl: row.original_url || row.url,
-    internalUrl: row.internal_url || (row.slug ? `/news/${row.slug}` : null),
+    // Derive the destination from the same row that supplied the headline.
+    // Never trust a stale stored internal_url after an upstream URL collision.
+    internalUrl: row.slug ? `/news/${row.slug}` : row.internal_url,
     slug: row.slug,
     imageUrl: row.image_url,
     author: row.author,

@@ -151,7 +151,7 @@ router.get('/news/:slug', async (req, res, next) => {
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
 <h1>${escapeHtml(story.title)}</h1>
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
-${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
+${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
 <section class="summary"><h2>What the report says</h2>${renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
