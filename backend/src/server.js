@@ -17,6 +17,7 @@ const feedRoutes = require('./routes/feeds');
 const { pollDueFeeds } = require('./feedImport');
 const rssRoutes = require('./routes/rss');
 const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
+const platformNewsRoutes = require('./routes/platformNews');
 const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
@@ -26,7 +27,19 @@ const port = Number(process.env.PORT || 5066);
 
 app.set('trust proxy', true);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: ['https://256newsroom.com', 'https://www.256newsroom.com'], credentials: true }));
+// The session-cookie-bearing app is locked to 256newsroom's own origins.
+// /api/platforms/*/news is a public, credential-less read endpoint meant to
+// be fetched cross-origin from the individual platform sites, so it gets a
+// permissive, no-credentials CORS policy instead — resolved per-request so
+// there's only ever one `cors()` middleware in the stack (two stacked
+// instances previously produced conflicting Access-Control-* headers).
+app.use(cors((req, callback) => {
+  if (req.path.startsWith('/api/platforms/')) {
+    callback(null, { origin: true, credentials: false });
+  } else {
+    callback(null, { origin: ['https://256newsroom.com', 'https://www.256newsroom.com'], credentials: true });
+  }
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(loadSessionUser);
@@ -45,6 +58,7 @@ app.use('/api/me/stories', meStoryRoutes);
 app.use('/api', taxonomyRoutes);
 app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
+app.use('/api/platforms', platformNewsRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only
