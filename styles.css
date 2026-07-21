@@ -433,6 +433,8 @@ input[name="cattab"], .toggle-input { display: none; }
 .master-headline h1 { border-bottom: 3px solid var(--ink); font-family: "DM Serif Display", serif; font-size: 32px; line-height: 1.1; padding-bottom: 14px; }
 
 .card-grid, .eco-grid { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x proximity; }
+.auto-news-rail { overscroll-behavior-inline:contain; scroll-behavior:smooth; scroll-snap-type:x mandatory; }
+.auto-news-rail:focus-within { outline:2px solid var(--gold-bright); outline-offset:4px; }
 .eco-platform-grid { display: grid; gap: 20px; grid-template-columns: repeat(4, 1fr); }
 .grid-card { flex: 0 0 var(--carousel-card); scroll-snap-align: start; transition: transform 0.15s ease; }
 .grid-card:hover, .eco-card:hover { transform: translateY(-2px); }

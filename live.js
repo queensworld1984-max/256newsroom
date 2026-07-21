@@ -5,6 +5,7 @@ let heroStories = [];
 let heroStoryIndex = 0;
 let trendingRotationTimer = null;
 let carouselRotationTimer = null;
+let headlineRefreshTimer = null;
 const storyIndex = new Map();
 
 const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -375,9 +376,12 @@ function setCardGrid(heading, items) {
   const section = sections.find((candidate) => candidate.querySelector('.section-header h2')?.textContent.trim() === heading);
   const mount = section?.querySelector('.card-grid');
   if (!mount) return;
+  mount.classList.add('auto-news-rail');
+  mount.setAttribute('aria-label', `${heading} — automatically advances every 10 seconds`);
   mount.innerHTML = items?.length
-    ? items.slice(0, 6).map(articleCard).join('')
+    ? items.map(articleCard).join('')
     : '<article class="grid-card empty-card"><h3>No current stories in this category yet</h3><p>Waiting for approved source feeds.</p></article>';
+  loadVisibleImages();
 }
 
 function setTrending(items) {
@@ -409,17 +413,38 @@ function startTrendingRotation(items = []) {
 
 function startCarouselRotation() {
   if (carouselRotationTimer) clearInterval(carouselRotationTimer);
-  const selectors = ['.card-grid', '.eco-grid', '.social-scroll', '.citizens-scroll', '.district-scroll', '.journalist-scroll'];
+  const selectors = ['.auto-news-rail'];
   carouselRotationTimer = setInterval(() => {
     document.querySelectorAll(selectors.join(',')).forEach((mount) => {
       if (mount.scrollWidth <= mount.clientWidth + 4) return;
+      if (mount.matches(':hover') || mount.contains(document.activeElement)) return;
       const first = mount.firstElementChild;
       const gap = Number.parseFloat(getComputedStyle(mount).columnGap || getComputedStyle(mount).gap || '0') || 0;
       const step = first ? first.getBoundingClientRect().width + gap : mount.clientWidth;
       const nearEnd = mount.scrollLeft + mount.clientWidth + step >= mount.scrollWidth;
       mount.scrollTo({ left: nearEnd ? 0 : mount.scrollLeft + step, behavior: 'smooth' });
     });
-  }, 60000);
+  }, 10000);
+}
+
+function startHeadlineRefresh() {
+  if (headlineRefreshTimer) clearInterval(headlineRefreshTimer);
+  headlineRefreshTimer = setInterval(async () => {
+    const [national, world, sports] = await Promise.all([
+      safeJson('/news/category/national?limit=50'),
+      safeJson('/news/category/world?limit=50'),
+      safeJson('/news/category/sports?limit=50'),
+    ]);
+    const sections = [
+      ['National Headlines', national.items || []],
+      ['International News', world.items || []],
+      ['Sports News', sports.items || []],
+    ];
+    sections.forEach(([heading, items]) => {
+      rememberStories(items);
+      setCardGrid(heading, items);
+    });
+  }, 120000);
 }
 
 function platformLogo(item) {
@@ -698,9 +723,9 @@ async function bootLiveNews() {
       safeJson('/news/hero?limit=12'),
       safeJson('/news/top?limit=12'),
       safeJson('/news/latest?limit=12'),
-      safeJson('/news/category/national?limit=6'),
-      safeJson('/news/category/world?limit=6'),
-      safeJson('/news/category/sports?limit=6'),
+      safeJson('/news/category/national?limit=50'),
+      safeJson('/news/category/world?limit=50'),
+      safeJson('/news/category/sports?limit=50'),
       safeJson('/news/districts/latest?limit=12'),
       safeJson('/news/ecosystem?limit=6'),
       safeJson('/news/sources/top?limit=50'),
@@ -744,6 +769,7 @@ async function bootLiveNews() {
     loadVisibleImages();
     await setCategoryTabs(districtStories);
     startCarouselRotation();
+    startHeadlineRefresh();
   } catch (err) {
     const statusEl = document.getElementById('masthead-status');
     if (statusEl) statusEl.innerHTML = '<strong>Uganda\'s Newsroom</strong><small>Refreshing the latest coverage…</small>';
