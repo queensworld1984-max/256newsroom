@@ -16,6 +16,7 @@ const taxonomyRoutes = require('./routes/taxonomy');
 const feedRoutes = require('./routes/feeds');
 const { pollDueFeeds } = require('./feedImport');
 const rssRoutes = require('./routes/rss');
+const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -42,6 +43,7 @@ app.use('/api/publishers', publisherProfileRoutes);
 app.use('/api/me/stories', meStoryRoutes);
 app.use('/api', taxonomyRoutes);
 app.use('/rss', rssRoutes);
+app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only
