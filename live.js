@@ -51,57 +51,23 @@ function storyAttributes(item) {
   return `class="story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item?.id || '')}" data-category="${escapeHtml(item?.category?.slug || '')}" data-district="${escapeHtml(item?.district?.slug || '')}"`;
 }
 
-function openStoryReader(storyId) {
-  const item = storyIndex.get(String(storyId));
-  const modal = document.getElementById('story-reader');
-  if (!item || !modal) return;
-  const media = modal.querySelector('.story-reader-media');
-  modal.querySelector('.story-reader-kicker').textContent = `${item.category?.name || 'News'} · ${item.district?.name || 'Uganda'}`;
-  modal.querySelector('.story-reader-title').textContent = item.title;
-  modal.querySelector('.story-reader-summary').textContent = item.summary || 'A summary is not available from this source. Continue to the publisher to read the full report.';
-  modal.querySelector('.story-reader-source').textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
-  const fullLink = modal.querySelector('.story-reader-full-link');
-  const fullUrl = String(item.url || '').trim();
-  fullLink.href = /^https?:\/\//i.test(fullUrl) ? fullUrl : '#';
-  fullLink.textContent = `Read full article at ${item.source?.name || 'source'} →`;
-  if (item.imageUrl) {
-    media.hidden = false;
-    media.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
-  } else {
-    media.hidden = true;
-    media.removeAttribute('style');
-  }
-  modal.classList.add('is-open');
-  modal.setAttribute('aria-hidden', 'false');
-  modal.querySelector('.story-reader-close').focus();
-}
-
-function closeStoryReader() {
-  const modal = document.getElementById('story-reader');
-  if (!modal) return;
-  modal.classList.remove('is-open');
-  modal.setAttribute('aria-hidden', 'true');
-}
-
-function setupStoryReader() {
+function setupStoryNavigation() {
   document.addEventListener('click', (event) => {
-    if (event.target.closest('.story-reader-close') || event.target.classList.contains('story-reader-overlay')) {
-      closeStoryReader();
-      return;
-    }
-    if (event.target.closest('.story-reader-full-link')) return;
     const target = event.target.closest('.story-clickable, [data-open-story]');
     if (!target?.dataset.storyId) return;
+    const item = storyIndex.get(String(target.dataset.storyId));
+    if (!item?.internalUrl) return;
     event.preventDefault();
-    openStoryReader(target.dataset.storyId);
+    window.location.href = item.internalUrl;
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') return closeStoryReader();
     if (!['Enter', ' '].includes(event.key)) return;
     const target = event.target.closest('.story-clickable');
     if (!target?.dataset.storyId) return;
+    const item = storyIndex.get(String(target.dataset.storyId));
+    if (!item?.internalUrl) return;
     event.preventDefault();
-    openStoryReader(target.dataset.storyId);
+    window.location.href = item.internalUrl;
   });
 }
 
@@ -257,7 +223,7 @@ function setTicker(items) {
     return;
   }
   mount.innerHTML = items.slice(0, 6).map((item, index) => `
-    <span ${storyAttributes(item)}>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</span>
+    <a href="${safeHref(item.internalUrl)}" ${storyAttributes(item)}>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</a>
   `).join('');
 }
 
@@ -281,7 +247,7 @@ function articleCard(item) {
       <div class="thumb ${imageClass(item)}"${imageStyle(item)}></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(initials)}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span> · ${formatTime(item.publishedAt)}</p>
-      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `;
 }
@@ -313,7 +279,7 @@ function setHero(item) {
       ${sourceBadges(item)}
       <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span>
       <span class="cluster-note">${item.source?.official ? 'Direct official source' : 'Live from approved source feed'}</span>
-      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     `;
   }
 }
@@ -349,7 +315,7 @@ function setTrending(items) {
       <h3>${escapeHtml(item.title)}</h3>
       <div class="cmeta">${sourceBadges(item)}<span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></div>
       <div class="trend-tag">updated ${formatTime(item.publishedAt)}</div>
-      <a href="#" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `).join('');
 }
@@ -421,14 +387,14 @@ function setEcosystemGrid(items, officialItems = []) {
   if (items?.length) {
     mount.innerHTML = items.slice(0, 6).map((item) => `
     <article class="eco-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
-      <a class="eco-card-media" href="${safeHref(item.url)}" target="_blank" rel="noopener">
+      <a class="eco-card-media" href="${safeHref(item.internalUrl)}">
         <div class="eco-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       </a>
       <div>
         <small>256 AI Systems <b>${item.source?.official ? 'OFFICIAL SOURCE' : 'PUBLISHED COVERAGE'}</b></small>
-        <h3><a href="${safeHref(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a></h3>
-        <p><a href="${safeHref(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.summary || 'Published coverage mentioning 256 AI Systems.')}</a></p>
-        <footer><span>${formatTime(item.publishedAt)}</span><a href="${safeHref(item.url)}" target="_blank" rel="noopener">Read Full Update -></a></footer>
+        <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
+        <p><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.summary || 'Published coverage mentioning 256 AI Systems.')}</a></p>
+        <footer><span>${formatTime(item.publishedAt)}</span><a href="${safeHref(item.internalUrl)}">Read Summary -></a></footer>
       </div>
     </article>
   `).join('');
@@ -465,7 +431,7 @@ function setSocialLatest(items) {
       <div class="social-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} ${escapeHtml(item.category?.name || 'News')} · ${formatTime(item.publishedAt)}</p>
-      <b><a href="#" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a></b>
+      <b><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a></b>
     </article>
   `).join('');
 }
@@ -478,7 +444,7 @@ function setCitizenLatest(items) {
     ${items.slice(0, 5).map((item) => `
       <article class="citizen-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
         <div class="citizen-thumb ${imageClass(item)}"${imageStyle(item)}><span>LIVE NEWS</span></div>
-        <h3>${escapeHtml(item.title)}</h3>
+        <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
         <p>${escapeHtml(item.source?.name || '256 Newsroom')} · ${escapeHtml(item.district?.name || item.category?.name || 'Uganda')} · ${formatTime(item.publishedAt)}</p>
       </article>
     `).join('')}
@@ -520,7 +486,7 @@ function setDistricts(items) {
   mount.innerHTML = items.slice(0, 6).map((item) => `
     <article class="district-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="district-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.district?.name || 'UGANDA')}</span></div>
-      <h3>${escapeHtml(item.title)}</h3>
+      <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></p>
     </article>
   `).join('');
@@ -606,7 +572,7 @@ function setupCitizenReportForm() {
 async function bootLiveNews() {
   setupCitizenReportForm();
   setupInterestTracking();
-  setupStoryReader();
+  setupStoryNavigation();
   setMastheadDate();
   try {
     const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([

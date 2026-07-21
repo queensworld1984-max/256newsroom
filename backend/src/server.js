@@ -18,7 +18,9 @@ const { pollDueFeeds } = require('./feedImport');
 const rssRoutes = require('./routes/rss');
 const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
 const platformNewsRoutes = require('./routes/platformNews');
+const storyPageRoutes = require('./routes/storyPages');
 const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
+const { generateStorySummary, generatePendingStorySummaries } = require('./storySummaries');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -59,6 +61,7 @@ app.use('/api', taxonomyRoutes);
 app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
 app.use('/api/platforms', platformNewsRoutes);
+app.use(storyPageRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only
@@ -87,12 +90,15 @@ function citizenReportRateLimit(req, res, next) {
 
 const articleSelect = `
   select
-    a.id, a.title, a.summary, a.url, a.image_url, a.author, a.published_at, a.score,
-    s.name as source_name, s.slug as source_slug, s.source_type, s.official, s.credibility_label,
+    a.id, a.title, a.summary, a.url, a.original_url, a.internal_url, a.slug, a.image_url, a.author, a.published_at, a.score,
+    coalesce(s.name, o.name, '256 Newsroom') as source_name, coalesce(s.slug, o.slug, '256-newsroom') as source_slug,
+    coalesce(s.source_type, o.org_type, 'newsroom') as source_type, coalesce(s.official, o.is_official, false) as official,
+    s.credibility_label,
     c.name as category, c.slug as category_slug,
     d.name as district, d.slug as district_slug
   from articles a
-  join sources s on s.id = a.source_id
+  left join sources s on s.id = a.source_id
+  left join organizations o on o.id = a.organization_id
   left join categories c on c.id = a.category_id
   left join districts d on d.id = a.district_id
   where a.hidden = false and a.status = 'published'
@@ -119,6 +125,9 @@ function normalizeRows(rows) {
     title: row.title,
     summary: row.summary,
     url: row.url,
+    originalUrl: row.original_url || row.url,
+    internalUrl: row.internal_url || (row.slug ? `/news/${row.slug}` : null),
+    slug: row.slug,
     imageUrl: row.image_url,
     author: row.author,
     publishedAt: row.published_at,
@@ -390,6 +399,14 @@ app.post('/api/crawl/run-googlenews', requireAdmin, async (_req, res, next) => {
   }
 });
 
+app.post('/api/admin/articles/:id/generate-summary', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await generateStorySummary(req.params.id));
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/api/admin/sources', requireAdmin, async (_req, res, next) => {
   try {
     const { rows } = await pool.query(`
@@ -540,6 +557,13 @@ if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
   const minutes = Math.max(5, Number(process.env.FEED_IMPORT_INTERVAL_MINUTES || 15));
   cron.schedule(`*/${minutes} * * * *`, () => {
     pollDueFeeds().catch((err) => console.error('Scheduled feed import failed:', err));
+  });
+}
+
+if (process.env.STORY_SUMMARY_INTERVAL_MINUTES && process.env.STORY_SUMMARY_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.STORY_SUMMARY_INTERVAL_MINUTES));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    generatePendingStorySummaries(3).catch((err) => console.error('Scheduled story-summary generation failed:', err));
   });
 }
 
