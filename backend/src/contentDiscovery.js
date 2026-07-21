@@ -124,7 +124,17 @@ function extractPageContent(html, url) {
 
   const main = $('main, article, [role="main"]').first();
   const contentRoot = main.length ? main : $('body');
-  const textContent = contentRoot.text().replace(/\s+/g, ' ').trim();
+  // Keep visible section boundaries so a model can distinguish headings,
+  // feature names and their descriptions instead of receiving one compressed
+  // run of text. Nested blocks can add blank lines, which are normalized.
+  contentRoot.find('h1,h2,h3,h4,h5,h6,p,li,dt,dd,tr,section').each((_index, element) => {
+    $(element).append('\n');
+  });
+  const textContent = contentRoot.text()
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 
   const ogImage = $('meta[property="og:image"]').attr('content');
   const firstContentImage = contentRoot.find('img').first().attr('src');

@@ -67,6 +67,16 @@ function renderSummary(summary) {
   return String(summary || '').split(/\n{2,}/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`).join('');
 }
 
+function renderArticleBody(body) {
+  return String(body || '').split(/\n{2,}/).filter(Boolean).map((block) => {
+    const text = block.trim();
+    if (/^##\s+/.test(text)) return `<h2>${escapeHtml(text.replace(/^##\s+/, ''))}</h2>`;
+    const disclosure = text.match(/^\*([^*]+)\*$/s);
+    if (disclosure) return `<p class="story-disclosure"><em>${escapeHtml(disclosure[1])}</em></p>`;
+    return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+}
+
 router.get('/sitemap.xml', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(`
@@ -152,7 +162,7 @@ router.get('/news/:slug', async (req, res, next) => {
 <h1>${escapeHtml(story.title)}</h1>
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
-<section class="summary"><h2>What the report says</h2>${renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
+<section class="summary"><h2>${story.body ? 'Full report' : 'What the report says'}</h2>${story.body ? renderArticleBody(story.body) : renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>

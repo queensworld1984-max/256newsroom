@@ -4,6 +4,8 @@ const { slugify, uniqueStorySlug, resolveId } = require('./storiesCore');
 const { hostnameOf } = require('./contentDiscovery');
 
 const GENERATION_MODEL = 'gpt-5.5';
+const EVIDENCE_LIMIT = 24000;
+const MAX_REPAIR_ATTEMPTS = 2;
 
 const PERMITTED_CONTENT_TYPES = [
   'Official Update', 'Company Announcement', 'Product Update', 'Platform Guide',
@@ -14,10 +16,12 @@ const PERMITTED_CONTENT_TYPES = [
 
 const PERMITTED_CATEGORIES = ['business', 'ecosystem', 'education', 'health', 'national', 'politics', 'sports', 'technology', 'world', 'district'];
 
-const GENERATION_SYSTEM_PROMPT = `You are a factual newsroom content assistant for 256 Newsroom, writing about one platform in the 256 Ecosystem. You are given the extracted text of one public page from that platform's own official website. Write a short, professional, factual newsroom article using ONLY information explicitly present in that text.
+const GENERATION_SYSTEM_PROMPT = `You are the service-news writer for 256 Newsroom, preparing a substantial, persuasive but factual article about one platform in the 256 Ecosystem. The article should market the service by clearly explaining its usefulness, while maintaining newsroom accuracy. You are given trusted platform identity plus extracted information from the platform's official public website.
 
 Strict rules:
-- Use only facts, features, prices, dates, and claims explicitly stated in the source text. Never invent, estimate, or assume anything not present.
+- Every claim about the platform, its features, prices, availability, coverage, performance or users must be supported by the supplied evidence.
+- You may frame an everyday service problem in cautious, general language without statistics (for example, that people need a simpler way to find a service). Do not claim how widespread, severe or costly a problem is unless the evidence states it.
+- Comparisons must be category-level and evidence-led: explain how the listed features differ from a conventional or fragmented way of accessing the service. Do not name competitors, claim superiority, or invent competitor features, prices or shortcomings.
 - Never invent subscriber/user counts, revenue or financial figures, partnerships, awards, endorsements, certifications, launches, or events.
 - Never claim something happened "today" or "recently" unless the source text gives an explicit date.
 - Never present an existing/older feature as if newly launched.
@@ -25,12 +29,23 @@ Strict rules:
 - If the source text does not contain enough substantive, newsworthy information to support a genuine article, respond with exactly {"insufficient": true, "reason": "<why, one sentence>"} and nothing else.
 - contentType must be exactly one of: ${PERMITTED_CONTENT_TYPES.join(', ')}.
 - category must be exactly one of: ${PERMITTED_CATEGORIES.join(', ')} (default "ecosystem" if nothing else clearly fits).
-- Write in clear, professional, factual newsroom prose. No exaggerated marketing language unless clearly presented as a direct quotation from the source.
+- Use confident, accessible service journalism. Market what is verifiably offered, but avoid hype, unsupported superlatives and vague promotional filler.
 
 If there is enough information, respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["...","..."],"disclosure":"...","callToAction":"..."}
 - summary: one or two sentences, under 300 characters.
-- body: 3-6 short paragraphs, markdown "##" subheadings allowed.
+- body: 700-1,000 words using exactly these markdown sections in this order:
+  ## The problem on the ground
+  ## What <platform name> offers
+  ## How the service fills the gap
+  ## Features, availability and access
+  ## Why this matters for Uganda
+- The opening paragraph before the first heading must lead with the service and the clearest reader benefit.
+- Under the problem section, state the practical user need without invented statistics or unsupported claims about the whole country.
+- Under the offer and solution sections, explain the platform's actual services and connect each major feature to a practical user benefit.
+- Include one careful category-level comparison within "How the service fills the gap" based only on evidenced features.
+- Under availability, say only what the evidence supports about locations, access channels, operating times, prices or eligibility. Clearly say when a detail is not stated rather than guessing.
+- Under national importance, explain the potential relevance of the evidenced service to Uganda using cautious language such as "can", "could" or "is designed to"; never assert an unmeasured national outcome.
 - tags: up to 6 short tags.
 - disclosure: one sentence noting this was prepared from the official platform's published information.
 - callToAction: one short sentence directing readers to the platform, referencing its real URL.`;
@@ -44,14 +59,23 @@ async function generateArticleFromEvidence({ platformName, websiteUrl, evidence,
     rotationHint ? `Today's suggested content focus (soft preference only — factual availability always overrides this): ${rotationHint}` : '',
     '',
     'Source page text:',
-    String(evidence.raw_text_snapshot || '').slice(0, 6000),
+    String(evidence.raw_text_snapshot || '').slice(0, EVIDENCE_LIMIT),
   ].filter(Boolean).join('\n');
 
   const { data } = await chatJson({ system: GENERATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
   return data;
 }
 
-const VALIDATION_SYSTEM_PROMPT = `You are a strict fact-checker for a newsroom. You are given a source text and a generated article about it. Identify every material factual claim in the article (specific features, prices, dates, names, numbers, or claims that something is new/exclusive/an award/a partnership) and determine whether each is directly and explicitly supported by the source text. A claim is only "supported" if the source text actually states it — inference, paraphrase of something not present, or plausible-sounding detail is NOT supported.
+const VALIDATION_SYSTEM_PROMPT = `You are a precise fact-checker for a service newsroom. You are given trusted platform context, official source evidence and a generated article. Identify every material factual claim about the platform, its services, features, prices, locations, availability, users, results, partners or status, and determine whether the meaning is supported by the evidence.
+
+Apply these rules:
+- Accept faithful paraphrases and summaries; support does not require the same words or sentence structure.
+- Platform name, official website, official source URL and source-page title in the trusted context are supported facts.
+- A cautious, non-quantified statement of an everyday user need is framing, not a factual claim requiring a statistic.
+- A category-level comparison is acceptable only when it contrasts an evidenced feature with a generic process and makes no factual claim about a named competitor.
+- Cautious statements of potential relevance using "can", "could", "may" or "is designed to" are acceptable when the mechanism is an evidenced feature. Claims of measured impact are not.
+- Reject invented specifics, unsupported superlatives, ungrounded availability, or inference presented as established fact.
+- Do not reject a supported claim merely because extracted web text has compressed spacing or navigation labels.
 
 Respond with exactly this JSON shape and nothing else:
 {"allSupported": true|false, "unsupportedClaims": ["...", "..."]}`;
@@ -59,7 +83,7 @@ Respond with exactly this JSON shape and nothing else:
 async function validateArticleClaims({ body, headline, summary, sourceText }) {
   const user = [
     'Source text:',
-    String(sourceText || '').slice(0, 6000),
+    String(sourceText || '').slice(0, EVIDENCE_LIMIT),
     '',
     'Generated article:',
     `Headline: ${headline}`,
@@ -68,6 +92,34 @@ async function validateArticleClaims({ body, headline, summary, sourceText }) {
   ].join('\n');
 
   const { data } = await chatJson({ system: VALIDATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
+  return data;
+}
+
+const REPAIR_SYSTEM_PROMPT = `You repair a 256 Newsroom service article after fact-checking. Rewrite only what is needed to remove or qualify every listed unsupported claim while retaining a persuasive, useful and complete article. Use only the supplied trusted context and official evidence for platform facts. Preserve the required section structure, supported features, practical problem statement, category-level comparison, Uganda relevance, disclosure and call to action. Never solve a verification issue by inventing replacement detail.
+
+Respond with exactly this JSON shape and nothing else:
+{"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["..."],"disclosure":"...","callToAction":"..."}`;
+
+function composeArticleBody(draft) {
+  return [
+    String(draft.body || '').trim(),
+    draft.callToAction ? `## How to access the service\n\n${String(draft.callToAction).trim()}` : '',
+    draft.disclosure ? `*${String(draft.disclosure).trim()}*` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
+async function repairArticleClaims({ draft, unsupportedClaims, sourceText }) {
+  const user = [
+    'Trusted context and official evidence:',
+    String(sourceText || '').slice(0, EVIDENCE_LIMIT),
+    '',
+    'Unsupported claims identified by fact-checking:',
+    JSON.stringify(unsupportedClaims || []),
+    '',
+    'Draft to repair:',
+    JSON.stringify(draft),
+  ].join('\n');
+  const { data } = await chatJson({ system: REPAIR_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
   return data;
 }
 
@@ -152,17 +204,32 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
   const validationSource = [
     `Platform name: ${org.name}`,
     `Official platform website: ${org.website_url}`,
+    org.description ? `Platform description: ${org.description}` : '',
     `Official source page: ${evidence.canonical_url || evidence.source_url}`,
     `Source page title: ${evidence.source_page_title || ''}`,
     '',
     evidence.raw_text_snapshot || '',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   let validation;
+  let articleBody = composeArticleBody(draft);
   try {
-    validation = await validateArticleClaims({ body: draft.body, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
+    validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
+    for (let attempt = 0; !validation.allSupported && attempt < MAX_REPAIR_ATTEMPTS; attempt += 1) {
+      draft = await repairArticleClaims({
+        draft,
+        unsupportedClaims: validation.unsupportedClaims,
+        sourceText: validationSource,
+      });
+      if (!draft.headline || !draft.body || !PERMITTED_CONTENT_TYPES.includes(draft.contentType)) {
+        throw new Error('Repaired draft was missing required fields or used an invalid content type.');
+      }
+      if (!PERMITTED_CATEGORIES.includes(draft.category)) draft.category = 'ecosystem';
+      articleBody = composeArticleBody(draft);
+      validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
+    }
   } catch (err) {
-    job = await fail('failed', `Validation call failed: ${err.message}`);
+    job = await fail('failed', `Validation or repair call failed: ${err.message}`);
     return { job, article: null };
   }
 
@@ -191,7 +258,7 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
        $20,$21,now(),true,false)
      returning *`,
     [
-      organizationId, org.parent_organization_id, draft.headline, draft.summary, draft.body,
+      organizationId, org.parent_organization_id, draft.headline, draft.summary, articleBody,
       categoryId, draft.tags || [], evidence.image_url, evidence.source_url, slug,
       `urn:256newsroom:ecosystem:${organizationId}:${slug}`, status, status === 'published' ? new Date() : null,
       draft.contentType, sourceDomain, evidence.source_page_title, evidence.content_hash,
@@ -214,5 +281,7 @@ module.exports = {
   PERMITTED_CATEGORIES,
   generateArticleFromEvidence,
   validateArticleClaims,
+  repairArticleClaims,
+  composeArticleBody,
   runGenerationJob,
 };
