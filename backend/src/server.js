@@ -534,8 +534,12 @@ if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
 // so this needs two explicit opt-ins before anything can auto-publish.
 if (process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES && process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES !== '0') {
   const minutes = Math.max(15, Number(process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES));
+  console.log(`Ecosystem automation cron enabled: running every ${minutes} minutes.`);
   cron.schedule(`*/${minutes} * * * *`, () => {
-    runEcosystemAutomationCycle().catch((err) => console.error('Scheduled ecosystem automation cycle failed:', err));
+    console.log('Ecosystem automation cycle starting...');
+    runEcosystemAutomationCycle()
+      .then((result) => console.log('Ecosystem automation cycle finished:', JSON.stringify(result.results?.map((r) => `${r.name}:${r.status}`) || result)))
+      .catch((err) => console.error('Scheduled ecosystem automation cycle failed:', err));
   });
 }
 
