@@ -50,6 +50,44 @@ function imageStyle(item) {
   return ` style="background-image:linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${cssSafe}'); background-size:cover; background-position:center;"`;
 }
 
+const imagePreloadCache = new Map();
+
+function preloadImage(url, timeoutMs = 4000) {
+  const src = String(url ?? '').trim();
+  if (!/^https?:\/\//i.test(src)) return Promise.resolve();
+  if (imagePreloadCache.has(src)) return imagePreloadCache.get(src);
+
+  const request = new Promise((resolve) => {
+    const img = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    img.onload = async () => {
+      try {
+        if (typeof img.decode === 'function') await img.decode();
+      } catch (_) {
+        // A loaded image is still usable when decode() is unsupported or rejects.
+      }
+      finish();
+    };
+    img.onerror = finish;
+    img.src = src;
+  });
+
+  imagePreloadCache.set(src, request);
+  return request;
+}
+
+function preloadArticleImages(items = []) {
+  const urls = [...new Set(items.map((item) => item?.imageUrl).filter(Boolean))];
+  return Promise.all(urls.map((url) => preloadImage(url)));
+}
+
 function rotatedWindow(items = [], start = 0, size = 4) {
   if (!items.length) return [];
   return Array.from({ length: Math.min(size, items.length) }, (_, index) => items[(start + index) % items.length]);
@@ -368,6 +406,7 @@ async function setCategoryTabs(districtItems = []) {
   await Promise.all(Object.entries(categoryMap).map(async ([slug, path]) => {
     try {
       const data = await getJson(path);
+      await preloadArticleImages(data.items || []);
       setCategoryTab(slug, data.items || []);
     } catch (err) {
       setCategoryTab(slug, []);
@@ -441,6 +480,22 @@ async function bootLiveNews() {
       getJson('/journalists/top?limit=6'),
     ]);
     const heroStories = hero.items || [];
+
+    // Warm every image used by the initial live view before replacing the
+    // matching article text. Because the cards use CSS background images,
+    // preloading here ensures the browser already has the image when the text
+    // and card markup are revealed. Missing image URLs keep their fallback.
+    await preloadArticleImages([
+      ...heroStories,
+      ...(top.items || []),
+      ...(latest.items || []),
+      ...(national.items || []),
+      ...(world.items || []),
+      ...(sports.items || []),
+      ...(districtNews.items || []),
+      ...(ecosystemNews.items || []),
+    ]);
+
     setTicker(top.items || []);
     setMastheadStatus((sources.items || []).length);
     setTrending(rotatedWindow(top.items || [], 0, 4));
