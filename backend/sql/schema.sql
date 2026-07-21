@@ -303,46 +303,16 @@ on conflict (url) do update set
   score = greatest(articles.score, excluded.score),
   updated_at = now();
 
-insert into journalists (name, slug, beat, profile_url, verified, trust_score) values
-  ('Sarah Atwine', 'sarah-atwine', 'Politics & Government', '/journalists/sarah-atwine/', true, 94),
-  ('David Kato', 'david-kato', 'Business & Markets', '#', true, 89),
-  ('Aisha Namuli', 'aisha-namuli', 'Health & Communities', '#', true, 91),
-  ('Oscar Mugisha', 'oscar-mugisha', 'Sports & Live Video', '#', true, 87),
-  ('Lydia Nsubuga', 'lydia-nsubuga', 'District Affairs', '#', true, 88),
-  ('Peter Nyanzi', 'peter-nyanzi', 'Investigations', '#', true, 92)
+-- Note: trust_score and engagement_stats are intentionally NOT seeded with numbers here.
+-- No genuine engagement tracking exists yet; seeding fabricated figures previously
+-- caused fake reads/views/shares/trust_score to be served publicly via
+-- /api/journalists/top. trust_score defaults to 0 (its schema default) until a real
+-- scoring mechanism exists; `verified` reflects editorial status, not engagement.
+insert into journalists (name, slug, beat, profile_url, verified) values
+  ('Sarah Atwine', 'sarah-atwine', 'Politics & Government', '/journalists/sarah-atwine/', true),
+  ('David Kato', 'david-kato', 'Business & Markets', '#', true),
+  ('Aisha Namuli', 'aisha-namuli', 'Health & Communities', '#', true),
+  ('Oscar Mugisha', 'oscar-mugisha', 'Sports & Live Video', '#', true),
+  ('Lydia Nsubuga', 'lydia-nsubuga', 'District Affairs', '#', true),
+  ('Peter Nyanzi', 'peter-nyanzi', 'Investigations', '#', true)
 on conflict (slug) do nothing;
-
-insert into engagement_stats (entity_type, entity_id, reads, views, shares, comments, bookmarks, stat_date)
-select 'journalist', id,
-  case slug
-    when 'sarah-atwine' then 312000
-    when 'david-kato' then 284000
-    when 'aisha-namuli' then 241000
-    when 'oscar-mugisha' then 218000
-    when 'lydia-nsubuga' then 196000
-    else 172000
-  end,
-  case slug
-    when 'sarah-atwine' then 620000
-    when 'david-kato' then 1600000
-    when 'aisha-namuli' then 890000
-    when 'oscar-mugisha' then 1200000
-    when 'lydia-nsubuga' then 620000
-    else 410000
-  end,
-  case slug
-    when 'sarah-atwine' then 4820
-    when 'david-kato' then 3900
-    when 'aisha-namuli' then 2700
-    when 'oscar-mugisha' then 3100
-    when 'lydia-nsubuga' then 1800
-    else 1400
-  end,
-  0,
-  0,
-  current_date
-from journalists
-on conflict (entity_type, entity_id, stat_date) do update set
-  reads = excluded.reads,
-  views = excluded.views,
-  shares = excluded.shares;

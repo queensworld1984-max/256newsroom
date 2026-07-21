@@ -233,18 +233,19 @@ app.get('/api/news/sources/top', async (req, res, next) => {
   }
 });
 
+// Ranked by published story count, not fabricated engagement figures — no genuine
+// reads/views/shares tracking exists yet (see backend/sql/migrations/0008_*).
 app.get('/api/journalists/top', async (req, res, next) => {
   try {
     const limit = limitParam(req, 6);
     const { rows } = await pool.query(`
       select j.id, j.name, j.slug, j.beat, j.profile_url, j.image_url, j.verified, j.trust_score,
-        coalesce(sum(es.reads), 0)::int as reads,
-        coalesce(sum(es.views), 0)::int as views,
-        coalesce(sum(es.shares), 0)::int as shares
+        count(a.id)::int as published_story_count,
+        max(a.published_at) as most_recent_published_at
       from journalists j
-      left join engagement_stats es on es.entity_type = 'journalist' and es.entity_id = j.id
+      left join articles a on a.journalist_id = j.id and a.status = 'published'
       group by j.id
-      order by reads desc, views desc, trust_score desc
+      order by published_story_count desc, most_recent_published_at desc nulls last, j.name asc
       limit $1
     `, [limit]);
     res.json({ items: rows });
@@ -253,18 +254,44 @@ app.get('/api/journalists/top', async (req, res, next) => {
   }
 });
 
-app.get('/api/ecosystem', (_req, res) => {
-  res.json({
-    items: [
-      { platform: '256 Heart', type: 'Platform Update', title: 'Free access codes launched for Gold, VIP & Stealth membership plans', summary: 'All current membership tiers are available at no cost through promotional access codes as the platform expands across Uganda and the diaspora.', description: 'Dating and matchmaking platform for Uganda and the diaspora.', mark: 'H', logoUrl: '/assets/logos/256-heart.png', link: 'https://256heart.com' },
-      { platform: '256 Corporate', type: 'Opportunity', title: '256 Corporate opens applications for software-development volunteers', summary: 'Approved technical volunteers get access to development assignments, onboarding, dashboard tools and commission-based project opportunities.', description: 'Business and technology services, including software-development opportunities.', mark: 'C', logoUrl: '/assets/logos/256-corporate.png', link: 'https://enterprise.256.co.ug' },
-      { platform: '256 Mall', type: 'Milestone', title: '256 Mall onboards its 1,000th verified wholesale seller', summary: "The milestone comes as the platform's wholesale tier expands into three new districts this quarter.", description: "Uganda's national e-commerce and wholesale marketplace.", mark: 'M', logoUrl: '/assets/logos/256-mall.png', link: 'https://256mall.com' },
-      { platform: '256 Express', type: 'Safety Notice', title: '256 Express introduces in-app driver verification badges', summary: 'Riders can now confirm driver identity and vehicle details before every trip, part of a wider district-by-district safety rollout.', description: 'Transport, delivery and logistics platform.', mark: 'E', logoUrl: '/assets/logos/256-express.png', link: 'https://256express.com' },
-      { platform: '256Shield', type: 'Product Update', title: 'Domain scanner now covers four new threat categories', summary: "The update expands 256Shield's automated scanning modules to catch a wider range of phishing and spoofing patterns before they reach users.", description: 'Cybersecurity and digital protection, including domain and phishing scanning.', mark: 'S', logoUrl: '/assets/logos/256-shield.svg', link: 'https://shield.256.co.ug' },
-      { platform: '256 AI Systems', type: 'Press Briefing', title: 'Queen Dorothy Amolo Unveils 256 AI Systems During Lira Press Briefing', summary: 'At a press briefing at Pauline Hotel in Lira City on 13 July 2026, Queen Dorothy Amolo and Dr. Jason Boyle launched 256 AI Systems, covering the digital ecosystem launch, employment and digital-skills development, AI tools for Ugandan users, e-commerce through 256 Mall, transport and service access through 256 Express, private matchmaking through 256 Heart, cybersecurity and scam protection, government-accountability tools, support for farmers and businesses, and plans for Uganda to become a regional digital-innovation centre. See independent press coverage of the event on the profile linked below.', description: "Ugandan AI and digital-infrastructure company connecting commerce, transport, cybersecurity, matchmaking and public-service platforms.", mark: 'AI', logoUrl: '/assets/logos/256-ai.png', link: 'https://ai.256.co.ug', profileUrl: '/people/queen-dorothy-amolo/' },
-      { platform: '256LinkShield', type: 'Safety Update', title: 'Link reputation checks expand across public news submissions', summary: 'The platform now screens submitted URLs for spoofing, malware and suspicious redirects before they reach moderation queues.', description: 'Link and website reputation checking to catch phishing and spoofing.', mark: 'LS', logoUrl: '/assets/logos/256-linkshield.svg', link: 'https://linkshield.256.co.ug' },
-    ],
-  });
+// Real published stories from the internally-seeded 256 Ecosystem organization and its
+// active child platforms — never a hardcoded array. Organizations are flagged
+// is_official=true only via internal seeding (backend/sql/migrations/0009_*), never
+// through public registration, so this can't be spoofed by a third-party publisher.
+// featured_in_ecosystem lets an admin control the homepage widget without unpublishing
+// a story. Deliberately unrelated to the general "ecosystem" news category, which may
+// contain independent third-party coverage about 256 companies rather than official
+// updates from them.
+app.get('/api/ecosystem', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 10, 50);
+    const { rows } = await pool.query(`
+      select
+        a.id, a.title, a.summary, a.published_at, a.slug, a.external_url,
+        o.name as platform, o.slug as org_slug, o.logo_url, o.website_url
+      from articles a
+      join organizations o on o.id = a.organization_id
+      where a.featured_in_ecosystem = true
+        and a.status = 'published'
+        and o.active = true
+        and o.is_official = true
+      order by a.published_at desc nulls last
+      limit $1
+    `, [limit]);
+    res.json({
+      items: rows.map((row) => ({
+        platform: row.platform,
+        logoUrl: row.logo_url,
+        title: row.title,
+        summary: row.summary,
+        publishedAt: row.published_at,
+        articleUrl: row.slug ? `/${row.org_slug}/${row.slug}` : null,
+        externalUrl: row.external_url || row.website_url || null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.post('/api/citizen-reports', citizenReportRateLimit, async (req, res, next) => {
