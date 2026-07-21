@@ -465,6 +465,15 @@ function setEcosystem(items) {
   `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">EXPLORE THE COMPLETE ECOSYSTEM →</a>';
 }
 
+function setEcosystemDirectory(items = []) {
+  document.querySelectorAll('.eco-platform-grid [data-platform]').forEach((card) => {
+    const item = items.find((entry) => entry.platform === card.dataset.platform);
+    const latest = card.querySelector('.eco-latest');
+    if (!latest || !item?.title) return;
+    latest.innerHTML = `<b>Latest update</b><span>${escapeHtml(item.title)}</span><small>${item.publishedAt ? formatTime(item.publishedAt) : 'recently'}</small>`;
+  });
+}
+
 function setEcosystemGrid(items, officialItems = []) {
   const sections = [...document.querySelectorAll('#panel-home section')];
   const section = sections.find((candidate) => candidate.querySelector('.section-header h2')?.textContent.trim() === 'Latest from 256 AI Systems');
@@ -730,6 +739,7 @@ async function bootLiveNews() {
     setDeveloping(latestStories);
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
+    setEcosystemDirectory(ecosystem.items || []);
     setJournalists(journalists.items);
     loadVisibleImages();
     await setCategoryTabs(districtStories);

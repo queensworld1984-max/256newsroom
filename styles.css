@@ -598,14 +598,29 @@ input[name="cattab"], .toggle-input { display: none; }
 .journalist-card p { color: var(--grey); font-family: "Inconsolata", monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .journalist-card b { border-top: 1px dashed var(--line); color: var(--gold); font-family: "Inconsolata", monospace; font-size: 11px; margin-top: auto; padding-top: 10px; }
 
-.eco-subnav { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 28px; }
-.eco-subnav a { border: 1px solid var(--line-strong); border-radius: 20px; font-family: "Inconsolata", monospace; font-size: 12px; font-weight: 700; padding: 7px 14px; }
-.eco-subnav .active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.eco-platform-grid article { background: var(--white); border: 1px solid var(--line-strong); padding: 20px; text-align: center; }
-.eco-platform-grid span { align-items: center; background: var(--gold); border-radius: 10px; display: flex; font-family: "DM Serif Display", serif; font-size: 20px; height: 48px; justify-content: center; margin: 0 auto 12px; width: 48px; }
-.eco-platform-grid h3 { font-family: "DM Serif Display", serif; font-size: 16px; font-weight: 400; margin-bottom: 6px; }
-.eco-platform-grid p { color: var(--grey); font-size: 11.5px; line-height: 1.4; margin-bottom: 10px; }
-.eco-platform-grid a { color: var(--red); font-family: "Inconsolata", monospace; font-size: 10.5px; font-weight: 700; }
+.eco-directory-hero { align-items:end; background:linear-gradient(135deg,#0c0d0b 0%,#242015 70%,#0c0d0b 100%); border:1px solid #5d4a1c; box-shadow:0 18px 45px #0003; color:#fff; display:grid; gap:34px; grid-template-columns:minmax(0,1.5fr) minmax(250px,.7fr); margin-bottom:28px; overflow:hidden; padding:clamp(28px,5vw,58px); position:relative; }
+.eco-directory-hero::after { background:radial-gradient(circle,#f8e08e88 0,#c99a2e22 35%,transparent 70%); content:""; height:340px; pointer-events:none; position:absolute; right:-120px; top:-170px; width:340px; }
+.eco-directory-kicker { color:#f3d273; font:700 11px Inconsolata,monospace; letter-spacing:.12em; text-transform:uppercase; }
+.eco-directory-hero h1 { font:clamp(44px,7vw,86px)/.95 "DM Serif Display",serif; margin:12px 0 18px; }
+.eco-directory-hero p { color:#ddd8ca; font-size:17px; line-height:1.65; max-width:720px; }
+.eco-directory-actions { display:grid; gap:10px; position:relative; z-index:1; }
+.eco-directory-actions a { border:1px solid #70674e; color:#fff; font:700 11px Inconsolata,monospace; letter-spacing:.04em; padding:12px 14px; text-align:center; text-transform:uppercase; }
+.eco-directory-actions .gold-action { background:linear-gradient(135deg,#7a5608,#f8e08e 35%,#c99a2e 60%,#fff1a8 80%,#8b650f); border-color:#d5ad49; color:#171208; }
+.eco-platform-grid { gap:18px; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.eco-platform-grid article { background:linear-gradient(145deg,#fff,#faf6e9); border:1px solid #d8cfba; border-top:4px solid #c99a2e; box-shadow:0 8px 22px #1b160d12; display:flex; flex-direction:column; min-height:350px; padding:24px; text-align:left; transition:transform .18s,box-shadow .18s; }
+.eco-platform-grid article:hover { box-shadow:0 16px 34px #1b160d24; transform:translateY(-4px); }
+.eco-platform-grid img { background:#fff; border:1px solid #ddd3bc; height:76px; margin-bottom:18px; object-fit:contain; padding:8px; width:76px; }
+.eco-platform-grid article>small { color:#8a620d; font:700 10px Inconsolata,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.eco-platform-grid h3 { font-family:"DM Serif Display",serif; font-size:28px; font-weight:400; margin:5px 0 8px; }
+.eco-platform-grid p { color:#4f4d47; font-size:13px; line-height:1.5; margin-bottom:14px; }
+.eco-latest { border-top:1px solid #ded6c5; color:#333; display:grid; gap:4px; margin-top:auto; padding-top:14px; }
+.eco-latest b { color:#8a620d; font:700 9px Inconsolata,monospace; letter-spacing:.08em; text-transform:uppercase; }
+.eco-latest span { background:none; border-radius:0; display:-webkit-box; font:700 12.5px/1.35 Outfit,sans-serif; height:auto; margin:0; overflow:hidden; width:auto; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.eco-latest small { color:#77736a; font:10px Inconsolata,monospace; }
+.eco-card-actions { display:grid; gap:8px; grid-template-columns:1fr 1fr; margin-top:18px; }
+.eco-platform-grid .eco-card-actions a { border:1px solid #171713; color:#171713; font:800 10px Inconsolata,monospace; padding:10px 7px; text-align:center; text-transform:uppercase; }
+.eco-platform-grid .eco-card-actions a:first-child { background:#11120f; color:#fff; }
+.eco-platform-grid .eco-card-actions a:hover { background:#c99a2e; border-color:#9d7216; color:#161106; }
 
 .site-footer {
   background: var(--ink);
@@ -629,6 +644,8 @@ input[name="cattab"], .toggle-input { display: none; }
 .info-content section { border-bottom:1px solid var(--line); padding:0 0 38px; scroll-margin-top:24px; }.info-content section+section{padding-top:38px}
 .info-content h1 { font:clamp(38px,6vw,64px)/1 "DM Serif Display",serif; margin:8px 0 20px; }.info-content h2{font:32px "DM Serif Display",serif;margin-bottom:12px}.info-content p{font-size:16px;line-height:1.75;margin:8px 0}.info-content a{color:var(--red);text-decoration:underline}.info-kicker{color:var(--red);font:700 12px Inconsolata,monospace;letter-spacing:.1em;text-transform:uppercase}
 @media(max-width:700px){.info-layout{grid-template-columns:1fr}.info-nav{display:flex;overflow:auto;position:static}.info-nav a{flex-shrink:0;padding:8px 12px}}
+@media(max-width:900px){.eco-directory-hero{grid-template-columns:1fr}.eco-platform-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.eco-platform-grid{grid-template-columns:1fr}.eco-directory-hero{padding:28px 22px}.eco-platform-grid article{min-height:320px}}
 
 .citizen-modal-overlay {
   align-items: center;
@@ -697,7 +714,7 @@ input[name="cattab"], .toggle-input { display: none; }
   .hero-excerpt { font-size: 14.5px; }
   .trending-row, .trending-row.in-column { grid-template-columns: 1fr; }
   .cluster-card { min-height: auto; }
-  .eco-platform-grid { grid-template-columns: repeat(2, 1fr); }
+  .eco-platform-grid { grid-template-columns: 1fr; }
   .story-card { gap: 10px; grid-template-columns: 76px 1fr; }
   .story-thumb { height: 58px; width: 76px; }
   .section-header h2 { font-size: 19px; }
