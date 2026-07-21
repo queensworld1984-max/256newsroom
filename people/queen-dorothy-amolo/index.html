@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queen Dorothy Amolo - Founder, 256 AI Systems | 256 Newsroom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=Inconsolata:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/people/queen-dorothy-amolo/profile.css">
+</head>
+<body class="profile-page">
+  <header class="profile-masthead">
+    <a href="/" class="profile-brand"><span>256</span> News<span>room</span></a>
+    <div class="breadcrumb"><a href="/">Home</a> / <a href="/#ecosystem">256 AI Systems</a> / Queen Dorothy Amolo</div>
+  </header>
+
+  <div class="cover-banner"><div class="cover-inner"></div></div>
+
+  <main class="profile-container">
+    <section class="profile-hero">
+      <div class="profile-photo">DA</div>
+      <div class="profile-main">
+        <div class="name-row">
+          <h1>Queen Dorothy Amolo</h1>
+        </div>
+        <p class="profile-role">Founder and President, 256 AI Systems · Computer Programmer, AI Engineer and Systems Architect</p>
+        <div class="profile-meta-row">
+          <span>Uganda</span>
+          <span>Executive / Founder</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="profile-grid">
+      <div>
+        <section class="bio-block">
+          <h2 class="profile-section-title">About</h2>
+          <p class="bio-text">Queen Dorothy Amolo is the founder and president of 256 AI Systems, a Ugandan digital infrastructure company bringing together AI, commerce, transport, cybersecurity, matchmaking and public-service platforms.</p>
+          <div class="tag-row">
+            <span class="primary">256 AI Systems</span><span>Artificial Intelligence</span><span>Technology</span><span>Uganda</span>
+          </div>
+        </section>
+
+        <section class="bio-block">
+          <h2 class="profile-section-title">Press Coverage</h2>
+          <p class="bio-subtext">Independent news coverage of Queen Dorothy Amolo's work with 256 AI Systems, pulled automatically from approved news sources. This list only shows articles other outlets have actually published - nothing here is written by 256 Newsroom.</p>
+          <div id="press-coverage-list"><p class="eco-empty">Loading press coverage...</p></div>
+        </section>
+
+        <section class="bio-block">
+          <h2 class="profile-section-title">Related 256 Platforms</h2>
+          <div class="tag-row">
+            <a href="https://256heart.com" target="_blank" rel="noopener" class="platform-pill">256 Heart</a>
+            <a href="https://256mall.com" target="_blank" rel="noopener" class="platform-pill">256 Mall</a>
+            <a href="https://256express.com" target="_blank" rel="noopener" class="platform-pill">256 Express</a>
+            <a href="https://enterprise.256.co.ug" target="_blank" rel="noopener" class="platform-pill">256 Corporate</a>
+            <a href="https://shield.256.co.ug" target="_blank" rel="noopener" class="platform-pill">256Shield</a>
+            <a href="https://linkshield.256.co.ug" target="_blank" rel="noopener" class="platform-pill">256LinkShield</a>
+          </div>
+        </section>
+      </div>
+
+      <aside>
+        <section class="info-card">
+          <h2 class="profile-section-title">Details</h2>
+          <p><span>Role</span><b>Founder &amp; President</b></p>
+          <p><span>Organization</span><b>256 AI Systems</b></p>
+          <p><span>Profile type</span><b>Executive / Founder</b></p>
+          <p><span>Location</span><b>Uganda</b></p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, (ch) => escapeMap[ch]); }
+    function safeHref(value) {
+      const str = String(value ?? '').trim();
+      return /^https?:\/\//i.test(str) ? escapeHtml(str) : '#';
+    }
+    function formatDate(value) {
+      if (!value) return 'Undated';
+      return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    async function loadPressCoverage() {
+      const mount = document.getElementById('press-coverage-list');
+      try {
+        const res = await fetch('/api/news/mentions?q=Amolo&limit=12', { headers: { Accept: 'application/json' } });
+        const data = await res.json();
+        const items = data.items || [];
+        if (!items.length) {
+          mount.innerHTML = '<p class="eco-empty">No independent press coverage found yet.</p>';
+          return;
+        }
+        mount.innerHTML = items.map((item) => `
+          <article class="portfolio-item">
+            <div class="portfolio-top single">
+              <div><h3><a href="${safeHref(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a></h3>
+              <p>${escapeHtml(item.source?.name || 'Unknown source')}${item.author ? ' · ' + escapeHtml(item.author) : ''} · ${formatDate(item.publishedAt)}</p></div>
+            </div>
+          </article>
+        `).join('');
+      } catch (err) {
+        mount.innerHTML = '<p class="eco-empty">Press coverage is temporarily unavailable.</p>';
+      }
+    }
+    loadPressCoverage();
+  </script>
+</body>
+</html>

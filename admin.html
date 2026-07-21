@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>256 Newsroom Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    body { padding: 24px; }
+    .admin-wrap { max-width: 1180px; margin: 0 auto; }
+    .admin-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-card { background: #fff; border: 1px solid var(--line-strong); padding: 18px; }
+    input, select, textarea, button { border: 1px solid var(--line-strong); font: inherit; padding: 10px 12px; }
+    button { background: var(--ink); color: var(--paper); cursor: pointer; font-weight: 700; }
+    label { color: var(--grey); display: grid; font-family: "Inconsolata", monospace; font-size: 10.5px; font-weight: 700; gap: 5px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .source-form { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 18px; }
+    .source-form label:nth-child(1), .source-form label:nth-child(2), .source-form label:nth-child(7) { grid-column: 1 / -1; }
+    pre { background: var(--paper-dim); overflow: auto; padding: 12px; white-space: pre-wrap; }
+    @media (max-width: 760px) { .admin-grid, .source-form { grid-template-columns: 1fr; } .source-form label { grid-column: auto !important; } }
+  </style>
+</head>
+<body>
+  <main class="admin-wrap">
+    <div class="section-header"><h2>256 Newsroom Admin</h2><span>MODERATION</span></div>
+    <p style="margin-bottom:16px;color:var(--grey);">Enter the admin token from the backend environment to manage sources, crawl logs, articles, and citizen reports.</p>
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+      <input id="token" type="password" placeholder="Admin token" style="flex:1;min-width:220px;">
+      <button id="load">Load Dashboard</button>
+      <button id="crawl">Run Crawl</button>
+    </div>
+    <section class="admin-card" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:12px;">Add or Approve Source</h3>
+      <div class="source-form">
+        <label>Name <input id="source-name" placeholder="BBC World News"></label>
+        <label>Slug <input id="source-slug" placeholder="bbc-world-news"></label>
+        <label>Homepage URL <input id="source-homepage" placeholder="https://example.com"></label>
+        <label>Feed URL <input id="source-feed" placeholder="https://example.com/feed.xml"></label>
+        <label>Source Type
+          <select id="source-type">
+            <option value="local_publisher">Local publisher</option>
+            <option value="international_publisher">International publisher</option>
+            <option value="sports_official">Sports official</option>
+            <option value="government_official">Government official</option>
+            <option value="social_official">Social official</option>
+          </select>
+        </label>
+        <label>Default Category
+          <select id="source-category">
+            <option value="">Auto classify</option>
+            <option value="national">National</option>
+            <option value="politics">Politics</option>
+            <option value="business">Business</option>
+            <option value="district">District</option>
+            <option value="sports">Sports</option>
+            <option value="world">World</option>
+            <option value="health">Health</option>
+            <option value="technology">Technology</option>
+            <option value="education">Education</option>
+          </select>
+        </label>
+        <label>Admin Notes <textarea id="source-notes" rows="2" placeholder="Verification notes, API requirements, known feed limits"></textarea></label>
+        <label><span><input id="source-official" type="checkbox"> Official source</span></label>
+        <label><span><input id="source-active" type="checkbox"> Active</span></label>
+        <label><span><input id="source-approved" type="checkbox"> Approved</span></label>
+      </div>
+      <button id="save-source">Save Source</button>
+    </section>
+    <div class="admin-grid">
+      <section class="admin-card"><h3>Sources</h3><pre id="sources">Not loaded</pre></section>
+      <section class="admin-card"><h3>Crawl Logs</h3><pre id="logs">Not loaded</pre></section>
+      <section class="admin-card"><h3>Citizen Reports</h3><pre id="reports">Not loaded</pre></section>
+      <section class="admin-card"><h3>Latest Articles</h3><pre id="articles">Not loaded</pre></section>
+    </div>
+  </main>
+  <script>
+    const tokenInput = document.querySelector('#token');
+    const out = (id, data) => document.querySelector(id).textContent = JSON.stringify(data, null, 2);
+    async function api(path, options = {}) {
+      const token = tokenInput.value.trim();
+      const res = await fetch(path, { ...options, headers: { 'content-type': 'application/json', 'x-admin-token': token, ...(options.headers || {}) } });
+      return res.json();
+    }
+    async function load() {
+      out('#sources', await api('/api/admin/sources'));
+      out('#logs', await api('/api/admin/crawl-logs'));
+      out('#reports', await api('/api/admin/citizen-reports'));
+      out('#articles', await fetch('/api/news/latest?limit=10').then((r) => r.json()));
+    }
+    document.querySelector('#load').addEventListener('click', load);
+    document.querySelector('#save-source').addEventListener('click', async () => {
+      const payload = {
+        name: document.querySelector('#source-name').value.trim(),
+        slug: document.querySelector('#source-slug').value.trim(),
+        homepageUrl: document.querySelector('#source-homepage').value.trim() || null,
+        feedUrl: document.querySelector('#source-feed').value.trim() || null,
+        sourceType: document.querySelector('#source-type').value,
+        defaultCategorySlug: document.querySelector('#source-category').value || null,
+        official: document.querySelector('#source-official').checked,
+        active: document.querySelector('#source-active').checked,
+        approved: document.querySelector('#source-approved').checked,
+        adminNotes: document.querySelector('#source-notes').value.trim() || null,
+      };
+      out('#sources', await api('/api/admin/sources', { method: 'POST', body: JSON.stringify(payload) }));
+      await load();
+    });
+    document.querySelector('#crawl').addEventListener('click', async () => {
+      out('#logs', await api('/api/crawl/run', { method: 'POST', body: '{}' }));
+      await load();
+    });
+  </script>
+</body>
+</html>

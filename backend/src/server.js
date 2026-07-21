@@ -1,0 +1,464 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const cron = require('node-cron');
+const pool = require('./db');
+const { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics } = require('../scripts/crawl');
+
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+
+const app = express();
+const port = Number(process.env.PORT || 5066);
+
+app.set('trust proxy', true);
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: ['https://256newsroom.com', 'https://www.256newsroom.com'] }));
+app.use(express.json({ limit: '1mb' }));
+
+function requireAdmin(req, res, next) {
+  const expected = process.env.ADMIN_TOKEN;
+  const provided = req.header('x-admin-token');
+  if (!expected || provided !== expected) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+const citizenReportAttempts = new Map();
+function citizenReportRateLimit(req, res, next) {
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const maxRequests = 5;
+  const attempts = (citizenReportAttempts.get(ip) || []).filter((t) => now - t < windowMs);
+  if (attempts.length >= maxRequests) {
+    return res.status(429).json({ error: 'Too many reports submitted from this connection. Please try again later.' });
+  }
+  attempts.push(now);
+  citizenReportAttempts.set(ip, attempts);
+  next();
+}
+
+const articleSelect = `
+  select
+    a.id, a.title, a.summary, a.url, a.image_url, a.author, a.published_at, a.score,
+    s.name as source_name, s.slug as source_slug, s.source_type, s.official, s.credibility_label,
+    c.name as category, c.slug as category_slug,
+    d.name as district, d.slug as district_slug
+  from articles a
+  join sources s on s.id = a.source_id
+  left join categories c on c.id = a.category_id
+  left join districts d on d.id = a.district_id
+  where a.hidden = false and a.status = 'published'
+`;
+
+const ecosystemSearchSql = `
+  lower(coalesce(a.title, '') || ' ' || coalesce(a.summary, '') || ' ' || coalesce(a.url, '')) similar to
+  '%(256 heart|256heart|256 corporate|256corporate|256 mall|256mall|256 express|256express|256shield|256 shield|256 ai|256ai|256 ai systems|256linkshield|256 linkshield|256 ecosystem|256 group|queen dorothy amolo|dorothy amolo|jason boyle|r. boyle|r boyle|enterprise.256|shield.256|ai.256)%'
+`;
+
+// Today's Uganda-local-day articles are ranked ahead of everything else; older
+// articles still show, just pushed further down instead of dropped.
+const todayFirstOrder = `(date_trunc('day', a.published_at at time zone 'Africa/Kampala') = date_trunc('day', now() at time zone 'Africa/Kampala')) desc nulls last`;
+
+function limitParam(req, fallback = 12, max = 50) {
+  const value = Number(req.query.limit || fallback);
+  if (!Number.isFinite(value) || value < 1) return fallback;
+  return Math.min(value, max);
+}
+
+function normalizeRows(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    url: row.url,
+    imageUrl: row.image_url,
+    author: row.author,
+    publishedAt: row.published_at,
+    score: Number(row.score || 0),
+    source: {
+      name: row.source_name,
+      slug: row.source_slug,
+      type: row.source_type,
+      official: row.official,
+      credibilityLabel: row.credibility_label,
+    },
+    category: row.category ? { name: row.category, slug: row.category_slug } : null,
+    district: row.district ? { name: row.district, slug: row.district_slug } : null,
+  }));
+}
+
+app.get('/api/health', async (_req, res) => {
+  const db = await pool.query('select now() as now');
+  res.json({ ok: true, service: '256-newsroom-api', databaseTime: db.rows[0].now });
+});
+
+function interleave(primary, secondary) {
+  if (!secondary.length) return primary;
+  const result = [];
+  const step = Math.max(1, Math.floor(primary.length / (secondary.length + 1)));
+  let secIndex = 0;
+  primary.forEach((item, i) => {
+    result.push(item);
+    if ((i + 1) % step === 0 && secIndex < secondary.length) {
+      result.push(secondary[secIndex++]);
+    }
+  });
+  while (secIndex < secondary.length) result.push(secondary[secIndex++]);
+  return result;
+}
+
+// 256 Newsroom is a Uganda-focused outlet: the hero/top-story rotation should be
+// Uganda news first, with only a handful of major international stories mixed in.
+app.get('/api/news/hero', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 12);
+    const internationalCap = Math.max(1, Math.min(3, Math.round(limit * 0.2)));
+    const ugandaLimit = limit - internationalCap;
+    const [ugandaRows, intlRows] = await Promise.all([
+      pool.query(`${articleSelect} and s.source_type <> 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [ugandaLimit]),
+      pool.query(`${articleSelect} and s.source_type = 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [internationalCap]),
+    ]);
+    const items = interleave(normalizeRows(ugandaRows.rows), normalizeRows(intlRows.rows));
+    res.json({ items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/top', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 12);
+    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/latest', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 18);
+    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, a.published_at desc nulls last, a.fetched_at desc limit $1`, [limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/ecosystem', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 12);
+    const { rows } = await pool.query(`
+      ${articleSelect}
+      and (c.slug = 'ecosystem' or ${ecosystemSearchSql})
+      order by ${todayFirstOrder}, a.published_at desc nulls last, a.fetched_at desc
+      limit $1
+    `, [limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/mentions', async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 120);
+    if (!q) return res.json({ items: [] });
+    const limit = limitParam(req, 12);
+    const { rows } = await pool.query(`
+      ${articleSelect}
+      and (a.title ilike '%' || $1 || '%' or a.summary ilike '%' || $1 || '%')
+      order by ${todayFirstOrder}, a.published_at desc nulls last, a.fetched_at desc
+      limit $2
+    `, [q, limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/category/:category', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 12);
+    const { rows } = await pool.query(`${articleSelect} and c.slug = $1 order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/district/:district', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 12);
+    const { rows } = await pool.query(`${articleSelect} and d.slug = $1 order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.district, limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/districts/latest', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 18);
+    const { rows } = await pool.query(`
+      ${articleSelect}
+      and (d.id is not null or c.slug = 'district')
+      order by ${todayFirstOrder}, a.published_at desc nulls last, a.fetched_at desc
+      limit $1
+    `, [limit]);
+    res.json({ items: normalizeRows(rows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/news/sources/top', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 10);
+    const { rows } = await pool.query(`
+      select s.id, s.name, s.slug, s.source_type, s.official, s.credibility_label,
+        count(a.id)::int as article_count, coalesce(sum(a.score), 0)::numeric as score
+      from sources s
+      left join articles a on a.source_id = s.id and a.hidden = false and a.status = 'published'
+      where s.active = true and s.approved = true
+      group by s.id
+      order by score desc, article_count desc, s.name asc
+      limit $1
+    `, [limit]);
+    res.json({ items: rows.map((row) => ({ ...row, score: Number(row.score || 0) })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/journalists/top', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 6);
+    const { rows } = await pool.query(`
+      select j.id, j.name, j.slug, j.beat, j.profile_url, j.image_url, j.verified, j.trust_score,
+        coalesce(sum(es.reads), 0)::int as reads,
+        coalesce(sum(es.views), 0)::int as views,
+        coalesce(sum(es.shares), 0)::int as shares
+      from journalists j
+      left join engagement_stats es on es.entity_type = 'journalist' and es.entity_id = j.id
+      group by j.id
+      order by reads desc, views desc, trust_score desc
+      limit $1
+    `, [limit]);
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/ecosystem', (_req, res) => {
+  res.json({
+    items: [
+      { platform: '256 Heart', type: 'Platform Update', title: 'Free access codes launched for Gold, VIP & Stealth membership plans', summary: 'All current membership tiers are available at no cost through promotional access codes as the platform expands across Uganda and the diaspora.', description: 'Dating and matchmaking platform for Uganda and the diaspora.', mark: 'H', logoUrl: '/assets/logos/256-heart.png', link: 'https://256heart.com' },
+      { platform: '256 Corporate', type: 'Opportunity', title: '256 Corporate opens applications for software-development volunteers', summary: 'Approved technical volunteers get access to development assignments, onboarding, dashboard tools and commission-based project opportunities.', description: 'Business and technology services, including software-development opportunities.', mark: 'C', logoUrl: '/assets/logos/256-corporate.png', link: 'https://enterprise.256.co.ug' },
+      { platform: '256 Mall', type: 'Milestone', title: '256 Mall onboards its 1,000th verified wholesale seller', summary: "The milestone comes as the platform's wholesale tier expands into three new districts this quarter.", description: "Uganda's national e-commerce and wholesale marketplace.", mark: 'M', logoUrl: '/assets/logos/256-mall.png', link: 'https://256mall.com' },
+      { platform: '256 Express', type: 'Safety Notice', title: '256 Express introduces in-app driver verification badges', summary: 'Riders can now confirm driver identity and vehicle details before every trip, part of a wider district-by-district safety rollout.', description: 'Transport, delivery and logistics platform.', mark: 'E', logoUrl: '/assets/logos/256-express.png', link: 'https://256express.com' },
+      { platform: '256Shield', type: 'Product Update', title: 'Domain scanner now covers four new threat categories', summary: "The update expands 256Shield's automated scanning modules to catch a wider range of phishing and spoofing patterns before they reach users.", description: 'Cybersecurity and digital protection, including domain and phishing scanning.', mark: 'S', logoUrl: '/assets/logos/256-shield.svg', link: 'https://shield.256.co.ug' },
+      { platform: '256 AI Systems', type: 'Press Briefing', title: 'Queen Dorothy Amolo Unveils 256 AI Systems During Lira Press Briefing', summary: 'At a press briefing at Pauline Hotel in Lira City on 13 July 2026, Queen Dorothy Amolo and Dr. Jason Boyle launched 256 AI Systems, covering the digital ecosystem launch, employment and digital-skills development, AI tools for Ugandan users, e-commerce through 256 Mall, transport and service access through 256 Express, private matchmaking through 256 Heart, cybersecurity and scam protection, government-accountability tools, support for farmers and businesses, and plans for Uganda to become a regional digital-innovation centre. See independent press coverage of the event on the profile linked below.', description: "Ugandan AI and digital-infrastructure company connecting commerce, transport, cybersecurity, matchmaking and public-service platforms.", mark: 'AI', logoUrl: '/assets/logos/256-ai.png', link: 'https://ai.256.co.ug', profileUrl: '/people/queen-dorothy-amolo/' },
+      { platform: '256LinkShield', type: 'Safety Update', title: 'Link reputation checks expand across public news submissions', summary: 'The platform now screens submitted URLs for spoofing, malware and suspicious redirects before they reach moderation queues.', description: 'Link and website reputation checking to catch phishing and spoofing.', mark: 'LS', logoUrl: '/assets/logos/256-linkshield.svg', link: 'https://linkshield.256.co.ug' },
+    ],
+  });
+});
+
+app.post('/api/citizen-reports', citizenReportRateLimit, async (req, res, next) => {
+  try {
+    const description = String(req.body.description || '').trim().slice(0, 2000);
+    const districtSlug = req.body.districtSlug ? String(req.body.districtSlug).trim() : null;
+    const anonymous = Boolean(req.body.anonymous);
+    if (!description) return res.status(400).json({ error: 'Please describe what you are seeing.' });
+    const title = description.length > 80 ? `${description.slice(0, 77)}...` : description;
+    const districtId = districtSlug
+      ? (await pool.query('select id from districts where slug = $1', [districtSlug])).rows[0]?.id || null
+      : null;
+    const { rows } = await pool.query(`
+      insert into citizen_reports (title, description, district_id, anonymous, status)
+      values ($1, $2, $3, $4, 'pending')
+      returning id, status
+    `, [title, description, districtId, anonymous]);
+    res.status(201).json({ item: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/crawl/run', requireAdmin, async (_req, res, next) => {
+  try {
+    const result = await crawlAllSources();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/crawl/run-newsapi', requireAdmin, async (_req, res, next) => {
+  try {
+    const result = await crawlNewsApiSources();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/crawl/run-googlenews', requireAdmin, async (_req, res, next) => {
+  try {
+    const result = await crawlGoogleNewsTopics();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/admin/sources', requireAdmin, async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select s.*, c.slug as default_category_slug, c.name as default_category
+      from sources s
+      left join categories c on c.id = s.default_category_id
+      order by s.approved asc, s.active desc, s.name
+    `);
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/admin/sources', requireAdmin, async (req, res, next) => {
+  try {
+    const {
+      name,
+      slug,
+      homepageUrl,
+      feedUrl,
+      sourceType = 'local_publisher',
+      defaultCategorySlug = null,
+      official = false,
+      credibilityLabel = null,
+      adminNotes = null,
+      active = true,
+      approved = true,
+    } = req.body;
+    const categoryId = defaultCategorySlug
+      ? (await pool.query('select id from categories where slug = $1', [defaultCategorySlug])).rows[0]?.id
+      : null;
+    const { rows } = await pool.query(`
+      insert into sources
+        (name, slug, homepage_url, feed_url, source_type, default_category_id, official, credibility_label, admin_notes, active, approved)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      on conflict (slug) do update set
+        name = excluded.name,
+        homepage_url = excluded.homepage_url,
+        feed_url = excluded.feed_url,
+        source_type = excluded.source_type,
+        default_category_id = excluded.default_category_id,
+        official = excluded.official,
+        credibility_label = excluded.credibility_label,
+        admin_notes = excluded.admin_notes,
+        active = excluded.active,
+        approved = excluded.approved,
+        updated_at = now()
+      returning *
+    `, [name, slug, homepageUrl, feedUrl, sourceType, categoryId, official, credibilityLabel, adminNotes, active, approved]);
+    res.json({ item: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.patch('/api/admin/articles/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { hidden, status, categorySlug, districtSlug } = req.body;
+    const categoryId = categorySlug ? (await pool.query('select id from categories where slug = $1', [categorySlug])).rows[0]?.id : null;
+    const districtId = districtSlug ? (await pool.query('select id from districts where slug = $1', [districtSlug])).rows[0]?.id : null;
+    const { rows } = await pool.query(`
+      update articles set
+        hidden = coalesce($2, hidden),
+        status = coalesce($3, status),
+        category_id = coalesce($4, category_id),
+        district_id = coalesce($5, district_id),
+        updated_at = now()
+      where id = $1
+      returning *
+    `, [req.params.id, hidden, status, categoryId, districtId]);
+    res.json({ item: rows[0] || null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/admin/citizen-reports', requireAdmin, async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select cr.*, d.name as district
+      from citizen_reports cr
+      left join districts d on d.id = cr.district_id
+      order by cr.created_at desc
+      limit 100
+    `);
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.patch('/api/admin/citizen-reports/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    const { rows } = await pool.query('update citizen_reports set status = $2 where id = $1 returning *', [req.params.id, status]);
+    res.json({ item: rows[0] || null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get('/api/admin/crawl-logs', requireAdmin, async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select cl.*, s.name as source_name
+      from crawl_logs cl
+      left join sources s on s.id = cl.source_id
+      order by cl.started_at desc
+      limit 50
+    `);
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+if (process.env.CRAWL_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(10, Number(process.env.CRAWL_INTERVAL_MINUTES || 30));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    crawlAllSources().catch((err) => console.error('Scheduled crawl failed:', err));
+  });
+}
+
+if (process.env.NEWSAPI_KEY && process.env.NEWSAPI_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(60, Number(process.env.NEWSAPI_INTERVAL_MINUTES || 120));
+  const hours = Math.max(1, Math.round(minutes / 60));
+  cron.schedule(`0 */${hours} * * *`, () => {
+    crawlNewsApiSources().catch((err) => console.error('Scheduled NewsAPI crawl failed:', err));
+  });
+}
+
+if (process.env.GOOGLENEWS_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.GOOGLENEWS_INTERVAL_MINUTES || 30));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    crawlGoogleNewsTopics().catch((err) => console.error('Scheduled Google News crawl failed:', err));
+  });
+}
+
+app.listen(port, () => {
+  console.log(`256 Newsroom API listening on ${port}`);
+});
