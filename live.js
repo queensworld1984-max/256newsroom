@@ -1,4 +1,6 @@
 const API = '/api';
+const FALLBACK_IMAGE = '/assets/images/newsroom-fallback.webp';
+const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
 let trendingRotationTimer = null;
 let carouselRotationTimer = null;
@@ -45,8 +47,8 @@ function imageClass(item) {
 
 function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
-  if (!/^https?:\/\//i.test(raw)) return '';
-  const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+  const source = /^https?:\/\//i.test(raw) || raw.startsWith('/') ? raw : FALLBACK_IMAGE;
+  const cssSafe = source.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
   return ` style="background-image:linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${cssSafe}'); background-size:cover; background-position:center;"`;
 }
 
@@ -54,7 +56,7 @@ const imagePreloadCache = new Map();
 
 function preloadImage(url, timeoutMs = 4000) {
   const src = String(url ?? '').trim();
-  if (!/^https?:\/\//i.test(src)) return Promise.resolve();
+  if (!/^https?:\/\//i.test(src) && !src.startsWith('/')) return Promise.resolve();
   if (imagePreloadCache.has(src)) return imagePreloadCache.get(src);
 
   const request = new Promise((resolve) => {
@@ -84,8 +86,74 @@ function preloadImage(url, timeoutMs = 4000) {
 }
 
 function preloadArticleImages(items = []) {
-  const urls = [...new Set(items.map((item) => item?.imageUrl).filter(Boolean))];
+  const urls = [...new Set(items.map((item) => item?.imageUrl || FALLBACK_IMAGE))];
   return Promise.all(urls.map((url) => preloadImage(url)));
+}
+
+function readReaderProfile() {
+  try {
+    return JSON.parse(localStorage.getItem(READER_PROFILE_KEY)) || { categories: {}, districts: {}, terms: [] };
+  } catch (_) {
+    return { categories: {}, districts: {}, terms: [] };
+  }
+}
+
+function saveReaderInterest(item) {
+  const profile = readReaderProfile();
+  profile.categories ||= {};
+  profile.districts ||= {};
+  if (item?.category?.slug) profile.categories[item.category.slug] = (profile.categories[item.category.slug] || 0) + 1;
+  if (item?.district?.slug) profile.districts[item.district.slug] = (profile.districts[item.district.slug] || 0) + 2;
+  localStorage.setItem(READER_PROFILE_KEY, JSON.stringify(profile));
+}
+
+function personalizeItems(items = [], profile = readReaderProfile()) {
+  return items.map((item, index) => {
+    const categoryScore = Number(profile.categories?.[item.category?.slug] || 0) * 3;
+    const districtScore = Number(profile.districts?.[item.district?.slug] || 0) * 5;
+    const locationScore = profile.locationDistrict && item.district?.slug === profile.locationDistrict ? 100 : 0;
+    const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+    const termScore = (profile.terms || []).reduce((score, term) => score + (text.includes(String(term).toLowerCase()) ? 4 : 0), 0);
+    return { item, index, score: categoryScore + districtScore + locationScore + termScore };
+  }).sort((a, b) => b.score - a.score || a.index - b.index).map(({ item }) => item);
+}
+
+function setupInterestTracking() {
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('[data-story-id]');
+    if (!link) return;
+    saveReaderInterest({
+      category: link.dataset.category ? { slug: link.dataset.category } : null,
+      district: link.dataset.district ? { slug: link.dataset.district } : null,
+    });
+  });
+}
+
+const districtCentres = [
+  ['kampala', 0.3476, 32.5825], ['wakiso', 0.4044, 32.4594], ['mukono', 0.3533, 32.7553],
+  ['jinja', 0.4479, 33.2026], ['mbale', 1.0806, 34.1750], ['gulu', 2.7724, 32.2881],
+  ['mbarara', -0.6072, 30.6545], ['fort-portal', 0.6710, 30.2750], ['masaka', -0.3338, 31.7341],
+  ['arua', 3.0303, 30.9107], ['lira', 2.2499, 32.8998], ['soroti', 1.7146, 33.6111],
+  ['kabale', -1.2417, 29.9856], ['hoima', 1.4331, 31.3524], ['moroto', 2.5345, 34.6666],
+];
+
+function nearestDistrict(latitude, longitude) {
+  return districtCentres.reduce((nearest, district) => {
+    const distance = ((latitude - district[1]) ** 2) + ((longitude - district[2]) ** 2);
+    return !nearest || distance < nearest.distance ? { slug: district[0], distance } : nearest;
+  }, null)?.slug || null;
+}
+
+function resolveReaderProfile() {
+  const profile = readReaderProfile();
+  if (profile.locationDistrict || !navigator.geolocation) return Promise.resolve(profile);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(({ coords }) => {
+      profile.locationDistrict = nearestDistrict(coords.latitude, coords.longitude);
+      localStorage.setItem(READER_PROFILE_KEY, JSON.stringify(profile));
+      resolve(profile);
+    }, () => resolve(profile), { enableHighAccuracy: false, timeout: 3000, maximumAge: 86400000 });
+  });
 }
 
 function rotatedWindow(items = [], start = 0, size = 4) {
@@ -144,12 +212,13 @@ function setTopSources(items) {
 
 function articleCard(item) {
   const initials = sourceInitials(item.source?.name);
+  const tracking = `data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}"`;
   return `
     <article class="grid-card">
       <div class="thumb ${imageClass(item)}"${imageStyle(item)}></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(initials)}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span> · ${formatTime(item.publishedAt)}</p>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="${safeHref(item.url)}" class="read-link" ${tracking} target="_blank" rel="noopener">Click to read</a>
     </article>
   `;
 }
@@ -163,17 +232,18 @@ function setHero(item) {
   const image = hero.querySelector('.hero-img');
   const cap = hero.querySelector('.hero-img span');
   const meta = hero.querySelector('.story-meta');
+  const eyebrow = hero.querySelector('.eyebrow');
+  if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
   if (title) title.textContent = item.title;
   if (excerpt) excerpt.textContent = item.summary || 'Latest developing story from monitored Ugandan news sources.';
-  if (image && item.imageUrl) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
-  if (image && !item.imageUrl) image.removeAttribute('style');
+  if (image) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
   if (cap) cap.textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
   if (meta) {
     meta.innerHTML = `
       ${sourceBadges(item)}
       <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span>
       <span class="cluster-note">${item.source?.official ? 'Direct official source' : 'Live from approved source feed'}</span>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="${safeHref(item.url)}" class="read-link" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}" target="_blank" rel="noopener">Click to read</a>
     `;
   }
 }
@@ -464,9 +534,10 @@ function setupCitizenReportForm() {
 
 async function bootLiveNews() {
   setupCitizenReportForm();
+  setupInterestTracking();
   setMastheadDate();
   try {
-    const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists] = await Promise.all([
+    const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
       getJson('/news/hero?limit=12'),
       getJson('/news/top?limit=12'),
       getJson('/news/latest?limit=12'),
@@ -478,8 +549,12 @@ async function bootLiveNews() {
       getJson('/news/sources/top?limit=50'),
       getJson('/ecosystem'),
       getJson('/journalists/top?limit=6'),
+      resolveReaderProfile(),
     ]);
-    const heroStories = hero.items || [];
+    const heroStories = personalizeItems(hero.items || [], readerProfile);
+    const topStories = personalizeItems(top.items || [], readerProfile);
+    const latestStories = personalizeItems(latest.items || [], readerProfile);
+    const districtStories = personalizeItems(districtNews.items || [], readerProfile);
 
     // Warm every image used by the initial live view before replacing the
     // matching article text. Because the cards use CSS background images,
@@ -487,32 +562,32 @@ async function bootLiveNews() {
     // and card markup are revealed. Missing image URLs keep their fallback.
     await preloadArticleImages([
       ...heroStories,
-      ...(top.items || []),
-      ...(latest.items || []),
+      ...topStories,
+      ...latestStories,
       ...(national.items || []),
       ...(world.items || []),
       ...(sports.items || []),
-      ...(districtNews.items || []),
+      ...districtStories,
       ...(ecosystemNews.items || []),
     ]);
 
-    setTicker(top.items || []);
+    setTicker(topStories);
     setMastheadStatus((sources.items || []).length);
-    setTrending(rotatedWindow(top.items || [], 0, 4));
-    startTrendingRotation(top.items || []);
+    setTrending(rotatedWindow(topStories, 0, 4));
+    startTrendingRotation(topStories);
     setHero(heroStories[0]);
     startHeroRotation(heroStories);
     setCardGrid('National Headlines', national.items || []);
     setCardGrid('International News', world.items || []);
     setCardGrid('Sports News', sports.items || []);
-    setDistricts(districtNews.items || []);
+    setDistricts(districtStories);
     setEcosystemGrid(ecosystemNews.items || [], ecosystem.items || []);
-    setSocialLatest(latest.items);
-    setCitizenLatest(latest.items);
+    setSocialLatest(latestStories);
+    setCitizenLatest(latestStories);
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
-    setJournalists(journalists.items, latest.items || []);
-    await setCategoryTabs(districtNews.items || []);
+    setJournalists(journalists.items, latestStories);
+    await setCategoryTabs(districtStories);
     startCarouselRotation();
   } catch (err) {
     const statusEl = document.getElementById('masthead-status');
