@@ -149,7 +149,6 @@ router.get('/news/:slug', async (req, res, next) => {
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
 <section class="summary"><h2>What the report says</h2><p>${escapeHtml(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</p></section>
-    ${!substantive ? '<aside class="quality-note">This page is excluded from search indexing until a sufficiently detailed, independently written and fact-checked summary is available.</aside>' : ''}
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>

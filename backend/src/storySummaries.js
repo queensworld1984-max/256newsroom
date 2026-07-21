@@ -1,9 +1,9 @@
 const pool = require('./db');
 const { chatJson } = require('./openaiClient');
+const cheerio = require('cheerio');
 
 const MODEL = 'gpt-5.5';
 const GENERATE_PROMPT = `You are preparing an attributed story digest for 256 Newsroom. Write a neutral summary of 60-150 words using ONLY the supplied evidence snippets. Use original wording; do not copy a full sentence from the evidence. State the essential event, identify who is involved, and add context only when another supplied source explicitly supports it. Do not invent facts, quotations, motives, causes, dates, locations, or outcomes. Do not imply that 256 Newsroom did original reporting. Never pad the word count by discussing what the evidence or snippet does not provide; if that would be necessary, mark the evidence insufficient. Return JSON only. If the evidence cannot support at least 60 useful factual words without padding or speculation, return {"insufficient":true,"reason":"..."}. Otherwise return {"insufficient":false,"summary":"..."}.`;
-const VALIDATE_PROMPT = `You are a strict factual editor. Compare the proposed digest with the supplied evidence. Every factual claim must be directly supported. The digest must be 60-150 words, neutrally attributed, independently worded, and contain no invented quotation, substantial copied sentence, padding, or meta-commentary about missing details/evidence/snippets. Return JSON only: {"valid":true,"unsupportedClaims":[],"copiedPhrases":[]} only if every requirement passes; otherwise return valid false with concise arrays.`;
 
 function countWords(value) {
   return String(value || '').trim().split(/\s+/).filter(Boolean).length;
@@ -28,14 +28,34 @@ async function evidenceForArticle(articleId) {
     where a.cluster_id = $1 and a.id <> $2 and a.hidden = false and a.status = 'published'
     order by a.published_at desc nulls last limit 8
   `, [article.cluster_id, article.id])).rows : [];
-  return { article, coverage };
+  let sourceText = '';
+  try {
+    const sourceUrl = new URL(article.original_url);
+    const privateHost = /^(localhost|::1|127\.|10\.|169\.254\.|192\.168\.)/.test(sourceUrl.hostname)
+      || sourceUrl.hostname.endsWith('.local')
+      || /^172\.(1[6-9]|2\d|3[01])\./.test(sourceUrl.hostname);
+    if (['http:', 'https:'].includes(sourceUrl.protocol) && !privateHost) {
+      const res = await fetch(sourceUrl, {
+        headers: { 'User-Agent': '256NewsroomBot/1.0 (+https://256newsroom.com)' },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (res.ok && String(res.headers.get('content-type') || '').includes('text/html')) {
+        const $ = cheerio.load(await res.text());
+        $('script,style,noscript,nav,header,footer,aside,form,iframe,svg').remove();
+        const root = $('article,main,[role="main"]').first();
+        sourceText = (root.length ? root : $('body')).text().replace(/\s+/g, ' ').trim().slice(0, 8000);
+      }
+    }
+  } catch { /* RSS evidence remains available if the publisher page cannot be fetched. */ }
+  return { article, coverage, sourceText };
 }
 
-function evidenceText({ article, coverage }) {
+function evidenceText({ article, coverage, sourceText }) {
   return [
     `Primary publisher: ${article.publisher_name}`,
     `Primary headline: ${article.title}`,
     `Primary source snippet: ${article.summary || '(none)'}`,
+    `Primary public article text: ${sourceText || '(unavailable)'}`,
     `Original report URL: ${article.original_url}`,
     ...coverage.map((item, index) => `Additional coverage ${index + 1} — ${item.publisher_name}\nHeadline: ${item.title}\nSnippet: ${item.summary || '(none)'}`),
   ].join('\n\n').slice(0, 12000);
@@ -49,24 +69,16 @@ async function generateStorySummary(articleId) {
   const summary = String(generated.data.summary || '').trim();
   if (countWords(summary) < 60 || countWords(summary) > 150) return { articleId, status: 'rejected_length', words: countWords(summary) };
 
-  const checked = await chatJson({
-    system: VALIDATE_PROMPT,
-    user: `${source}\n\nProposed digest:\n${summary}`,
-    model: MODEL,
-  });
-  if (!checked.data.valid) {
-    return { articleId, status: 'rejected_validation', unsupportedClaims: checked.data.unsupportedClaims || [], copiedPhrases: checked.data.copiedPhrases || [] };
-  }
-
   await pool.query(`
     update articles set seo_summary = $2, summary_is_original = true,
-      summary_generation_model = $3, summary_generated_at = now(), updated_at = now()
+      summary_generation_model = $3, summary_generated_at = now(),
+      summary_review_status = 'pending_review', updated_at = now()
     where id = $1
   `, [articleId, summary, generated.model || MODEL]);
-  return { articleId, status: 'ready', words: countWords(summary), summary };
+  return { articleId, status: 'ready_pending_review', words: countWords(summary), summary };
 }
 
-async function generatePendingStorySummaries(limit = 3) {
+async function generatePendingStorySummaries(limit = 10) {
   const { rows } = await pool.query(`
     select id from articles
     where hidden = false and status = 'published' and seo_summary is null

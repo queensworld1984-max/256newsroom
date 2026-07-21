@@ -560,10 +560,10 @@ if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
   });
 }
 
-if (process.env.STORY_SUMMARY_INTERVAL_MINUTES && process.env.STORY_SUMMARY_INTERVAL_MINUTES !== '0') {
-  const minutes = Math.max(15, Number(process.env.STORY_SUMMARY_INTERVAL_MINUTES));
+if (process.env.OPENAI_API_KEY && process.env.STORY_SUMMARY_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.STORY_SUMMARY_INTERVAL_MINUTES || 15));
   cron.schedule(`*/${minutes} * * * *`, () => {
-    generatePendingStorySummaries(3).catch((err) => console.error('Scheduled story-summary generation failed:', err));
+    generatePendingStorySummaries(10).catch((err) => console.error('Scheduled story-summary generation failed:', err));
   });
 }
 
