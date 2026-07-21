@@ -196,10 +196,10 @@ async function discoverSource(organizationId, sourceUrl) {
 
   const { rows } = await pool.query(
     `insert into source_evidence
-      (organization_id, source_url, canonical_url, source_page_title, content_hash, raw_text_snapshot)
-     values ($1, $2, $3, $4, $5, $6)
+      (organization_id, source_url, canonical_url, source_page_title, content_hash, raw_text_snapshot, image_url)
+     values ($1, $2, $3, $4, $5, $6, $7)
      returning *`,
-    [organizationId, sourceUrl, finalUrl, extracted.title, contentHash, extracted.textContent],
+    [organizationId, sourceUrl, finalUrl, extracted.title, contentHash, extracted.textContent, extracted.imageUrl],
   );
 
   return {

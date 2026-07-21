@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../auth');
 const { discoverSource, DomainNotApprovedError } = require('../contentDiscovery');
+const { runGenerationJob } = require('../ecosystemGenerate');
 
 const router = express.Router();
 router.use(requireRole('super_admin', 'newsroom_admin'));
@@ -204,6 +205,24 @@ router.post('/platforms/:orgId(\\d+)/discover', async (req, res, next) => {
   } catch (err) {
     if (err instanceof DomainNotApprovedError) return res.status(403).json({ error: err.message });
     res.status(502).json({ error: `Discovery failed: ${err.message}` });
+  }
+});
+
+// Manual/test-only generation trigger — runs the full generate + validate
+// pipeline for one already-discovered piece of evidence. Only creates an
+// article if every material claim validates against the source text.
+router.post('/platforms/:orgId(\\d+)/generate', async (req, res, next) => {
+  try {
+    const sourceEvidenceId = Number(req.body.sourceEvidenceId);
+    if (!sourceEvidenceId) return res.status(400).json({ error: 'sourceEvidenceId is required.' });
+    const result = await runGenerationJob({
+      organizationId: req.params.orgId,
+      sourceEvidenceId,
+      triggeredBy: `user:${req.user.id}`,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 
