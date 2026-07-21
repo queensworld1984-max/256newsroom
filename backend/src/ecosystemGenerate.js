@@ -83,7 +83,7 @@ async function findExistingArticleByHash(organizationId, contentHash) {
 // -> generate -> validate every material claim -> create the article at the
 // status the platform's automation mode allows. Never creates a public
 // article from a failed or unverified job.
-async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy = 'automation' }) {
+async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy = 'automation', rotationHint = null }) {
   const { rows: evidenceRows } = await pool.query('select * from source_evidence where id = $1 and organization_id = $2', [sourceEvidenceId, organizationId]);
   const evidence = evidenceRows[0];
   if (!evidence) throw new Error('Source evidence not found.');
@@ -127,7 +127,7 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
       platformName: org.name,
       websiteUrl: org.website_url,
       evidence,
-      rotationHint: null,
+      rotationHint,
     });
   } catch (err) {
     job = await fail('failed', `Generation call failed: ${err.message}`);

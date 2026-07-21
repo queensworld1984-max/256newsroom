@@ -17,6 +17,7 @@ const feedRoutes = require('./routes/feeds');
 const { pollDueFeeds } = require('./feedImport');
 const rssRoutes = require('./routes/rss');
 const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
+const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -525,6 +526,16 @@ if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
   const minutes = Math.max(5, Number(process.env.FEED_IMPORT_INTERVAL_MINUTES || 15));
   cron.schedule(`*/${minutes} * * * *`, () => {
     pollDueFeeds().catch((err) => console.error('Scheduled feed import failed:', err));
+  });
+}
+
+// Off by default (ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES=0) — every platform
+// is also individually in 'draft' mode by default (see automation_settings),
+// so this needs two explicit opt-ins before anything can auto-publish.
+if (process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES && process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    runEcosystemAutomationCycle().catch((err) => console.error('Scheduled ecosystem automation cycle failed:', err));
   });
 }
 

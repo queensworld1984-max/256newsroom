@@ -3,6 +3,8 @@ const pool = require('../db');
 const { requireRole } = require('../auth');
 const { discoverSource, DomainNotApprovedError } = require('../contentDiscovery');
 const { runGenerationJob } = require('../ecosystemGenerate');
+const { runEcosystemAutomationCycle, isGloballyPaused, setGloballyPaused } = require('../ecosystemScheduler');
+const { withdrawStory, rejectStory, archiveStory } = require('../storiesCore');
 
 const router = express.Router();
 router.use(requireRole('super_admin', 'newsroom_admin'));
@@ -219,6 +221,112 @@ router.post('/platforms/:orgId(\\d+)/generate', async (req, res, next) => {
       organizationId: req.params.orgId,
       sourceEvidenceId,
       triggeredBy: `user:${req.user.id}`,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/global-settings', async (_req, res, next) => {
+  try {
+    res.json({ paused: await isGloballyPaused() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/global-settings', async (req, res, next) => {
+  try {
+    await setGloballyPaused(Boolean(req.body.paused), req.user.id);
+    res.json({ paused: Boolean(req.body.paused) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Manual "run now" — the same cycle the cron would run, gated by the same
+// global pause / per-platform mode / daily max / min interval / active-day
+// rules. Useful for testing without waiting for the schedule.
+router.post('/run-cycle', async (_req, res, next) => {
+  try {
+    const result = await runEcosystemAutomationCycle();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/articles', async (req, res, next) => {
+  try {
+    const params = [];
+    let where = "a.origin = 'ecosystem_ai_generated'";
+    if (req.query.status) {
+      params.push(req.query.status);
+      where += ` and a.status = $${params.length}`;
+    }
+    if (req.query.organizationId) {
+      params.push(req.query.organizationId);
+      where += ` and a.organization_id = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `select a.id, a.title, a.summary, a.status, a.content_type, a.source_domain, a.external_url,
+              a.fact_verification_status, a.generated_at, a.published_at, a.rejected_reason, a.withdrawn_reason,
+              o.name as platform_name, o.slug as platform_slug
+       from articles a
+       join organizations o on o.id = a.organization_id
+       where ${where}
+       order by a.generated_at desc nulls last limit 200`,
+      params,
+    );
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/articles/:id(\\d+)/reject', async (req, res, next) => {
+  try {
+    const item = await rejectStory(req.params.id, req.body.reason, req.user.id);
+    if (!item) return res.status(404).json({ error: 'Article not found.' });
+    res.json({ item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/articles/:id(\\d+)/withdraw', async (req, res, next) => {
+  try {
+    const item = await withdrawStory(req.params.id, req.body.reason, req.user.id);
+    if (!item) return res.status(404).json({ error: 'Article not found.' });
+    res.json({ item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/articles/:id(\\d+)/archive', async (req, res, next) => {
+  try {
+    const item = await archiveStory(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Article not found.' });
+    res.json({ item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/jobs/:id(\\d+)/retry', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query('select * from generation_jobs where id = $1', [req.params.id]);
+    const job = rows[0];
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
+    if (!['rejected', 'failed'].includes(job.status)) {
+      return res.status(400).json({ error: 'Only a rejected or failed job can be retried.' });
+    }
+    const result = await runGenerationJob({
+      organizationId: job.organization_id,
+      sourceEvidenceId: job.source_evidence_id,
+      triggeredBy: `retry:user:${req.user.id}`,
     });
     res.json(result);
   } catch (err) {

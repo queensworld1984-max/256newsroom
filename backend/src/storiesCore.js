@@ -29,7 +29,7 @@ async function uniqueStorySlug(title, organizationId) {
   }
 }
 
-const STORY_STATUSES = new Set(['draft', 'scheduled', 'published', 'withdrawn', 'pending_review']);
+const STORY_STATUSES = new Set(['draft', 'scheduled', 'published', 'withdrawn', 'pending_review', 'rejected', 'archived']);
 
 function pickStoryInput(body) {
   return {
@@ -203,10 +203,26 @@ async function scheduleStory(articleId, scheduledPublishAt) {
   return rows[0];
 }
 
-async function withdrawStory(articleId, reason) {
+async function withdrawStory(articleId, reason, withdrawnByUserId = null) {
   const { rows } = await pool.query(
-    `update articles set status = 'withdrawn', withdrawn_at = now(), withdrawn_reason = $2, updated_at = now() where id = $1 returning *`,
-    [articleId, reason || null],
+    `update articles set status = 'withdrawn', withdrawn_at = now(), withdrawn_reason = $2, withdrawn_by_user_id = $3, updated_at = now() where id = $1 returning *`,
+    [articleId, reason || null, withdrawnByUserId],
+  );
+  return rows[0];
+}
+
+async function rejectStory(articleId, reason, rejectedByUserId) {
+  const { rows } = await pool.query(
+    `update articles set status = 'rejected', rejected_at = now(), rejected_reason = $2, rejected_by_user_id = $3, updated_at = now() where id = $1 returning *`,
+    [articleId, reason || null, rejectedByUserId || null],
+  );
+  return rows[0];
+}
+
+async function archiveStory(articleId) {
+  const { rows } = await pool.query(
+    `update articles set status = 'archived', archived_at = now(), updated_at = now() where id = $1 returning *`,
+    [articleId],
   );
   return rows[0];
 }
@@ -239,6 +255,8 @@ module.exports = {
   publishStory,
   scheduleStory,
   withdrawStory,
+  rejectStory,
+  archiveStory,
   addCorrection,
   isOrgApproved,
   STORY_STATUSES,
