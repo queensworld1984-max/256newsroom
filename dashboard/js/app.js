@@ -17,6 +17,12 @@ import * as verification from './sections/verification.js';
 import * as rssDistribution from './sections/rssDistribution.js';
 import * as settings from './sections/settings.js';
 
+import * as adminOverview from './sections/admin/overview.js';
+import * as adminPlatforms from './sections/admin/platforms.js';
+import * as adminPlatformDetail from './sections/admin/platformDetail.js';
+import * as adminArticles from './sections/admin/articles.js';
+import * as adminJobs from './sections/admin/jobs.js';
+
 const navEl = document.getElementById('dash-nav');
 const contentEl = document.getElementById('dash-content');
 const topbarOrgEl = document.getElementById('dash-topbar-org');
@@ -64,6 +70,16 @@ const ONBOARDING_NAV = [
   { section: 'Get started', items: [{ path: '/overview', label: 'Overview' }] },
 ];
 
+const ADMIN_NAV = {
+  section: 'Ecosystem Automation',
+  items: [
+    { path: '/admin/ecosystem/overview', label: 'Overview' },
+    { path: '/admin/ecosystem/platforms', label: 'Platforms' },
+    { path: '/admin/ecosystem/articles', label: 'Generated Articles' },
+    { path: '/admin/ecosystem/jobs', label: 'Jobs & Audit Log' },
+  ],
+};
+
 const ROUTES = [
   { pattern: /^\/overview$/, render: (m, c) => overview.render(contentEl, c) },
   { pattern: /^\/stories$/, render: (m, c, q) => stories.render(contentEl, c, { status: q.status }) },
@@ -80,6 +96,11 @@ const ROUTES = [
   { pattern: /^\/verification$/, render: (m, c) => verification.render(contentEl, c) },
   { pattern: /^\/rss-distribution$/, render: (m, c) => rssDistribution.render(contentEl, c) },
   { pattern: /^\/settings$/, render: (m, c) => settings.render(contentEl, c) },
+  { pattern: /^\/admin\/ecosystem\/overview$/, render: (m, c) => adminOverview.render(contentEl, c) },
+  { pattern: /^\/admin\/ecosystem\/platforms$/, render: (m, c) => adminPlatforms.render(contentEl, c) },
+  { pattern: /^\/admin\/ecosystem\/platforms\/(\d+)$/, render: (m, c) => adminPlatformDetail.render(contentEl, c, { orgId: m[1] }) },
+  { pattern: /^\/admin\/ecosystem\/articles$/, render: (m, c, q) => adminArticles.render(contentEl, c, { status: q.status }) },
+  { pattern: /^\/admin\/ecosystem\/jobs$/, render: (m, c, q) => adminJobs.render(contentEl, c, { status: q.status }) },
 ];
 
 function navConfigFor(mode) {
@@ -89,7 +110,8 @@ function navConfigFor(mode) {
 }
 
 function renderNav(mode, currentPath) {
-  const groups = navConfigFor(mode);
+  const groups = navConfigFor(mode).slice();
+  if (ctx.isGlobalAdmin) groups.push(ADMIN_NAV);
   navEl.innerHTML = '';
   for (const group of groups) {
     const heading = document.createElement('div');
@@ -100,7 +122,8 @@ function renderNav(mode, currentPath) {
       const a = document.createElement('a');
       a.href = `#${item.path}`;
       a.textContent = item.label;
-      if (item.path === currentPath || (item.path === '/stories' && currentPath.startsWith('/stories/') && currentPath !== '/stories/new' && currentPath !== '/stories/scheduled')) {
+      const isPlatformDetail = item.path === '/admin/ecosystem/platforms' && currentPath.startsWith('/admin/ecosystem/platforms/');
+      if (item.path === currentPath || isPlatformDetail || (item.path === '/stories' && currentPath.startsWith('/stories/') && currentPath !== '/stories/new' && currentPath !== '/stories/scheduled')) {
         a.classList.add('active');
       }
       navEl.appendChild(a);
@@ -126,7 +149,7 @@ async function route() {
   const [path, search] = raw.split('?');
   const query = Object.fromEntries(new URLSearchParams(search || ''));
 
-  if (ctx.mode === 'onboarding' && path !== '/settings') {
+  if (ctx.mode === 'onboarding' && path !== '/settings' && !(ctx.isGlobalAdmin && path.startsWith('/admin/'))) {
     renderNav('onboarding', '/overview');
     contentEl.innerHTML = '';
     contentEl.appendChild(await onboarding.render(contentEl, ctx));

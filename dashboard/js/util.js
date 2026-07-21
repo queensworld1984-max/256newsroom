@@ -31,6 +31,8 @@ export function statusBadgeClass(status) {
     scheduled: 'badge-gold',
     published: 'badge-green',
     withdrawn: 'badge-red',
+    rejected: 'badge-red',
+    archived: 'badge-grey',
   }[status] || 'badge-grey';
 }
 
