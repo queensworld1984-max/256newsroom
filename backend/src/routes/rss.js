@@ -154,7 +154,7 @@ router.get('/ecosystem.xml', async (req, res, next) => {
     );
     sendRss(res, buildRssXml({
       title: '256 Newsroom — 256 Ecosystem Updates',
-      description: 'Official updates from 256 AI Technologies and its platforms.',
+      description: 'Official updates from 256 AI Systems and its platforms.',
       link: `${SITE_URL}/#ecosystem`,
       selfUrl: `${SITE_URL}/rss/ecosystem.xml`,
       items: rows.map(toRssItem),
