@@ -360,31 +360,34 @@ app.get('/api/search', async (req, res, next) => {
 // updates from them.
 app.get('/api/ecosystem', async (req, res, next) => {
   try {
-    const limit = limitParam(req, 10, 50);
     const { rows } = await pool.query(`
       select
-        a.id, a.title, a.summary, a.published_at, a.slug, a.external_url, a.content_type,
-        o.name as platform, o.slug as org_slug, o.logo_url, o.website_url
-      from articles a
-      join organizations o on o.id = a.organization_id
-      where a.featured_in_ecosystem = true
-        and a.status = 'published'
-        and o.active = true
-        and o.is_official = true
-        and o.verification_status = 'approved'
-      order by a.published_at desc nulls last
-      limit $1
-    `, [limit]);
+        o.id as organization_id, o.name as platform, o.slug as org_slug, o.logo_url, o.website_url,
+        latest.id, latest.title, latest.summary, latest.published_at, latest.slug,
+        latest.external_url, latest.content_type
+      from organizations o
+      left join lateral (
+        select a.id, a.title, a.summary, a.published_at, a.slug, a.external_url, a.content_type
+        from articles a
+        where a.organization_id=o.id and a.status='published' and a.hidden=false
+        order by a.published_at desc nulls last, a.id desc
+        limit 1
+      ) latest on true
+      where o.org_type='ecosystem_platform' and o.active=true
+      order by o.name
+    `);
     res.json({
       items: rows.map((row) => ({
+        organizationId: row.organization_id,
         platform: row.platform,
         logoUrl: row.logo_url,
         title: row.title,
         summary: row.summary,
         publishedAt: row.published_at,
         contentType: row.content_type,
-        articleUrl: row.slug ? `/${row.org_slug}/${row.slug}` : null,
-        externalUrl: row.external_url || row.website_url || null,
+        articleUrl: row.slug ? `/news/${row.slug}` : null,
+        link: row.website_url || row.external_url || null,
+        websiteUrl: row.website_url || null,
       })),
     });
   } catch (err) {

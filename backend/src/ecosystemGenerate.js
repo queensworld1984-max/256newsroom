@@ -145,9 +145,22 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
   }
   if (!PERMITTED_CATEGORIES.includes(draft.category)) draft.category = 'ecosystem';
 
+  // Platform identity, approved official URL and page title are trusted
+  // discovery context, not invented article claims. Include them in the
+  // validation corpus so accurate identity/attribution is not rejected just
+  // because a page's visible <main> omits its brand name or <title>.
+  const validationSource = [
+    `Platform name: ${org.name}`,
+    `Official platform website: ${org.website_url}`,
+    `Official source page: ${evidence.canonical_url || evidence.source_url}`,
+    `Source page title: ${evidence.source_page_title || ''}`,
+    '',
+    evidence.raw_text_snapshot || '',
+  ].join('\n');
+
   let validation;
   try {
-    validation = await validateArticleClaims({ body: draft.body, headline: draft.headline, summary: draft.summary, sourceText: evidence.raw_text_snapshot });
+    validation = await validateArticleClaims({ body: draft.body, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
   } catch (err) {
     job = await fail('failed', `Validation call failed: ${err.message}`);
     return { job, article: null };

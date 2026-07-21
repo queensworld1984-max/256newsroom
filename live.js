@@ -451,7 +451,7 @@ function domainFromLink(url) {
 function setEcosystem(items) {
   const mount = document.querySelector('.eco-teaser-box');
   if (!mount) return;
-  const platforms = items?.length ? items : [
+  const directory = [
     { platform:'256 AI', description:'AI infrastructure and automation', link:'https://ai.256.co.ug' },
     { platform:'256 Mall', description:'Commerce and verified marketplace services', link:'https://256mall.com' },
     { platform:'256 Express', description:'Transport, delivery and logistics', link:'https://256express.com' },
@@ -460,10 +460,11 @@ function setEcosystem(items) {
     { platform:'256Shield', description:'Cybersecurity and digital protection', link:'https://shield.256.co.ug' },
     { platform:'256LinkShield', description:'Link and website reputation checking', link:'https://linkshield.256.co.ug' },
   ];
+  const platforms = directory.map((entry) => ({ ...entry, ...(items || []).find((item) => item.platform === entry.platform) }));
   mount.innerHTML = '<div class="sidebar-title">256 AI Systems Ecosystem</div>' + platforms.slice(0, 7).map((item) => `
-    <a class="eco-teaser-item" href="${safeHref(item.link) !== '#' ? safeHref(item.link) : '/#ecosystem'}" target="_blank" rel="noopener">
+    <a class="eco-teaser-item" href="${safeHref(item.articleUrl || item.link) !== '#' ? safeHref(item.articleUrl || item.link) : '/#ecosystem'}"${item.articleUrl ? '' : ' target="_blank" rel="noopener"'}>
       <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
-      <div><b>${escapeHtml(item.platform)}</b><p>${escapeHtml(item.description || item.summary)}</p><span class="eco-domain">${escapeHtml(domainFromLink(item.link))}</span></div>
+      <div><b>${escapeHtml(item.platform)}</b>${item.title ? `<strong>${escapeHtml(item.title)}</strong>` : ''}<p>${escapeHtml(item.title ? (item.summary || 'Read the latest official platform update.') : (item.description || item.summary))}</p><span class="eco-domain">${item.publishedAt ? `Published ${formatTime(item.publishedAt)} · Read summary` : escapeHtml(domainFromLink(item.link))}</span></div>
     </a>
   `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">EXPLORE THE COMPLETE ECOSYSTEM →</a>';
 }
