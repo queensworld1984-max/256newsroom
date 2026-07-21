@@ -311,19 +311,20 @@ input[name="cattab"], .toggle-input { display: none; }
 .sidebar-block { margin-bottom: 14px; }
 .sidebar-title { border-bottom: 2px solid var(--ink); font-family: "Inconsolata", monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; margin-bottom: 10px; padding-bottom: 7px; text-transform: uppercase; }
 .eco-teaser-box, .district-strip-box { background: var(--white); border: 1px solid var(--line-strong); padding: 14px; }
-.eco-teaser-box { background:linear-gradient(155deg,#4a3020 0%,#2d1c13 62%,#1e150f 100%); border-color:#6f4d2e; border-top:4px solid var(--gold); box-shadow:0 10px 24px rgba(42,25,15,.18); color:#f7f0df; }
-.eco-teaser-box .sidebar-title { border-bottom-color:rgba(232,190,86,.72); color:#f6d77d; }
-.eco-teaser-box .eco-empty { color:rgba(255,255,255,.78); }
-.eco-teaser-item { align-items:start; border-bottom:1px solid rgba(255,255,255,.14); color:inherit; display:grid; gap:10px; grid-template-columns:72px 1fr; padding:8px 0; text-decoration:none; }
-.eco-teaser-item:hover { background:rgba(255,255,255,.045); }
+.eco-teaser-box { background:linear-gradient(145deg,#fff 0%,#fffdf8 54%,#f8f2e3 100%); border-color:#d8cfba; border-top:4px solid #c99a2e; box-shadow:0 10px 24px rgba(31,25,12,.1),inset 0 1px 0 #fff; color:var(--ink); }
+.eco-teaser-box .sidebar-title { border-bottom-color:#c99a2e; color:var(--ink); position:relative; }
+.eco-teaser-box .sidebar-title::after { background:linear-gradient(90deg,#7a5608,#f8e08e,#c99a2e,#fff1a8,#7a5608); bottom:-2px; content:""; height:2px; left:0; position:absolute; width:58%; }
+.eco-teaser-box .eco-empty { color:var(--grey); }
+.eco-teaser-item { align-items:start; border-bottom:1px solid #ddd5c4; color:var(--ink); display:grid; gap:10px; grid-template-columns:72px 1fr; padding:9px 4px; text-decoration:none; transition:background .16s,transform .16s; }
+.eco-teaser-item:hover { background:linear-gradient(90deg,rgba(248,224,142,.22),rgba(255,255,255,.8)); transform:translateX(2px); }
 .eco-teaser-item:hover strong { text-decoration: underline; }
 .eco-teaser-item:first-of-type { padding-top: 0; }
 .eco-teaser-item:last-of-type { border-bottom: 0; }
 .side-thumb {
   align-items: center;
   aspect-ratio: 1;
-  background: #0d0f0c;
-  border: 1px solid var(--line);
+  background: #fff;
+  border: 1px solid #d8cfba;
   display: flex;
   justify-content: center;
   min-height: 58px;
@@ -343,11 +344,11 @@ input[name="cattab"], .toggle-input { display: none; }
   justify-content: center;
   width: 22px;
 }
-.eco-teaser-item b { color: var(--gold); display: block; font-family: "Inconsolata", monospace; font-size: 9.8px; letter-spacing: 0.04em; margin-bottom: 3px; text-transform: uppercase; }
-.eco-teaser-item strong { color:#fff8e9; display:-webkit-box; font-size:12.5px; font-weight:700; line-height:1.25; margin-bottom:4px; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.eco-teaser-item p { color:rgba(255,255,255,.78); display:-webkit-box; font-size:11.5px; line-height:1.28; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:3px; }
-.eco-domain { color: var(--gold); font-family: "Inconsolata", monospace; font-size: 10px; font-weight: 700; }
-.eco-teaser-more { border-top:1px solid rgba(255,255,255,.18); color:#f6d77d; display:block; font-family:"Inconsolata",monospace; font-size:11px; font-weight:700; margin-top:8px; padding-top:9px; text-align:center; }
+.eco-teaser-item b { color:#8a620d; display:block; font-family:"Inconsolata",monospace; font-size:9.8px; letter-spacing:.04em; margin-bottom:3px; text-transform:uppercase; }
+.eco-teaser-item strong { color:var(--ink); display:-webkit-box; font-size:12.5px; font-weight:700; line-height:1.25; margin-bottom:4px; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.eco-teaser-item p { color:#4e4d47; display:-webkit-box; font-size:11.5px; line-height:1.28; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:3px; }
+.eco-domain { color:#8a620d; font-family:"Inconsolata",monospace; font-size:10px; font-weight:700; }
+.eco-teaser-more { background:linear-gradient(135deg,#7a5608 0%,#f8e08e 34%,#c99a2e 58%,#fff1a8 78%,#8b650f 100%); border:1px solid #a77b1f; color:#1b1609; display:block; font-family:"Inconsolata",monospace; font-size:11px; font-weight:800; margin-top:10px; padding:9px; text-align:center; text-shadow:0 1px rgba(255,255,255,.55); }
 .journalist-week-box { background: var(--white); border: 1px solid var(--line-strong); border-top: 4px solid var(--red); padding: 14px; }
 .journalist-week-card { align-items: stretch; display: grid; gap: 12px; grid-template-columns: 104px 1fr; }
 .jw-photo {
