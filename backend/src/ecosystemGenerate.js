@@ -37,7 +37,7 @@ Strict rules:
 If there is enough information, respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["...","..."],"disclosure":"...","callToAction":"..."}
 - summary: one or two sentences, under 300 characters.
-- body: 700-1,000 words using exactly these markdown sections in this order:
+- body: 1,100-1,600 words using exactly these markdown sections in this order:
   ## The problem on the ground
   ## What <platform name> offers
   ## How the service fills the gap
@@ -46,8 +46,10 @@ If there is enough information, respond with exactly this JSON shape and nothing
 - The opening paragraph before the first heading must lead with the service and the clearest reader benefit.
 - Under the problem section, state the practical user need without invented statistics or unsupported claims about the whole country.
 - Under the offer and solution sections, explain the platform's actual services and connect each major feature to a practical user benefit.
+- Use concrete, source-supported examples—such as named service categories, locations, access methods, product types or eligibility details—so the article is useful rather than generic.
 - Include one careful category-level comparison within "How the service fills the gap" based only on evidenced features.
 - Under availability, say only what the evidence supports about locations, access channels, operating times, prices or eligibility. Clearly say when a detail is not stated rather than guessing.
+- End the availability section with a clear limitations paragraph identifying important transaction, eligibility, pricing, fulfilment or access details that the source does not state. Do not turn absence of information into criticism.
 - Under national importance, explain the potential relevance of the evidenced service to Uganda using cautious language such as "can", "could" or "is designed to"; never assert an unmeasured national outcome.
 - tags: up to 6 short tags.
 - disclosure: one sentence noting this was prepared from the official platform's published information.
@@ -109,6 +111,27 @@ function composeArticleBody(draft) {
     draft.callToAction ? `## How to access the service\n\n${String(draft.callToAction).trim()}` : '',
     draft.disclosure ? `*${String(draft.disclosure).trim()}*` : '',
   ].filter(Boolean).join('\n\n');
+}
+
+const REQUIRED_BODY_SECTIONS = [
+  'The problem on the ground',
+  'What ',
+  'How the service fills the gap',
+  'Features, availability and access',
+  'Why this matters for Uganda',
+];
+
+function articleStructureIssues(draft) {
+  const body = String(draft?.body || '');
+  const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
+  const issues = [];
+  if (wordCount < 1000) issues.push(`Article body is too brief (${wordCount} words); expand it to at least 1,100 words with sourced detail.`);
+  for (const section of REQUIRED_BODY_SECTIONS) {
+    if (!body.includes(`## ${section}`)) issues.push(`Missing required section beginning "## ${section}".`);
+  }
+  if (!draft?.callToAction) issues.push('Missing direct service-access call to action.');
+  if (!draft?.disclosure) issues.push('Missing official-source disclosure.');
+  return issues;
 }
 
 async function repairArticleClaims({ draft, unsupportedClaims, sourceText }) {
@@ -217,6 +240,11 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
   let validation;
   let articleBody = composeArticleBody(draft);
   try {
+    const initialStructureIssues = articleStructureIssues(draft);
+    if (initialStructureIssues.length) {
+      draft = await repairArticleClaims({ draft, unsupportedClaims: initialStructureIssues, sourceText: validationSource });
+      articleBody = composeArticleBody(draft);
+    }
     validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
     for (let attempt = 0; !validation.allSupported && attempt < MAX_REPAIR_ATTEMPTS; attempt += 1) {
       draft = await repairArticleClaims({
@@ -228,11 +256,21 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
         throw new Error('Repaired draft was missing required fields or used an invalid content type.');
       }
       if (!PERMITTED_CATEGORIES.includes(draft.category)) draft.category = 'ecosystem';
+      const structureIssues = articleStructureIssues(draft);
+      if (structureIssues.length) {
+        draft = await repairArticleClaims({ draft, unsupportedClaims: structureIssues, sourceText: validationSource });
+      }
       articleBody = composeArticleBody(draft);
       validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
     }
   } catch (err) {
     job = await fail('failed', `Validation or repair call failed: ${err.message}`);
+    return { job, article: null };
+  }
+
+  const finalStructureIssues = articleStructureIssues(draft);
+  if (finalStructureIssues.length) {
+    job = await fail('rejected', `Incomplete article structure: ${finalStructureIssues.join('; ')}`);
     return { job, article: null };
   }
 
@@ -286,5 +324,6 @@ module.exports = {
   validateArticleClaims,
   repairArticleClaims,
   composeArticleBody,
+  articleStructureIssues,
   runGenerationJob,
 };
