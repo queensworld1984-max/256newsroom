@@ -163,8 +163,8 @@ app.get('/api/news/hero', async (req, res, next) => {
     const internationalCap = Math.max(1, Math.min(3, Math.round(limit * 0.2)));
     const ugandaLimit = limit - internationalCap;
     const [ugandaRows, intlRows] = await Promise.all([
-      pool.query(`${articleSelect} and s.source_type <> 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [ugandaLimit]),
-      pool.query(`${articleSelect} and s.source_type = 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [internationalCap]),
+      pool.query(`${articleSelect} and s.source_type <> 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [ugandaLimit]),
+      pool.query(`${articleSelect} and s.source_type = 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [internationalCap]),
     ]);
     const items = interleave(normalizeRows(ugandaRows.rows), normalizeRows(intlRows.rows));
     res.json({ items });
@@ -176,7 +176,7 @@ app.get('/api/news/hero', async (req, res, next) => {
 app.get('/api/news/top', async (req, res, next) => {
   try {
     const limit = limitParam(req, 12);
-    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [limit]);
+    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [limit]);
     res.json({ items: normalizeRows(rows) });
   } catch (err) {
     next(err);

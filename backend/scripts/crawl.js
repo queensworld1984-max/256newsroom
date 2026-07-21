@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const Parser = require('rss-parser');
+const cheerio = require('cheerio');
 const pool = require('../src/db');
 
 const FEED_USER_AGENT = '256NewsroomBot/1.0 (+https://256newsroom.com)';
@@ -169,13 +170,98 @@ function scoreArticle(item) {
 }
 
 function imageFromItem(item) {
-  if (item.enclosure && item.enclosure.url) return item.enclosure.url;
-  if (item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url) return item.mediaContent.$.url;
-  if (item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url) return item.mediaThumbnail.$.url;
-  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) return item['media:content'].$.url;
+  if (item.enclosure && likelyStoryImage(item.enclosure.url)) return normalizeImageUrl(item.enclosure.url);
+  if (item.mediaContent && item.mediaContent.$ && likelyStoryImage(item.mediaContent.$.url)) return normalizeImageUrl(item.mediaContent.$.url);
+  if (item.mediaThumbnail && item.mediaThumbnail.$ && likelyStoryImage(item.mediaThumbnail.$.url)) return normalizeImageUrl(item.mediaThumbnail.$.url);
+  if (item['media:content'] && item['media:content'].$ && likelyStoryImage(item['media:content'].$.url)) return normalizeImageUrl(item['media:content'].$.url);
   const html = item.contentEncoded || item['content:encoded'] || item.content || '';
   const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match ? match[1] : null;
+  return match && likelyStoryImage(match[1]) ? normalizeImageUrl(match[1]) : null;
+}
+
+function likelyStoryImage(value) {
+  const url = String(value || '').toLowerCase();
+  return Boolean(url)
+    && !/(ajax-loader|spinner|tracking|pixel|spacer|favicon|\/logo[._/-]|avatar|gravatar)/.test(url)
+    && !url.includes('j6_cofbogxhri9im864nl_ligxvsqp2aupskei7z0cnnfdvgumwuy20nuuhkreqyrpy4beeibuc')
+    && !/\.svg(?:\?|$)/.test(url);
+}
+
+function normalizeImageUrl(value) {
+  return value ? String(value).replace(/&amp;/g, '&') : null;
+}
+
+function isPublicArticleUrl(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    if (host === 'localhost' || host === '::1' || host.endsWith('.local')) return false;
+    if (/^(127\.|10\.|169\.254\.|192\.168\.)/.test(host)) return false;
+    const match = host.match(/^172\.(\d+)\./);
+    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function imageFromArticlePage(articleUrl) {
+  if (!isPublicArticleUrl(articleUrl)) return null;
+  try {
+    const res = await fetch(articleUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; 256NewsroomBot/1.0; +https://256newsroom.com)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok || !String(res.headers.get('content-type') || '').includes('text/html')) return null;
+    if (Number(res.headers.get('content-length') || 0) > 5_000_000) return null;
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const candidate = $('meta[property="og:image:secure_url"]').attr('content')
+      || $('meta[property="og:image"]').attr('content')
+      || $('meta[name="twitter:image"]').attr('content')
+      || $('link[rel="image_src"]').attr('href')
+      || $('article img').first().attr('src');
+    if (!candidate || !likelyStoryImage(candidate)) return null;
+    const resolved = new URL(candidate, res.url || articleUrl).toString();
+    return isPublicArticleUrl(resolved) ? normalizeImageUrl(resolved) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function enrichMissingImages(items, maxLookups = 30, concurrency = 5) {
+  const queue = items.filter((item) => !item.imageUrl && item.url).slice(0, maxLookups);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < queue.length) {
+      const item = queue[cursor++];
+      item.imageUrl = await imageFromArticlePage(item.url);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));
+  return items;
+}
+
+async function backfillMissingArticleImages(limit = 100) {
+  const { rows } = await pool.query(`
+    select id, url from articles
+    where image_url is null and hidden = false and status = 'published' and url is not null
+    order by published_at desc nulls last
+    limit $1
+  `, [limit]);
+  const candidates = rows.map((row) => ({ ...row, imageUrl: null }));
+  await enrichMissingImages(candidates, limit, 5);
+  let updated = 0;
+  for (const item of candidates) {
+    if (!item.imageUrl) continue;
+    await pool.query('update articles set image_url = $2, updated_at = now() where id = $1 and image_url is null', [item.id, item.imageUrl]);
+    updated += 1;
+  }
+  return { checked: rows.length, updated };
 }
 
 async function idFor(table, slug) {
@@ -209,9 +295,15 @@ async function crawlSource(source) {
     );
     logId = log.rows[0].id;
     const feed = await fetchAndParseFeed(source.feed_url);
+    const feedItems = feed.items || [];
+    const imageCandidates = feedItems.map((item) => ({
+      url: item.link || item.guid,
+      imageUrl: imageFromItem(item),
+    }));
+    await enrichMissingImages(imageCandidates, 20, 5);
     let inserted = 0;
 
-    for (const item of feed.items || []) {
+    for (const [itemIndex, item] of feedItems.entries()) {
       const title = cleanText(item.title);
       const url = item.link || item.guid;
       if (!title || !url) continue;
@@ -238,16 +330,16 @@ async function crawlSource(source) {
           score = greatest(articles.score, excluded.score),
           updated_at = now()
         returning (xmax = 0) as inserted
-      `, [source.id, clusterId, categoryId, districtId, title, summary, url, imageFromItem(item), item.creator || item.author || null, publishedAt, score]);
+      `, [source.id, clusterId, categoryId, districtId, title, summary, url, imageCandidates[itemIndex].imageUrl, item.creator || item.author || null, publishedAt, score]);
 
       if (result.rows[0] && result.rows[0].inserted) inserted += 1;
     }
 
     await pool.query(
       'update crawl_logs set status = $1, items_found = $2, items_inserted = $3, finished_at = now() where id = $4',
-      ['success', (feed.items || []).length, inserted, logId],
+      ['success', feedItems.length, inserted, logId],
     );
-    return { source: source.name, status: 'success', found: (feed.items || []).length, inserted };
+    return { source: source.name, status: 'success', found: feedItems.length, inserted };
   } catch (err) {
     if (logId) {
       await pool.query('update crawl_logs set status = $1, error = $2, finished_at = now() where id = $3', ['error', err.message, logId]);
@@ -266,6 +358,17 @@ const NEWSAPI_CATEGORIES = [
 
 async function upsertAggregatedSource(name, homepageUrl, defaultCategoryId, sourceType) {
   const slug = slugify(name).slice(0, 60) || crypto.createHash('sha1').update(name).digest('hex').slice(0, 12);
+  const existing = await pool.query(
+    'select id from sources where slug = $1 or lower(name) = lower($2) order by (slug = $1) desc limit 1',
+    [slug, name.slice(0, 120)],
+  );
+  if (existing.rows[0]) {
+    await pool.query(
+      'update sources set homepage_url = coalesce(homepage_url, $2) where id = $1',
+      [existing.rows[0].id, homepageUrl],
+    );
+    return existing.rows[0].id;
+  }
   const { rows } = await pool.query(`
     insert into sources (name, slug, homepage_url, feed_url, source_type, default_category_id, active, approved)
     values ($1, $2, $3, null, $4, $5, true, true)
@@ -287,6 +390,7 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
   let inserted = 0;
 
   try {
+    await enrichMissingImages(items);
     for (const item of items) {
       const title = cleanText(item.title);
       const url = item.url;
@@ -463,4 +567,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics };
+module.exports = { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics, backfillMissingArticleImages };

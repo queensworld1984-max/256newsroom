@@ -1,5 +1,4 @@
 const API = '/api';
-const FALLBACK_IMAGE = '/assets/images/newsroom-fallback.webp';
 const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
 let trendingRotationTimer = null;
@@ -47,8 +46,8 @@ function imageClass(item) {
 
 function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
-  const source = /^https?:\/\//i.test(raw) || raw.startsWith('/') ? raw : FALLBACK_IMAGE;
-  const cssSafe = source.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+  if (!/^https?:\/\//i.test(raw)) return '';
+  const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
   return ` style="background-image:linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${cssSafe}'); background-size:cover; background-position:center;"`;
 }
 
@@ -56,7 +55,7 @@ const imagePreloadCache = new Map();
 
 function preloadImage(url, timeoutMs = 4000) {
   const src = String(url ?? '').trim();
-  if (!/^https?:\/\//i.test(src) && !src.startsWith('/')) return Promise.resolve();
+  if (!/^https?:\/\//i.test(src)) return Promise.resolve();
   if (imagePreloadCache.has(src)) return imagePreloadCache.get(src);
 
   const request = new Promise((resolve) => {
@@ -86,7 +85,7 @@ function preloadImage(url, timeoutMs = 4000) {
 }
 
 function preloadArticleImages(items = []) {
-  const urls = [...new Set(items.map((item) => item?.imageUrl || FALLBACK_IMAGE))];
+  const urls = [...new Set(items.map((item) => item?.imageUrl).filter(Boolean))];
   return Promise.all(urls.map((url) => preloadImage(url)));
 }
 
@@ -236,7 +235,8 @@ function setHero(item) {
   if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
   if (title) title.textContent = item.title;
   if (excerpt) excerpt.textContent = item.summary || 'Latest developing story from monitored Ugandan news sources.';
-  if (image) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
+  if (image && item.imageUrl) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
+  if (image && !item.imageUrl) image.removeAttribute('style');
   if (cap) cap.textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
   if (meta) {
     meta.innerHTML = `
