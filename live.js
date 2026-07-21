@@ -1,6 +1,8 @@
 const API = '/api';
 const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
+let heroStories = [];
+let heroStoryIndex = 0;
 let trendingRotationTimer = null;
 let carouselRotationTimer = null;
 const storyIndex = new Map();
@@ -289,8 +291,8 @@ function setHero(item) {
   hero.dataset.category = item.category?.slug || '';
   hero.dataset.district = item.district?.slug || '';
   if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
-  if (title) title.textContent = item.title;
-  if (excerpt) excerpt.textContent = item.summary || 'Latest developing story from monitored Ugandan news sources.';
+  if (title) title.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a>`;
+  if (excerpt) excerpt.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.summary || 'Latest developing story from monitored Ugandan news sources.')}</a>`;
   if (image && item.imageUrl) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
   if (image && !item.imageUrl) image.removeAttribute('style');
   if (cap) cap.textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
@@ -302,17 +304,42 @@ function setHero(item) {
       <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     `;
   }
+  const position = hero.querySelector('.hero-position');
+  if (position && heroStories.length) position.textContent = `${heroStoryIndex + 1} / ${heroStories.length}`;
+}
+
+function scheduleHeroRotation() {
+  if (heroRotationTimer) clearTimeout(heroRotationTimer);
+  if (heroStories.length < 2) return;
+  heroRotationTimer = setTimeout(() => showHeroStory(heroStoryIndex + 1), 12000);
+}
+
+function showHeroStory(index) {
+  if (!heroStories.length) return;
+  heroStoryIndex = (index + heroStories.length) % heroStories.length;
+  setHero(heroStories[heroStoryIndex]);
+  scheduleHeroRotation();
 }
 
 function startHeroRotation(items = []) {
-  const stories = items.filter(Boolean);
-  if (heroRotationTimer) clearInterval(heroRotationTimer);
-  if (stories.length < 2) return;
-  let index = 0;
-  heroRotationTimer = setInterval(() => {
-    index = (index + 1) % stories.length;
-    setHero(stories[index]);
-  }, 5000);
+  heroStories = items.filter(Boolean);
+  heroStoryIndex = 0;
+  if (heroRotationTimer) clearTimeout(heroRotationTimer);
+  const hero = document.querySelector('.hero');
+  if (!hero) return;
+  const move = (direction, event) => { event?.preventDefault(); event?.stopPropagation(); showHeroStory(heroStoryIndex + direction); };
+  hero.querySelector('.hero-prev')?.addEventListener('click', (event) => move(-1, event));
+  hero.querySelector('.hero-next')?.addEventListener('click', (event) => move(1, event));
+  let touchStartX = null;
+  hero.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? null; }, { passive: true });
+  hero.addEventListener('touchend', (event) => {
+    if (touchStartX == null) return;
+    const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+    touchStartX = null;
+    if (Math.abs(distance) >= 50) move(distance > 0 ? -1 : 1, event);
+  });
+  setHero(heroStories[0]);
+  scheduleHeroRotation();
 }
 
 function setCardGrid(heading, items) {

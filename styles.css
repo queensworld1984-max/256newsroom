@@ -227,6 +227,8 @@ input[name="cattab"], .toggle-input { display: none; }
 .dot { animation: pulse 1.8s infinite; background: var(--red); border-radius: 50%; height: 6px; width: 6px; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .hero-headline { font-family: "DM Serif Display", serif; font-size: 38px; line-height: 1.12; margin-bottom: 12px; }
+.hero-headline a,.hero-excerpt a { color:inherit; display:block; }
+.hero-headline a:hover { color:var(--red); }
 .hero-img {
   align-items: end;
   background: linear-gradient(180deg, rgba(13, 15, 12, 0) 40%, rgba(13, 15, 12, 0.78) 100%), linear-gradient(135deg, #bbb390, #6d7968 55%, #544031);
@@ -235,9 +237,15 @@ input[name="cattab"], .toggle-input { display: none; }
   height: 300px;
   margin-bottom: 14px;
   padding: 16px;
+  cursor: pointer;
 }
 .hero-img span { color: var(--paper); font-family: "Inconsolata", monospace; font-size: 11px; opacity: 0.85; }
 .hero-excerpt { color: #2b2b26; font-size: 16px; line-height: 1.6; margin-bottom: 14px; }
+.hero-excerpt a:hover { text-decoration:underline; }
+.hero-controls { align-items:center; display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+.hero-controls button { background:var(--white); border:1px solid var(--line-strong); color:var(--ink); cursor:pointer; font:700 11px Inconsolata,monospace; padding:8px 11px; text-transform:uppercase; }
+.hero-controls button:hover { background:var(--ink); color:var(--white); }
+.hero-position { color:var(--grey); font:700 11px Inconsolata,monospace; min-width:38px; text-align:center; }
 .story-meta, .cmeta, .grid-card p, .story-card p, .district-card p {
   align-items: center;
   color: var(--grey);
