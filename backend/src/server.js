@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const cron = require('node-cron');
 const pool = require('./db');
 const { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics } = require('../scripts/crawl');
+const { loadSessionUser, requireRole } = require('./auth');
+const authRoutes = require('./routes/auth');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -12,16 +15,21 @@ const port = Number(process.env.PORT || 5066);
 
 app.set('trust proxy', true);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: ['https://256newsroom.com', 'https://www.256newsroom.com'] }));
+app.use(cors({ origin: ['https://256newsroom.com', 'https://www.256newsroom.com'], credentials: true }));
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+app.use(loadSessionUser);
 
+app.use('/api/auth', authRoutes);
+
+// Accepts either the legacy static admin token (existing ops/cron callers) or a
+// logged-in super_admin/newsroom_admin session — the static-token path is kept only
+// for backward compatibility during rollout and is a fast-follow removal candidate.
 function requireAdmin(req, res, next) {
   const expected = process.env.ADMIN_TOKEN;
   const provided = req.header('x-admin-token');
-  if (!expected || provided !== expected) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
+  if (expected && provided === expected) return next();
+  return requireRole('super_admin', 'newsroom_admin')(req, res, next);
 }
 
 const citizenReportAttempts = new Map();
