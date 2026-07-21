@@ -99,7 +99,7 @@ router.get('/news/:slug', async (req, res, next) => {
   try {
     const { rows } = await pool.query(`
       select a.*, coalesce(s.name, o.name, '256 Newsroom') as publisher_name,
-        s.slug as publisher_slug, s.homepage_url, o.logo_url as publisher_logo,
+        s.slug as publisher_slug, s.homepage_url, o.website_url as platform_website_url, o.logo_url as publisher_logo,
         c.name as category_name, c.slug as category_slug,
         d.name as district_name, d.slug as district_slug
       from articles a
@@ -135,7 +135,10 @@ router.get('/news/:slug', async (req, res, next) => {
     // sufficient for indexing; additional publishers enhance the page later.
     const substantive = story.summary_is_original && wordCount(summary) >= 200 && wordCount(summary) <= 300;
     const internalCanonical = `${SITE}${story.internal_url}`;
-    const canonical = substantive ? internalCanonical : story.original_url;
+    const platformCanonical = story.origin === 'ecosystem_ai_generated' && story.platform_website_url && story.slug
+      ? `${String(story.platform_website_url).replace(/\/$/, '')}/news/${story.slug}`
+      : null;
+    const canonical = platformCanonical || (substantive ? internalCanonical : story.original_url);
     const description = summary.slice(0, 160) || `${story.title} — report attributed to ${story.publisher_name}.`;
     const imageUrl = story.image_url || null;
     const originalUrl = safeUrl(story.original_url);

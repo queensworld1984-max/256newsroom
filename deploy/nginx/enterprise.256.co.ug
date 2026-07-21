@@ -1,0 +1,104 @@
+server {
+    listen 80;
+    listen [::]:80;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name enterprise.256.co.ug;
+
+    # Stop-gap: reuse 256.co.ug Let's Encrypt cert. Cloudflare in "Full" mode
+    # doesn't validate origin certs, so this is fine for the proxy. Replace
+    # with a dedicated cert for enterprise.256.co.ug or a CF Origin Cert later.
+    ssl_certificate /etc/letsencrypt/live/256.co.ug/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/256.co.ug/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    root /var/www/256-enterprise;
+    index index.html;
+
+    client_max_body_size 2M;
+
+    # Trust Cloudflare's forwarded scheme
+    real_ip_header CF-Connecting-IP;
+    set_real_ip_from 173.245.48.0/20;
+    set_real_ip_from 103.21.244.0/22;
+    set_real_ip_from 103.22.200.0/22;
+    set_real_ip_from 103.31.4.0/22;
+    set_real_ip_from 141.101.64.0/18;
+    set_real_ip_from 108.162.192.0/18;
+    set_real_ip_from 190.93.240.0/20;
+    set_real_ip_from 188.114.96.0/20;
+    set_real_ip_from 197.234.240.0/22;
+    set_real_ip_from 198.41.128.0/17;
+    set_real_ip_from 162.158.0.0/15;
+    set_real_ip_from 104.16.0.0/13;
+    set_real_ip_from 104.24.0.0/14;
+    set_real_ip_from 172.64.0.0/13;
+    set_real_ip_from 131.0.72.0/22;
+
+    # Security headers (Cloudflare also applies edge-level protections)
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+
+    # Clean URLs — strip .html from the original client request only.
+    # Uses $request_uri (original URI, never rewritten) so the internal
+    # index-directive substitution to /index.html doesn't trigger a loop.
+    if ($request_uri ~ "^/index\.html(\?.*)?$") {
+        return 301 /$1;
+    }
+    if ($request_uri ~ "^/([^?]+)\.html(\?.*)?$") {
+        return 301 /$1$2;
+    }
+
+    # Static assets — long-cache fingerprinted bundles
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location ~* \.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|webp|gif|ico)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # Consultation API — proxy to local Express on 5023
+    location /api/ {
+        proxy_pass http://127.0.0.1:5023;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_read_timeout 60;
+        proxy_connect_timeout 30;
+        proxy_buffering off;
+    }
+
+    # ACME HTTP-01 challenge (must take precedence over the dotfile deny below)
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/_acme;
+        default_type "text/plain";
+        try_files $uri =404;
+        access_log off;
+    }
+
+    location = /news { proxy_pass http://127.0.0.1:5066/api/platforms/256-corporate/news-page; proxy_set_header Host $host; }
+    location ~ ^/news/([^/]+)$ { proxy_pass http://127.0.0.1:5066/api/platforms/256-corporate/news-page/$1; proxy_set_header Host $host; }
+
+    # SPA fallback — also resolves /enterprise to /enterprise.html on disk
+    location / {
+        try_files $uri $uri/ $uri.html /index.html;
+    }
+
+    # Don't serve dotfiles
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}

@@ -1,0 +1,85 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name 256.ug www.256.ug;
+    return 301 https://256.ug$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name 256.ug www.256.ug;
+
+    ssl_certificate /etc/letsencrypt/live/256.ug/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/256.ug/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    root /var/www/256mall/frontend/dist;
+    index index.html;
+    client_max_body_size 15M;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_buffering off;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_buffering off;
+    }
+
+    location /health {
+        proxy_pass http://127.0.0.1:5001/api/health;
+        proxy_set_header Host $host;
+    }
+
+    location = /sitemap.xml {
+        proxy_pass http://127.0.0.1:5001/sitemap.xml;
+        proxy_set_header Host $host;
+    }
+
+    location /uploads/ {
+        alias /var/www/256mall/backend/uploads/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ~* \.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|webp|gif|ico)$ {
+        expires 1h;
+        add_header Cache-Control "public, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location = /news { proxy_pass http://127.0.0.1:5066/api/platforms/256-mall/news-page; proxy_set_header Host $host; }
+    location ~ ^/news/([^/]+)$ { proxy_pass http://127.0.0.1:5066/api/platforms/256-mall/news-page/$1; proxy_set_header Host $host; }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+        expires 0;
+    }
+}

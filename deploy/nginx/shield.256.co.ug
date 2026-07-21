@@ -1,0 +1,99 @@
+server {
+    listen 80;
+    listen [::]:80;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name shield.256.co.ug;
+
+    ssl_certificate /etc/letsencrypt/live/256.co.ug/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/256.co.ug/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    root /var/www/256shield/site;
+    index 256-shield.html;
+
+    real_ip_header CF-Connecting-IP;
+    set_real_ip_from 173.245.48.0/20;
+    set_real_ip_from 103.21.244.0/22;
+    set_real_ip_from 103.22.200.0/22;
+    set_real_ip_from 103.31.4.0/22;
+    set_real_ip_from 141.101.64.0/18;
+    set_real_ip_from 108.162.192.0/18;
+    set_real_ip_from 190.93.240.0/20;
+    set_real_ip_from 188.114.96.0/20;
+    set_real_ip_from 197.234.240.0/22;
+    set_real_ip_from 198.41.128.0/17;
+    set_real_ip_from 162.158.0.0/15;
+    set_real_ip_from 104.16.0.0/13;
+    set_real_ip_from 104.24.0.0/14;
+    set_real_ip_from 172.64.0.0/13;
+    set_real_ip_from 131.0.72.0/22;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location ~* \.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|webp|gif|ico)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5060;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_read_timeout 60;
+        proxy_connect_timeout 30;
+        proxy_buffering off;
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/_acme;
+        default_type "text/plain";
+        try_files $uri =404;
+        access_log off;
+    }
+
+    location = / {
+        try_files /256-shield.html =404;
+    }
+
+    location = /256-shield.html {
+        try_files /256-shield.html =404;
+    }
+
+    location = /dashboard {
+        try_files /256-shield-dashboard.html =404;
+    }
+
+    location = /dashboard.html {
+        try_files /256-shield-dashboard.html =404;
+    }
+
+    location = /news { proxy_pass http://127.0.0.1:5066/api/platforms/256shield/news-page; proxy_set_header Host $host; }
+    location ~ ^/news/([^/]+)$ { proxy_pass http://127.0.0.1:5066/api/platforms/256shield/news-page/$1; proxy_set_header Host $host; }
+
+    location = /enterprise.html { return 301 https://www.256.co.ug/enterprise.html; }
+    location = /web-digital.html { return 301 https://www.256.co.ug/web-digital.html; }
+    location = /contact.html { return 301 https://www.256.co.ug/contact.html; }
+    location = /consultation.html { return 301 https://www.256.co.ug/consultation.html; }
+    location = /privacy-policy.html { return 301 https://www.256.co.ug/privacy-policy.html; }
+    location = /terms.html { return 301 https://www.256.co.ug/terms.html; }
+    location = /refund-policy.html { return 301 https://www.256.co.ug/refund-policy.html; }
+
+    location / {
+        try_files $uri $uri/ /256-shield.html;
+    }
+
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}
