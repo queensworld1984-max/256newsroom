@@ -607,6 +607,14 @@ input[name="cattab"], .toggle-input { display: none; }
 .site-footer h3 { color: var(--gold-bright); font-size: 10.5px; letter-spacing: 0.08em; margin-bottom: 12px; text-transform: uppercase; }
 .site-footer a { color: rgba(247, 245, 240, 0.66); display: block; margin-bottom: 9px; }
 .footer-note { border-top: 1px solid rgba(247, 245, 240, 0.15); margin: 0 auto; max-width: 1440px; padding-top: 18px; }
+.info-page { background:var(--paper); color:var(--ink); }
+.info-header { align-items:center; background:#fff; border-bottom:3px solid var(--ink); display:flex; justify-content:space-between; padding:18px max(20px,calc((100% - 1100px)/2)); }
+.info-brand { font:28px "DM Serif Display",serif; }.info-brand span{color:var(--red)}
+.info-layout { display:grid; gap:50px; grid-template-columns:220px minmax(0,760px); margin:auto; max-width:1100px; padding:55px 20px 90px; }
+.info-nav { align-self:start; display:grid; position:sticky; top:20px; }.info-nav a{border-bottom:1px solid var(--line);font-weight:600;padding:9px 0}
+.info-content section { border-bottom:1px solid var(--line); padding:0 0 38px; scroll-margin-top:24px; }.info-content section+section{padding-top:38px}
+.info-content h1 { font:clamp(38px,6vw,64px)/1 "DM Serif Display",serif; margin:8px 0 20px; }.info-content h2{font:32px "DM Serif Display",serif;margin-bottom:12px}.info-content p{font-size:16px;line-height:1.75;margin:8px 0}.info-content a{color:var(--red);text-decoration:underline}.info-kicker{color:var(--red);font:700 12px Inconsolata,monospace;letter-spacing:.1em;text-transform:uppercase}
+@media(max-width:700px){.info-layout{grid-template-columns:1fr}.info-nav{display:flex;overflow:auto;position:static}.info-nav a{flex-shrink:0;padding:8px 12px}}
 
 .citizen-modal-overlay {
   align-items: center;

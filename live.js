@@ -91,6 +91,11 @@ function setupSearch() {
       results.innerHTML = `${people ? `<h3>Journalists</h3>${people}` : ''}${stories ? `<h3>News</h3>${stories}` : ''}${!people && !stories ? '<p>No matching news or journalists found.</p>' : ''}`;
     } catch (_) { results.innerHTML = '<p>Search is temporarily unavailable.</p>'; }
   });
+  const initialQuery = new URLSearchParams(window.location.search).get('search');
+  if (initialQuery) {
+    input.value = initialQuery;
+    window.requestAnimationFrame(() => form.requestSubmit());
+  }
 }
 
 function imageClass(item) {
@@ -225,6 +230,30 @@ async function getJson(path) {
   const response = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`);
   return response.json();
+}
+
+async function safeJson(path) {
+  try { return await getJson(path); } catch (error) {
+    console.warn(`Live data unavailable for ${path}:`, error.message);
+    return { items: [] };
+  }
+}
+
+function initializeLiveMounts() {
+  const loading = '<article class="empty-card"><h3>Loading current live coverage…</h3></article>';
+  ['.trending-row.in-column','.card-grid','.story-list','.social-scroll','.district-scroll','.journalist-scroll','.district-feature-list'].forEach((selector) => {
+    document.querySelectorAll(`#panel-home ${selector}`).forEach((mount) => { mount.innerHTML = loading; });
+  });
+  const citizen = document.querySelector('.citizens-scroll');
+  if (citizen) citizen.innerHTML = '<label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label><article class="empty-card"><h3>Loading current community coverage…</h3></article>';
+  const ecosystem = document.querySelector('.eco-teaser-box');
+  if (ecosystem) ecosystem.innerHTML = '<div class="sidebar-title">256 AI Systems</div><p class="eco-empty">Loading verified platform information…</p>';
+  const hero = document.querySelector('.hero');
+  if (hero) {
+    hero.querySelector('.hero-headline').textContent = 'Loading the current top story…';
+    hero.querySelector('.hero-excerpt').textContent = 'Fetching the latest verified coverage from monitored sources.';
+    hero.querySelector('.hero-img')?.removeAttribute('style');
+  }
 }
 
 function setMastheadDate() {
@@ -417,7 +446,11 @@ function domainFromLink(url) {
 
 function setEcosystem(items) {
   const mount = document.querySelector('.eco-teaser-box');
-  if (!mount || !items?.length) return;
+  if (!mount) return;
+  if (!items?.length) {
+    mount.innerHTML = '<div class="sidebar-title">256 AI Systems</div><p class="eco-empty">No verified platform updates are available right now.</p>';
+    return;
+  }
   mount.innerHTML = '<div class="sidebar-title">256 AI Systems</div>' + items.slice(0, 7).map((item) => `
     <a class="eco-teaser-item" href="${safeHref(item.link) !== '#' ? safeHref(item.link) : '/#ecosystem'}" target="_blank" rel="noopener">
       <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
@@ -445,8 +478,10 @@ function setEcosystemGrid(items, officialItems = []) {
       </div>
     </article>
   `).join('');
+    section.hidden = false;
     return;
   }
+  if (!officialItems?.length) { section.hidden = true; return; }
   mount.innerHTML = (officialItems || []).slice(0, 6).map((item) => {
     const siteLink = item.link ? safeHref(item.link) : '/#ecosystem';
     return `
@@ -468,11 +503,13 @@ function setEcosystemGrid(items, officialItems = []) {
     </article>
   `;
   }).join('');
+  section.hidden = false;
 }
 
 function setSocialLatest(items) {
   const mount = document.querySelector('.social-scroll');
-  if (!mount || !items?.length) return;
+  if (!mount) return;
+  if (!items?.length) { mount.innerHTML = '<article class="empty-card"><h3>No current updates available.</h3></article>'; return; }
   mount.innerHTML = items.slice(0, 6).map((item) => `
     <article class="social-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="social-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
@@ -485,7 +522,8 @@ function setSocialLatest(items) {
 
 function setCitizenLatest(items) {
   const mount = document.querySelector('.citizens-scroll');
-  if (!mount || !items?.length) return;
+  if (!mount) return;
+  if (!items?.length) { mount.innerHTML = '<label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label><article class="empty-card"><h3>No current community coverage available.</h3></article>'; return; }
   mount.innerHTML = `
     <label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share what's happening near you</b></label>
     ${items.slice(0, 5).map((item) => `
@@ -518,16 +556,42 @@ function setJournalists(items) {
 
 function setDistricts(items) {
   const mount = document.querySelector('.district-scroll');
-  if (!mount) return;
+  const sidebar = document.querySelector('.district-feature-list');
   if (!items?.length) {
-    mount.innerHTML = '<article class="district-card empty-card"><h3>No district-tagged stories yet</h3><p>Waiting for district metadata from approved source feeds.</p></article>';
+    if (mount) mount.innerHTML = '<article class="district-card empty-card"><h3>No current district-tagged stories</h3><p>The live feed has not supplied reliable district metadata yet.</p></article>';
+    if (sidebar) sidebar.innerHTML = '<article class="empty-card"><h3>No current district-tagged stories</h3><p>Checking live source feeds.</p></article>';
     return;
   }
-  mount.innerHTML = items.slice(0, 6).map((item) => `
+  if (mount) mount.innerHTML = items.slice(0, 6).map((item) => `
     <article class="district-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="district-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.district?.name || 'UGANDA')}</span></div>
       <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></p>
+    </article>
+  `).join('');
+  if (sidebar) sidebar.innerHTML = items.slice(0, 4).map((item) => `
+    <article class="story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
+      <div class="district-feature-thumb ${imageClass(item)}"${imageStyle(item)}></div>
+      <span>${escapeHtml(item.district?.name || 'UGANDA')}</span>
+      <h3><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a></h3>
+      <p>${escapeHtml(item.source?.name || '256 Newsroom')} · ${formatTime(item.publishedAt)}</p>
+    </article>
+  `).join('');
+}
+
+function setDeveloping(items = []) {
+  const mount = document.querySelector('.story-list');
+  if (!mount) return;
+  if (!items.length) {
+    mount.innerHTML = '<article class="story-card empty-card"><div><h3>No developing stories currently available</h3><p>The live feed will update this section when new reports arrive.</p></div></article>';
+    return;
+  }
+  mount.innerHTML = items.slice(0, 4).map((item) => `
+    <article class="story-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
+      <div class="story-thumb ${imageClass(item)}"${imageStyle(item)}></div><div>
+        <h3><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a></h3>
+        <p><span class="verify-badge developing">LATEST</span> ${escapeHtml(item.source?.name || '256 Newsroom')} · ${formatTime(item.publishedAt)}</p>
+      </div>
     </article>
   `).join('');
 }
@@ -610,6 +674,7 @@ function setupCitizenReportForm() {
 }
 
 async function bootLiveNews() {
+  initializeLiveMounts();
   setupSearch();
   setupCitizenReportForm();
   setupInterestTracking();
@@ -617,17 +682,17 @@ async function bootLiveNews() {
   setMastheadDate();
   try {
     const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
-      getJson('/news/hero?limit=12'),
-      getJson('/news/top?limit=12'),
-      getJson('/news/latest?limit=12'),
-      getJson('/news/category/national?limit=6'),
-      getJson('/news/category/world?limit=6'),
-      getJson('/news/category/sports?limit=6'),
-      getJson('/news/districts/latest?limit=12'),
-      getJson('/news/ecosystem?limit=6'),
-      getJson('/news/sources/top?limit=50'),
-      getJson('/ecosystem'),
-      getJson('/journalists/top?limit=6'),
+      safeJson('/news/hero?limit=12'),
+      safeJson('/news/top?limit=12'),
+      safeJson('/news/latest?limit=12'),
+      safeJson('/news/category/national?limit=6'),
+      safeJson('/news/category/world?limit=6'),
+      safeJson('/news/category/sports?limit=6'),
+      safeJson('/news/districts/latest?limit=12'),
+      safeJson('/news/ecosystem?limit=6'),
+      safeJson('/news/sources/top?limit=50'),
+      safeJson('/ecosystem'),
+      safeJson('/journalists/top?limit=6'),
       resolveReaderProfile(),
     ]);
     const heroStories = personalizeItems(hero.items || [], readerProfile);
@@ -673,6 +738,7 @@ async function bootLiveNews() {
     setEcosystemGrid(ecosystemNews.items || [], ecosystem.items || []);
     setSocialLatest(latestStories);
     setCitizenLatest(latestStories);
+    setDeveloping(latestStories);
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
     setJournalists(journalists.items);
