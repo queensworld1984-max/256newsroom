@@ -232,7 +232,7 @@ function setMastheadDate() {
 
 function setMastheadStatus(sourceCount) {
   const statusEl = document.getElementById('masthead-status');
-  if (statusEl) statusEl.textContent = `${sourceCount} sources monitored · live`;
+  if (statusEl) statusEl.innerHTML = `<span class="live-pulse"></span><strong>Uganda's News, As It Happens</strong><small>${sourceCount} trusted sources monitored live</small>`;
 }
 
 function setTicker(items) {
@@ -653,7 +653,7 @@ async function bootLiveNews() {
     startCarouselRotation();
   } catch (err) {
     const statusEl = document.getElementById('masthead-status');
-    if (statusEl) statusEl.textContent = 'Live sources temporarily unavailable';
+    if (statusEl) statusEl.innerHTML = '<strong>Uganda\'s Newsroom</strong><small>Refreshing the latest coverage…</small>';
     console.warn('Live news unavailable:', err.message);
   }
 }
