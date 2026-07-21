@@ -285,12 +285,12 @@ input[name="cattab"], .toggle-input { display: none; }
 
 .trending-row { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
 .trending-row.in-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.cluster-card { background:var(--white); border:1px solid var(--line-strong); display:flex; flex-direction:column; min-height:230px; padding:14px; }
+.cluster-card { background:var(--white); border:1px solid var(--line-strong); display:flex; flex-direction:column; min-height:280px; padding:17px; }
 .loading-card { overflow:hidden; pointer-events:none; position:relative; }
 .loading-card::after { animation:loading-sheen 1.3s infinite; background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent); content:""; inset:0; position:absolute; transform:translateX(-100%); }
 .loading-media { background:var(--paper-dim); border:1px solid var(--line); height:96px; margin-bottom:12px; width:100%; }
 .loading-line { background:#dedbd2; height:10px; margin:7px 0; width:62%; }.loading-line.wide{height:18px;width:92%}
-.trending-row .loading-card { min-height:230px; }.trending-row .loading-media{height:105px}
+.trending-row .loading-card { min-height:280px; }.trending-row .loading-media{height:130px}
 .card-grid .loading-card { min-height:210px; }.card-grid .loading-media{height:115px}
 .story-list .loading-card { min-height:90px; }.social-scroll .loading-card,.district-scroll .loading-card,.journalist-scroll .loading-card{flex:0 0 var(--carousel-card);min-height:220px}
 .district-feature-loading { background:var(--paper); border:1px solid var(--line); min-height:150px; padding:8px; }
@@ -300,10 +300,10 @@ input[name="cattab"], .toggle-input { display: none; }
   background: linear-gradient(135deg, #dfd9ca, #c7c0a9);
   border: 1px solid var(--line);
   margin-bottom: 10px;
-  height: 165px;
+  height: 200px;
   width: 100%;
 }
-.cluster-card h3 { font-family: "DM Serif Display", serif; font-size: 16.5px; font-weight: 400; line-height: 1.24; margin: 8px 0 9px; }
+.cluster-card h3 { font-family:"DM Serif Display",serif; font-size:18px; font-weight:400; line-height:1.27; margin:10px 0 11px; }
 .cat-tag { align-self: flex-start; background: var(--ink); color: var(--paper); display: inline-block; font-family: "Inconsolata", monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; text-transform: uppercase; }
 .trend-tag { color: var(--red); font-family: "Inconsolata", monospace; font-size: 9.5px; font-weight: 700; margin-top: 5px; }
 .read-link { border-top: 1px dashed var(--line); color: var(--red); display: block; font-family: "Inconsolata", monospace; font-size: 10.5px; font-weight: 700; margin-top: auto; padding-top: 7px; }
