@@ -13,6 +13,8 @@ const publisherAdminRoutes = require('./routes/publisherAdmin');
 const storyRoutes = require('./routes/stories');
 const meStoryRoutes = require('./routes/meStories');
 const taxonomyRoutes = require('./routes/taxonomy');
+const feedRoutes = require('./routes/feeds');
+const { pollDueFeeds } = require('./feedImport');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -33,6 +35,8 @@ app.use('/api/admin/publisher-applications', publisherApplicationRoutes.adminRou
 // profile route, which acts as the catch-all fallback for /api/publishers/:slug.
 app.use('/api/publishers', publisherAdminRoutes);
 app.use('/api/publishers', storyRoutes);
+app.use('/api/publishers', feedRoutes);
+app.use('/api/admin/feeds', feedRoutes.adminRouter);
 app.use('/api/publishers', publisherProfileRoutes);
 app.use('/api/me/stories', meStoryRoutes);
 app.use('/api', taxonomyRoutes);
@@ -508,6 +512,13 @@ if (process.env.GOOGLENEWS_INTERVAL_MINUTES !== '0') {
   const minutes = Math.max(15, Number(process.env.GOOGLENEWS_INTERVAL_MINUTES || 30));
   cron.schedule(`*/${minutes} * * * *`, () => {
     crawlGoogleNewsTopics().catch((err) => console.error('Scheduled Google News crawl failed:', err));
+  });
+}
+
+if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(5, Number(process.env.FEED_IMPORT_INTERVAL_MINUTES || 15));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    pollDueFeeds().catch((err) => console.error('Scheduled feed import failed:', err));
   });
 }
 
