@@ -132,6 +132,32 @@ async function updateStory(articleId, input) {
   return applyPatch(articleId, patch);
 }
 
+async function submitForReview(articleId) {
+  const { rows } = await pool.query(
+    `update articles set status = 'pending_review', updated_at = now()
+     where id = $1 and status = 'draft'
+     returning *`,
+    [articleId],
+  );
+  if (!rows.length) throw Object.assign(new Error('Only a draft story can be submitted for review.'), { status: 400 });
+  return rows[0];
+}
+
+async function approveStory(articleId, approvedByUserId) {
+  const { rows } = await pool.query(
+    `update articles set
+       status = 'draft',
+       approved_at = now(),
+       approved_by_user_id = $2,
+       updated_at = now()
+     where id = $1 and status = 'pending_review'
+     returning *`,
+    [articleId, approvedByUserId],
+  );
+  if (!rows.length) throw Object.assign(new Error('Only a story pending review can be approved.'), { status: 400 });
+  return rows[0];
+}
+
 async function isOrgApproved(organizationId) {
   if (!organizationId) return true; // independent journalists — no org-level gate
   const { rows } = await pool.query('select verification_status, is_official from organizations where id = $1', [organizationId]);
@@ -208,6 +234,8 @@ module.exports = {
   pickStoryInput,
   createStory,
   updateStory,
+  submitForReview,
+  approveStory,
   publishStory,
   scheduleStory,
   withdrawStory,

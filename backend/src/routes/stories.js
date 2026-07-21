@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { requireAuth, requireOrgAccess } = require('../auth');
+const { requireAuth, requireOrgAccess, hasGlobalAdminRole } = require('../auth');
 const core = require('../storiesCore');
 
 const router = express.Router();
@@ -55,6 +55,34 @@ router.patch('/:orgId/stories/:id', loadOwnedStory, async (req, res, next) => {
   try {
     const input = core.pickStoryInput(req.body);
     const updated = await core.updateStory(req.story.id, input);
+    res.json({ item: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const EDITOR_ROLES = new Set(['publisher_owner', 'publisher_editor']);
+
+function requireEditorRole(req, res, next) {
+  if (hasGlobalAdminRole(req.user)) return next();
+  const orgId = Number(req.params.orgId);
+  const ok = req.user.roles.some((role) => Number(role.organizationId) === orgId && EDITOR_ROLES.has(role.key));
+  if (!ok) return res.status(403).json({ error: 'Only a publisher owner or editor can do this.' });
+  next();
+}
+
+router.post('/:orgId/stories/:id/submit-for-review', loadOwnedStory, async (req, res, next) => {
+  try {
+    const updated = await core.submitForReview(req.story.id);
+    res.json({ item: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:orgId/stories/:id/approve', loadOwnedStory, requireEditorRole, async (req, res, next) => {
+  try {
+    const updated = await core.approveStory(req.story.id, req.user.id);
     res.json({ item: updated });
   } catch (err) {
     next(err);

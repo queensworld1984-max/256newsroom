@@ -12,6 +12,7 @@ const publisherProfileRoutes = require('./routes/publishers');
 const publisherAdminRoutes = require('./routes/publisherAdmin');
 const storyRoutes = require('./routes/stories');
 const meStoryRoutes = require('./routes/meStories');
+const taxonomyRoutes = require('./routes/taxonomy');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -34,6 +35,7 @@ app.use('/api/publishers', publisherAdminRoutes);
 app.use('/api/publishers', storyRoutes);
 app.use('/api/publishers', publisherProfileRoutes);
 app.use('/api/me/stories', meStoryRoutes);
+app.use('/api', taxonomyRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only

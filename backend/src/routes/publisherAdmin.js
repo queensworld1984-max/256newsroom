@@ -153,4 +153,113 @@ router.patch('/:orgId(\\d+)/journalists/:id', async (req, res, next) => {
   }
 });
 
+router.get('/:orgId(\\d+)/media', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'select * from media_assets where organization_id = $1 order by created_at desc limit 200',
+      [req.params.orgId],
+    );
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:orgId(\\d+)/media', async (req, res, next) => {
+  try {
+    const url = String(req.body.url || '').trim().slice(0, 1000);
+    if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) image URL is required.' });
+    const { rows } = await pool.query(
+      `insert into media_assets (organization_id, url, caption, credit, alt_text, added_by_user_id)
+       values ($1, $2, $3, $4, $5, $6)
+       returning *`,
+      [
+        req.params.orgId, url,
+        req.body.caption ? String(req.body.caption).slice(0, 300) : null,
+        req.body.credit ? String(req.body.credit).slice(0, 200) : null,
+        req.body.altText ? String(req.body.altText).slice(0, 300) : null,
+        req.user.id,
+      ],
+    );
+    res.status(201).json({ item: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:orgId(\\d+)/media/:id', async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      'delete from media_assets where id = $1 and organization_id = $2',
+      [req.params.id, req.params.orgId],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Media asset not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:orgId(\\d+)/corrections', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `select ac.*, a.title as current_title, a.slug
+       from article_corrections ac
+       join articles a on a.id = ac.article_id
+       where a.organization_id = $1
+       order by ac.corrected_at desc
+       limit 200`,
+      [req.params.orgId],
+    );
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Real counts derived from the organization's own articles — no fabricated
+// engagement/reach figures (see backend/sql/migrations/0008_*).
+router.get('/:orgId(\\d+)/analytics', async (req, res, next) => {
+  try {
+    const orgId = req.params.orgId;
+    const [statusCounts, categoryCounts, publishTrend, totals] = await Promise.all([
+      pool.query(
+        `select status, count(*)::int as count from articles where organization_id = $1 group by status`,
+        [orgId],
+      ),
+      pool.query(
+        `select c.name, c.slug, count(a.id)::int as count
+         from articles a join categories c on c.id = a.category_id
+         where a.organization_id = $1 group by c.id order by count desc`,
+        [orgId],
+      ),
+      pool.query(
+        `select date_trunc('day', published_at)::date as day, count(*)::int as count
+         from articles
+         where organization_id = $1 and status = 'published' and published_at > now() - interval '30 days'
+         group by day order by day`,
+        [orgId],
+      ),
+      pool.query(
+        `select
+           count(*) filter (where status = 'published')::int as published_count,
+           count(*) filter (where breaking)::int as breaking_count,
+           count(*) filter (where developing)::int as developing_count,
+           min(published_at) as first_published_at,
+           max(published_at) as most_recent_published_at
+         from articles where organization_id = $1`,
+        [orgId],
+      ),
+    ]);
+    res.json({
+      byStatus: statusCounts.rows,
+      byCategory: categoryCounts.rows,
+      publishTrend: publishTrend.rows,
+      totals: totals.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

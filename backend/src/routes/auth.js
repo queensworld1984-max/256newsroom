@@ -91,4 +91,40 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
   }
 });
 
+// Self-serve: any logged-in user can become an independent journalist without
+// admin approval — unlike organizations, independent journalists aren't gated
+// by a verification pipeline (see isOrgApproved in storiesCore.js, which treats
+// organizationId=null as always allowed to publish).
+router.post('/become-independent-journalist', requireAuth, async (req, res, next) => {
+  try {
+    const { rows: roleRows } = await pool.query("select id from roles where key = 'independent_journalist'");
+    await pool.query(
+      'insert into user_roles (user_id, role_id, organization_id) values ($1, $2, null) on conflict do nothing',
+      [req.user.id, roleRows[0].id],
+    );
+
+    const { rows: existing } = await pool.query('select id from journalists where user_id = $1', [req.user.id]);
+    if (!existing.length) {
+      const name = req.user.displayName || req.user.email.split('@')[0];
+      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'journalist';
+      let slug = baseSlug;
+      let suffix = 1;
+      for (;;) {
+        const { rows: clash } = await pool.query('select 1 from journalists where slug = $1', [slug]);
+        if (!clash.length) break;
+        suffix += 1;
+        slug = `${baseSlug}-${suffix}`;
+      }
+      await pool.query(
+        `insert into journalists (name, slug, user_id, is_independent) values ($1, $2, $3, true)`,
+        [name, slug, req.user.id],
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
