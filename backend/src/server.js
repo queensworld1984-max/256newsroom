@@ -9,6 +9,9 @@ const { loadSessionUser, requireRole } = require('./auth');
 const authRoutes = require('./routes/auth');
 const publisherApplicationRoutes = require('./routes/publisherApplications');
 const publisherProfileRoutes = require('./routes/publishers');
+const publisherAdminRoutes = require('./routes/publisherAdmin');
+const storyRoutes = require('./routes/stories');
+const meStoryRoutes = require('./routes/meStories');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -25,7 +28,12 @@ app.use(loadSessionUser);
 app.use('/api/auth', authRoutes);
 app.use('/api/publisher-applications', publisherApplicationRoutes);
 app.use('/api/admin/publisher-applications', publisherApplicationRoutes.adminRouter);
+// Order matters: numeric-id admin/story routes are tried before the slug-based public
+// profile route, which acts as the catch-all fallback for /api/publishers/:slug.
+app.use('/api/publishers', publisherAdminRoutes);
+app.use('/api/publishers', storyRoutes);
 app.use('/api/publishers', publisherProfileRoutes);
+app.use('/api/me/stories', meStoryRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only
@@ -474,7 +482,9 @@ app.get('/api/admin/crawl-logs', requireAdmin, async (_req, res, next) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  const status = Number.isInteger(err.status) ? err.status : 500;
+  const message = status < 500 ? err.message : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 if (process.env.CRAWL_INTERVAL_MINUTES !== '0') {
