@@ -3,7 +3,7 @@ const { chatJson } = require('./openaiClient');
 const cheerio = require('cheerio');
 
 const MODEL = 'gpt-5.5';
-const GENERATE_PROMPT = `You are preparing an attributed story digest for 256 Newsroom. Write a neutral summary of 60-150 words using ONLY the supplied evidence snippets. Use original wording; do not copy a full sentence from the evidence. State the essential event, identify who is involved, and add context only when another supplied source explicitly supports it. Do not invent facts, quotations, motives, causes, dates, locations, or outcomes. Do not imply that 256 Newsroom did original reporting. Never pad the word count by discussing what the evidence or snippet does not provide; if that would be necessary, mark the evidence insufficient. Return JSON only. If the evidence cannot support at least 60 useful factual words without padding or speculation, return {"insufficient":true,"reason":"..."}. Otherwise return {"insufficient":false,"summary":"..."}.`;
+const GENERATE_PROMPT = `You are preparing an attributed story digest for 256 Newsroom that will be marked pending editorial review. Always write a clear, neutral and informative summary of 200-300 words. Use the supplied source evidence for the core event and use original wording; do not copy a full sentence. Give readers the essential development, people or organizations involved, location and timing when supported, key decisions or figures, why it matters, and helpful context. When the supplied article text is limited, you may add cautious general background knowledge, but clearly separate it from what the named publisher reported and avoid any precise claim that is not in the evidence. Never invent quotations, statistics, dates, allegations, motives or outcomes. Do not imply that 256 Newsroom did original reporting. Organize the digest into 3-4 short paragraphs separated by blank lines. Return JSON only in this shape: {"insufficient":false,"summary":"..."}.`;
 
 function countWords(value) {
   return String(value || '').trim().split(/\s+/).filter(Boolean).length;
@@ -67,7 +67,7 @@ async function generateStorySummary(articleId) {
   const generated = await chatJson({ system: GENERATE_PROMPT, user: source, model: MODEL });
   if (generated.data.insufficient) return { articleId, status: 'insufficient', reason: generated.data.reason };
   const summary = String(generated.data.summary || '').trim();
-  if (countWords(summary) < 60 || countWords(summary) > 150) return { articleId, status: 'rejected_length', words: countWords(summary) };
+  if (countWords(summary) < 200 || countWords(summary) > 300) return { articleId, status: 'rejected_length', words: countWords(summary) };
 
   await pool.query(`
     update articles set seo_summary = $2, summary_is_original = true,

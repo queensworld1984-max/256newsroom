@@ -63,6 +63,10 @@ function renderRelated(items) {
   `).join('')}</div>`;
 }
 
+function renderSummary(summary) {
+  return String(summary || '').split(/\n{2,}/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`).join('');
+}
+
 router.get('/sitemap.xml', async (_req, res, next) => {
   try {
     const { rows } = await pool.query(`
@@ -71,7 +75,7 @@ router.get('/sitemap.xml', async (_req, res, next) => {
       where a.hidden = false and a.status = 'published'
         and a.internal_url is not null
         and a.summary_is_original = true
-        and array_length(regexp_split_to_array(trim(coalesce(a.seo_summary, a.summary, '')), '\\s+'), 1) between 60 and 150
+        and array_length(regexp_split_to_array(trim(coalesce(a.seo_summary, a.summary, '')), '\\s+'), 1) between 200 and 300
       order by a.updated_at desc
       limit 50000
     `);
@@ -119,7 +123,7 @@ router.get('/news/:slug', async (req, res, next) => {
     // Breaking-news publishers should not be penalized while they are still the
     // only source covering an event. A validated, independently worded digest is
     // sufficient for indexing; additional publishers enhance the page later.
-    const substantive = story.summary_is_original && wordCount(summary) >= 60 && wordCount(summary) <= 150;
+    const substantive = story.summary_is_original && wordCount(summary) >= 200 && wordCount(summary) <= 300;
     const internalCanonical = `${SITE}${story.internal_url}`;
     const canonical = substantive ? internalCanonical : story.original_url;
     const description = summary.slice(0, 160) || `${story.title} — report attributed to ${story.publisher_name}.`;
@@ -148,7 +152,7 @@ router.get('/news/:slug', async (req, res, next) => {
 <h1>${escapeHtml(story.title)}</h1>
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
-<section class="summary"><h2>What the report says</h2><p>${escapeHtml(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</p></section>
+<section class="summary"><h2>What the report says</h2>${renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
