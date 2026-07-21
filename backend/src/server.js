@@ -296,7 +296,7 @@ app.get('/api/ecosystem', async (req, res, next) => {
     const limit = limitParam(req, 10, 50);
     const { rows } = await pool.query(`
       select
-        a.id, a.title, a.summary, a.published_at, a.slug, a.external_url,
+        a.id, a.title, a.summary, a.published_at, a.slug, a.external_url, a.content_type,
         o.name as platform, o.slug as org_slug, o.logo_url, o.website_url
       from articles a
       join organizations o on o.id = a.organization_id
@@ -304,6 +304,7 @@ app.get('/api/ecosystem', async (req, res, next) => {
         and a.status = 'published'
         and o.active = true
         and o.is_official = true
+        and o.verification_status = 'approved'
       order by a.published_at desc nulls last
       limit $1
     `, [limit]);
@@ -314,6 +315,7 @@ app.get('/api/ecosystem', async (req, res, next) => {
         title: row.title,
         summary: row.summary,
         publishedAt: row.published_at,
+        contentType: row.content_type,
         articleUrl: row.slug ? `/${row.org_slug}/${row.slug}` : null,
         externalUrl: row.external_url || row.website_url || null,
       })),
