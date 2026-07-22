@@ -10,15 +10,73 @@ router.get('/:orgId(\\d+)', async (req, res, next) => {
   try {
     const { rows } = await pool.query('select * from organizations where id = $1', [req.params.orgId]);
     if (!rows.length) return res.status(404).json({ error: 'Organization not found.' });
-    res.json({ organization: rows[0] });
+    const org = rows[0];
+    const cooldownDays = NAME_CHANGE_COOLDOWN_DAYS;
+    let canChangeName = true;
+    let nextNameChangeAt = null;
+    if (org.name_changed_at) {
+      const next = new Date(org.name_changed_at);
+      next.setDate(next.getDate() + cooldownDays);
+      canChangeName = next <= new Date();
+      nextNameChangeAt = next.toISOString();
+    }
+    res.json({
+      organization: org,
+      publicUrl: org.short_path
+        ? `https://256newsroom.com/${org.short_path}`
+        : `https://256newsroom.com/publisher/${org.slug}`,
+      nameChange: {
+        cooldownDays,
+        lastChangedAt: org.name_changed_at,
+        canChangeNow: canChangeName,
+        nextAllowedAt: canChangeName ? null : nextNameChangeAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
 });
 
+const NAME_CHANGE_COOLDOWN_DAYS = 30;
+
+// Reserved top-level paths that cannot be claimed as publisher vanity URLs.
+const RESERVED_SHORT_PATHS = new Set([
+  'api', 'admin', 'dashboard', 'news', 'latest', 'districts', 'district', 'publisher',
+  'publishers', 'media', 'rss', 'journalists', 'people', 'assets', 'static', 'login',
+  'logout', 'search', 'sitemap.xml', 'robots.txt', 'engagement', 'health', 'auth',
+  'me', 'platforms', 'categories', 'section', 'sections', 'about', 'help', 'support',
+  'home', 'index', 'favicon.ico',
+]);
+
+function normalizeShortPath(raw) {
+  let path = String(raw || '').trim().toLowerCase();
+  path = path.replace(/^https?:\/\/(www\.)?256newsroom\.com\/?/i, '');
+  path = path.replace(/^\//, '').split(/[?#]/)[0];
+  path = path.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return path;
+}
+
+function shortPathError(path) {
+  if (!path) return null; // clearing allowed
+  if (path.length < 2) return 'Desired URL must be at least 2 characters.';
+  if (path.length > 40) return 'Desired URL is too long (max 40 characters).';
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path)) {
+    return 'URL may only use lowercase letters, numbers, and hyphens (e.g. vox or my-news).';
+  }
+  if (RESERVED_SHORT_PATHS.has(path)) {
+    return `“/${path}” is reserved by 256 Newsroom. Choose another path.`;
+  }
+  return null;
+}
+
 router.patch('/:orgId(\\d+)', async (req, res, next) => {
   try {
     const fields = req.body;
+    const orgId = req.params.orgId;
+    const { rows: currentRows } = await pool.query('select * from organizations where id = $1', [orgId]);
+    if (!currentRows.length) return res.status(404).json({ error: 'Organization not found.' });
+    const current = currentRows[0];
+
     const sets = [];
     const values = [];
     let i = 1;
@@ -53,12 +111,89 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
         i += 1;
       }
     }
+
+    // Display name — at most once every 30 days
+    if (fields.name !== undefined) {
+      const newName = String(fields.name || '').trim().slice(0, 200);
+      if (!newName) return res.status(400).json({ error: 'Publisher name cannot be empty.' });
+      if (newName !== current.name) {
+        if (current.name_changed_at) {
+          const nextAllowed = new Date(current.name_changed_at);
+          nextAllowed.setDate(nextAllowed.getDate() + NAME_CHANGE_COOLDOWN_DAYS);
+          if (nextAllowed > new Date()) {
+            return res.status(429).json({
+              error: `Publisher name can only be changed once every ${NAME_CHANGE_COOLDOWN_DAYS} days. Next change allowed after ${nextAllowed.toISOString().slice(0, 10)}.`,
+              nextAllowedAt: nextAllowed.toISOString(),
+              cooldownDays: NAME_CHANGE_COOLDOWN_DAYS,
+            });
+          }
+        }
+        sets.push(`name = $${i}`);
+        values.push(newName);
+        i += 1;
+        sets.push('name_changed_at = now()');
+      }
+    }
+
+    // Desired vanity URL: 256newsroom.com/{short_path}
+    if (fields.shortPath !== undefined || fields.desiredUrl !== undefined) {
+      const raw = fields.shortPath !== undefined ? fields.shortPath : fields.desiredUrl;
+      const path = raw === null || raw === '' ? null : normalizeShortPath(raw);
+      const err = shortPathError(path);
+      if (err) return res.status(400).json({ error: err });
+      if (path && path !== current.short_path) {
+        const { rows: taken } = await pool.query(
+          `select id, name from organizations
+           where lower(short_path) = $1 and id <> $2`,
+          [path, orgId],
+        );
+        if (taken.length) {
+          return res.status(409).json({ error: `“/${path}” is already taken by another publisher.` });
+        }
+        // Also avoid colliding with category slugs
+        const { rows: cats } = await pool.query(
+          'select 1 from categories where lower(slug) = $1 limit 1',
+          [path],
+        );
+        if (cats.length) {
+          return res.status(409).json({ error: `“/${path}” is already used as a news section.` });
+        }
+        sets.push(`short_path = $${i}`);
+        values.push(path);
+        i += 1;
+        sets.push('short_path_changed_at = now()');
+      } else if (path === null && current.short_path) {
+        sets.push('short_path = null');
+        sets.push('short_path_changed_at = now()');
+      }
+    }
+
     if (!sets.length) return res.status(400).json({ error: 'No updatable fields provided.' });
     sets.push('updated_at = now()');
-    values.push(req.params.orgId);
-    const { rows } = await pool.query(`update organizations set ${sets.join(', ')} where id = $${i} returning *`, values);
-    res.json({ organization: rows[0] });
+    values.push(orgId);
+    const { rows } = await pool.query(
+      `update organizations set ${sets.join(', ')} where id = $${i} returning *`,
+      values,
+    );
+    const org = rows[0];
+    res.json({
+      organization: org,
+      publicUrl: org.short_path
+        ? `https://256newsroom.com/${org.short_path}`
+        : `https://256newsroom.com/publisher/${org.slug}`,
+      nameChange: {
+        cooldownDays: NAME_CHANGE_COOLDOWN_DAYS,
+        lastChangedAt: org.name_changed_at,
+        canChangeNow: !org.name_changed_at || (
+          Date.now() - new Date(org.name_changed_at).getTime()
+          >= NAME_CHANGE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+        ),
+      },
+    });
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'That short URL is already taken.' });
+    }
     next(err);
   }
 });

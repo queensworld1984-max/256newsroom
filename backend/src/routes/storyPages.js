@@ -220,7 +220,7 @@ router.get('/news/:slug', async (req, res, next) => {
           [story.organization_id],
         ),
         pool.query(
-          `select verification_status, is_official, tagline
+          `select verification_status, is_official, tagline, short_path, slug, logo_url
            from organizations where id = $1`,
           [story.organization_id],
         ),
@@ -231,6 +231,9 @@ router.get('/news/:slug', async (req, res, next) => {
         verificationStatus: o.rows[0]?.verification_status,
         isOfficial: o.rows[0]?.is_official,
         tagline: o.rows[0]?.tagline,
+        shortPath: o.rows[0]?.short_path,
+        orgSlug: o.rows[0]?.slug,
+        logoUrl: o.rows[0]?.logo_url,
       }))
       : Promise.resolve(null);
 
@@ -325,12 +328,15 @@ ${story.organization_id && story.publisher_slug ? (() => {
   const badge = publisherStats?.isOfficial
     ? 'Official 256 Update'
     : (publisherStats?.verificationStatus === 'approved' ? 'Verified publisher' : 'Registered publisher');
+  const profileHref = publisherStats?.shortPath
+    ? `/${escapeHtml(publisherStats.shortPath)}`
+    : `/publisher/${escapeHtml(story.publisher_slug)}`;
   return `<div class="pub-card" data-publisher-card data-org-id="${story.organization_id}" data-org-slug="${escapeHtml(story.publisher_slug)}" aria-label="Publisher">
   <div class="pub-card-main">
     <div class="publisher-logo">${publisherLogo}</div>
     <div class="pub-card-text">
-      <strong class="pub-card-name"><a class="publisher-name-link" href="/publisher/${escapeHtml(story.publisher_slug)}">${escapeHtml(story.publisher_name)}</a></strong>
-      <p class="pub-card-badge">${escapeHtml(badge)} · <a href="/publisher/${escapeHtml(story.publisher_slug)}">View profile</a></p>
+      <strong class="pub-card-name"><a class="publisher-name-link" href="${profileHref}">${escapeHtml(story.publisher_name)}</a></strong>
+      <p class="pub-card-badge">${escapeHtml(badge)} · <a href="${profileHref}">View profile</a></p>
       ${publisherStats?.tagline ? `<p class="pub-card-tagline">${escapeHtml(publisherStats.tagline)}</p>` : ''}
       <p class="pub-card-meta">${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</p>
     </div>

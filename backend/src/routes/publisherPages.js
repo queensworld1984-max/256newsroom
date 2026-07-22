@@ -37,10 +37,10 @@ function yearRange(start, end, isCurrent) {
 router.get('/publisher/:slug', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `select id, name, slug, org_type, description, biography, logo_url, website_url,
+      `select id, name, slug, short_path, org_type, description, biography, logo_url, website_url,
               verification_status, is_official, active, tagline, headquarters,
               areas_of_practice, years_in_journalism, founded_year, created_at
-       from organizations where slug = $1`,
+       from organizations where slug = $1 or lower(short_path) = lower($1)`,
       [req.params.slug],
     );
     const org = rows[0];

@@ -51,7 +51,19 @@ router.get('/:slug', async (req,res,next) => {
     const redirect=(await pool.query('select c.slug from category_redirects r join categories c on c.id=r.category_id where r.old_slug=$1',[req.params.slug])).rows[0];
     if(redirect && redirect.slug!==req.params.slug)return res.redirect(301,`/${redirect.slug}`);
     const category=(await pool.query(`select c.*,coalesce(c.display_name,c.name) display_name,p.slug parent_slug,coalesce(p.display_name,p.name) parent_name from categories c left join categories p on p.id=c.parent_category_id where c.slug=$1 and c.is_active`,[req.params.slug])).rows[0];
-    if(!category)return next();
+    // Publisher vanity URL: 256newsroom.com/vox → full publisher profile
+    if(!category){
+      const path=String(req.params.slug||'').toLowerCase();
+      if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path)) return next();
+      const { rows: orgRows }=await pool.query(
+        `select slug from organizations where active=true and lower(short_path)=$1 limit 1`,
+        [path],
+      );
+      if(orgRows[0]?.slug){
+        return res.redirect(302,`/publisher/${orgRows[0].slug}`);
+      }
+      return next();
+    }
     const page=Math.max(1,Number.parseInt(req.query.page,10)||1), limit=24, offset=(page-1)*limit;
     const ids=category.parent_category_id?[category.id]:(await pool.query('select id from categories where id=$1 or parent_category_id=$1',[category.id])).rows.map(r=>r.id);
     const params=[ids]; let extra=category.slug==='national'?` and coalesce(s.source_type,o.org_type,'newsroom') in ('local_publisher','government_official','social_official')`:'';

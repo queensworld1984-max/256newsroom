@@ -830,10 +830,10 @@ router.post('/publishers/like', ...requireContributor, async (req, res, next) =>
 router.get('/publishers/:slug', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `select id, name, slug, org_type, description, biography, logo_url, website_url,
+      `select id, name, slug, short_path, org_type, description, biography, logo_url, website_url,
               verification_status, is_official, active, tagline, headquarters,
               areas_of_practice, years_in_journalism, founded_year, created_at
-       from organizations where slug = $1`,
+       from organizations where slug = $1 or lower(short_path) = lower($1)`,
       [req.params.slug],
     );
     const org = rows[0];
@@ -885,7 +885,11 @@ router.get('/publishers/:slug', async (req, res, next) => {
         verificationStatus: org.verification_status,
         isOfficial: org.is_official,
         badge: orgBadge(org),
-        profileUrl: `/publisher/${org.slug}`,
+        shortPath: org.short_path,
+        profileUrl: org.short_path ? `/${org.short_path}` : `/publisher/${org.slug}`,
+        publicUrl: org.short_path
+          ? `https://256newsroom.com/${org.short_path}`
+          : `https://256newsroom.com/publisher/${org.slug}`,
         followerCount: stats.followerCount,
         likeCount: stats.likeCount,
         articleCount: stats.articleCount,
