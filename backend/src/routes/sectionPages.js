@@ -54,7 +54,7 @@ router.get('/:slug', async (req,res,next) => {
     if(!category)return next();
     const page=Math.max(1,Number.parseInt(req.query.page,10)||1), limit=24, offset=(page-1)*limit;
     const ids=category.parent_category_id?[category.id]:(await pool.query('select id from categories where id=$1 or parent_category_id=$1',[category.id])).rows.map(r=>r.id);
-    const params=[ids]; let extra='';
+    const params=[ids]; let extra=category.slug==='national'?` and coalesce(s.source_type,o.org_type,'newsroom') in ('local_publisher','government_official','social_official')`:'';
     if(req.query.district){params.push(req.query.district);extra+=` and d.slug=$${params.length}`;}
     if(req.query.from){params.push(req.query.from);extra+=` and a.published_at >= $${params.length}::date`;}
     const base=` from articles a left join sources s on s.id=a.source_id left join organizations o on o.id=a.organization_id left join districts d on d.id=a.district_id where a.status='published' and not a.hidden and a.category_id=any($1::bigint[])${extra}`;

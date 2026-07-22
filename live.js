@@ -275,14 +275,29 @@ function setTicker(items) {
 function setTopSources(items) {
   const mount = document.querySelector('.top-sources');
   if (!mount || !items?.length) return;
-  mount.innerHTML = '<span class="ts-label">Top Sources Today</span>' + items.map((source, index) => `
+  const logoByName = {
+    'al jazeera': '/assets/logos/sources/al-jazeera.ico',
+    'nile post': '/assets/logos/sources/nile-post.png',
+    'bbc sport football': '/assets/logos/sources/bbc.png',
+    'bbc world news': '/assets/logos/sources/bbc.png',
+    'bbc': '/assets/logos/sources/bbc.png',
+    'yahoo sports': '/assets/logos/sources/yahoo.svg',
+    'the independent uganda': '/assets/logos/sources/independent-uganda.png',
+    'sky sports': '/assets/logos/sources/sky-sports.png',
+    'goal.com': '/assets/logos/sources/goal.png',
+  };
+  const sourceItems = items.map((source, index) => {
+    const logo = logoByName[String(source.name || '').toLowerCase()];
+    return `
     <div class="ts-item">
       <span class="ts-rank">${index + 1}</span>
-      <span class="ts-chip">${escapeHtml(sourceInitials(source.name))}</span>
+      ${logo ? `<span class="ts-logo"><img src="${logo}" alt="${escapeHtml(source.name)} logo"></span>` : `<span class="ts-chip">${escapeHtml(sourceInitials(source.name))}</span>`}
       <span class="ts-name">${escapeHtml(source.name)}</span>
       <span class="ts-stat">${Number(source.article_count || 0)} stories</span>
     </div>
-  `).join('');
+  `; }).join('');
+  const duration = Math.max(36, items.length * 5);
+  mount.innerHTML = `<span class="ts-label">Top Sources Today</span><div class="ts-viewport"><div class="ts-track" style="--source-duration:${duration}s"><div class="ts-group">${sourceItems}</div><div class="ts-group" aria-hidden="true">${sourceItems}</div></div></div>`;
 }
 
 function articleCard(item) {
@@ -313,7 +328,7 @@ function setHero(item) {
   hero.dataset.storyId = item.id;
   hero.dataset.category = item.category?.slug || '';
   hero.dataset.district = item.district?.slug || '';
-  if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || (item.category?.slug === 'world' ? 'World' : 'Uganda'))}`;
+  if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || item.category?.name || 'News')}`;
   if (title) title.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a>`;
   if (excerpt) excerpt.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.summary || 'Latest developing story from monitored Ugandan news sources.')}</a>`;
   if (image && item.imageUrl) {

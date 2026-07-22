@@ -241,7 +241,10 @@ app.get('/api/news/mentions', async (req, res, next) => {
 app.get('/api/news/category/:category', async (req, res, next) => {
   try {
     const limit = limitParam(req, 12);
-    const { rows } = await pool.query(`${articleSelect} and c.slug = $1 order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
+    const ugandaOnly = req.params.category === 'national'
+      ? ` and coalesce(s.source_type, o.org_type, 'newsroom') in ('local_publisher','government_official','social_official')`
+      : '';
+    const { rows } = await pool.query(`${articleSelect} and c.slug = $1${ugandaOnly} order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
     res.json({ items: normalizeRows(rows) });
   } catch (err) {
     next(err);
