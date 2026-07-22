@@ -77,6 +77,18 @@ table.dash-table tr:hover td { background: var(--paper-dim); }
 .dash-media-item img { aspect-ratio: 4/3; display: block; object-fit: cover; width: 100%; }
 .dash-media-item .cap { padding: 6px 8px; }
 
+.onboard-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.onboard-card h2 { font-size: 1.15rem; }
+.topic-checks { display: grid; gap: 6px 12px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); margin-top: 4px; }
+.topic-check { display: flex !important; align-items: center; gap: 8px; text-transform: none !important; letter-spacing: 0 !important; font-family: inherit !important; font-size: 13px !important; font-weight: 500 !important; color: var(--ink) !important; }
+.topic-check input { width: auto; margin: 0; }
+.media-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.media-upload-row .media-file-input { flex: 1; min-width: 140px; }
+
+@media (max-width: 900px) {
+  .onboard-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 860px) {
   .dash-shell { grid-template-columns: 1fr; }
   .dash-sidebar { flex-direction: row; overflow-x: auto; padding: 10px; }

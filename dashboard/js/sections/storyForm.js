@@ -1,4 +1,4 @@
-import { api, ApiError } from '../api.js';
+import { api, ApiError, uploadFile } from '../api.js';
 import { el, escapeHtml, formatDate, statusBadgeClass } from '../util.js';
 import { storiesBasePath, storyPath } from '../storiesApi.js';
 
@@ -35,6 +35,9 @@ export async function render(container, ctx, { id }) {
     story ? el('span', { class: `badge ${statusBadgeClass(story.status)}`, text: story.status.replace(/_/g, ' ') }) : null,
   ].filter(Boolean)));
 
+  // —— AI drafter (both independent + publisher) ——
+  wrap.appendChild(buildAiDrafterCard(wrap));
+
   const form = el('form', { class: 'dash-form dash-card' });
   form.innerHTML = `
     <label class="full">Title <input name="title" required maxlength="300" value="${escapeHtml(story?.title || '')}"></label>
@@ -58,14 +61,32 @@ export async function render(container, ctx, { id }) {
         ${journalists.map((j) => `<option value="${j.id}" ${story?.journalist_id === j.id ? 'selected' : ''}>${escapeHtml(j.name)}</option>`).join('')}
       </select>
     </label>` : ''}
-    <label>Image URL <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}"></label>
+    <label class="full">Image
+      <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}" placeholder="https://… or upload below">
+      <div class="media-upload-row" data-upload="image">
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="media-file-input">
+        <button type="button" class="secondary small media-upload-btn">Upload image</button>
+        <span class="media-upload-status" style="color:var(--grey);font-size:12px;"></span>
+      </div>
+    </label>
     <label>Image credit <input name="imageCredit" maxlength="200" value="${escapeHtml(story?.image_credit || '')}"></label>
     <label class="full">Image caption <input name="imageCaption" maxlength="300" value="${escapeHtml(story?.image_caption || '')}"></label>
+    <label class="full">Video (shareable watch URL)
+      <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…">
+      <div class="media-upload-row" data-upload="video">
+        <input type="file" accept="video/mp4,video/webm,video/quicktime" class="media-file-input">
+        <button type="button" class="secondary small media-upload-btn">Upload video</button>
+        <span class="media-upload-status" style="color:var(--grey);font-size:12px;"></span>
+      </div>
+      <span style="color:var(--grey);font-size:12px;font-weight:400;text-transform:none;letter-spacing:0;font-family:inherit;">Uploads create a public watch page URL (like YouTube). MP4/WebM/MOV, up to 200&nbsp;MB.</span>
+    </label>
     <label>Tags (comma separated) <input name="tags" value="${escapeHtml((story?.tags || []).join(', '))}"></label>
     <label>External URL (source link) <input name="externalUrl" type="url" maxlength="1000" value="${escapeHtml(story?.external_url || '')}"></label>
     <label><span><input type="checkbox" name="breaking" ${story?.breaking ? 'checked' : ''}> Mark as breaking</span></label>
     <label><span><input type="checkbox" name="developing" ${story?.developing ? 'checked' : ''}> Mark as developing</span></label>
   `;
+
+  wireMediaUploads(form, ctx, wrap);
 
   const actions = el('div', { class: 'dash-actions full' });
   const saveBtn = el('button', { type: 'submit', text: story ? 'Save Changes' : 'Save Draft' });
@@ -85,6 +106,7 @@ export async function render(container, ctx, { id }) {
       imageUrl: raw.imageUrl,
       imageCredit: raw.imageCredit,
       imageCaption: raw.imageCaption,
+      videoUrl: raw.videoUrl,
       tags: raw.tags ? raw.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
       externalUrl: raw.externalUrl,
       breaking: form.breaking.checked,
@@ -116,6 +138,95 @@ export async function render(container, ctx, { id }) {
 
   container.innerHTML = '';
   container.appendChild(wrap);
+}
+
+function buildAiDrafterCard(pageWrap) {
+  const card = el('div', { class: 'dash-card' });
+  card.appendChild(el('h3', { text: 'AI story drafter' }));
+  card.appendChild(el('p', {
+    style: 'margin-bottom:10px;color:var(--grey);font-size:13px;',
+    text: 'Paste notes or facts. The drafter fills title, summary, body, and tags — it will not invent events not in your notes. Always edit before publishing.',
+  }));
+
+  const notes = el('textarea', { name: 'aiNotes', rows: '5', placeholder: 'Who / what / where / when — quotes, figures, source names…', style: 'width:100%;' });
+  const actions = el('div', { class: 'dash-actions' });
+  const btn = el('button', { type: 'button', class: 'secondary', text: 'Generate draft' });
+  const status = el('span', { style: 'color:var(--grey);font-size:12.5px;' });
+  actions.appendChild(btn);
+  actions.appendChild(status);
+  card.appendChild(notes);
+  card.appendChild(actions);
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    status.textContent = 'Drafting…';
+    try {
+      const form = pageWrap.querySelector('form.dash-form');
+      const { draft, warning } = await api.post('/ai/draft-story', {
+        notes: notes.value,
+        title: form?.title?.value || '',
+        category: form?.categorySlug?.selectedOptions?.[0]?.textContent || '',
+        district: form?.districtSlug?.selectedOptions?.[0]?.textContent || '',
+      });
+      if (form) {
+        if (draft.title) form.title.value = draft.title;
+        if (draft.summary) form.summary.value = draft.summary;
+        if (draft.body) form.body.value = draft.body;
+        if (draft.tags?.length && form.tags) form.tags.value = draft.tags.join(', ');
+      }
+      status.textContent = warning || 'Draft applied — review carefully.';
+      toast(pageWrap, warning || 'AI draft applied to the form.', warning ? 'error' : 'success');
+    } catch (err) {
+      status.textContent = '';
+      toast(pageWrap, err instanceof ApiError ? err.message : 'AI draft failed.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  return card;
+}
+
+function wireMediaUploads(form, ctx, pageWrap) {
+  form.querySelectorAll('.media-upload-row').forEach((row) => {
+    const kind = row.getAttribute('data-upload');
+    const fileInput = row.querySelector('.media-file-input');
+    const btn = row.querySelector('.media-upload-btn');
+    const status = row.querySelector('.media-upload-status');
+    btn.addEventListener('click', async () => {
+      if (!fileInput.files?.length) {
+        fileInput.click();
+        return;
+      }
+      btn.disabled = true;
+      status.textContent = 'Uploading…';
+      try {
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        if (ctx.mode === 'org' && ctx.orgId) fd.append('organizationId', String(ctx.orgId));
+        const result = await uploadFile('/media/upload', fd);
+        if (kind === 'video') {
+          form.videoUrl.value = result.shareUrl || result.url;
+          status.textContent = 'Video ready — shareable watch URL filled in.';
+        } else {
+          form.imageUrl.value = result.url;
+          status.textContent = 'Image uploaded.';
+        }
+        toast(pageWrap, kind === 'video' ? 'Video uploaded. Watch URL is ready to share.' : 'Image uploaded.', 'success');
+        fileInput.value = '';
+      } catch (err) {
+        status.textContent = '';
+        toast(pageWrap, err instanceof ApiError ? err.message : 'Upload failed.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files?.length) {
+        status.textContent = fileInput.files[0].name;
+      }
+    });
+  });
 }
 
 function buildWorkflowCard(pageWrap, ctx, story) {

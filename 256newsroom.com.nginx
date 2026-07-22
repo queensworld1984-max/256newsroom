@@ -9,6 +9,9 @@ server {
     add_header Permissions-Policy "geolocation=(self), microphone=(), camera=(), payment=()" always;
     add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
 
+    # Story image/video uploads (multipart) and AI draft endpoints.
+    client_max_body_size 200m;
+
     location /api/ {
         proxy_pass http://127.0.0.1:5066;
         proxy_http_version 1.1;
@@ -16,6 +19,20 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 200m;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    # Uploaded media files + YouTube-style video watch pages.
+    location /media/ {
+        proxy_pass http://127.0.0.1:5066;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
     }
 
     location /rss/ {

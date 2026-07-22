@@ -91,12 +91,77 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
   }
 });
 
-// Self-serve: any logged-in user can become an independent journalist without
-// admin approval — unlike organizations, independent journalists aren't gated
-// by a verification pipeline (see isOrgApproved in storiesCore.js, which treats
-// organizationId=null as always allowed to publish).
+// Self-serve independent journalist onboarding. Requires National ID (hashed),
+// district, topic beats, and contact details. Unlike publisher orgs, there is
+// no admin publish gate (see isOrgApproved in storiesCore.js for organizationId=null).
 router.post('/become-independent-journalist', requireAuth, async (req, res, next) => {
   try {
+    const {
+      normalizeNationalId,
+      isPlausibleNationalId,
+      hashNationalId,
+      nationalIdLast4,
+      cleanPhone,
+      cleanEmail,
+      cleanUrl,
+    } = require('../identity');
+
+    const displayName = String(req.body.displayName || req.body.name || req.user.displayName || '').trim().slice(0, 160);
+    const nationalIdRaw = normalizeNationalId(req.body.nationalId);
+    const districtSlug = String(req.body.districtSlug || '').trim().slice(0, 80);
+    const websiteUrl = cleanUrl(req.body.websiteUrl);
+    const whatsapp = cleanPhone(req.body.whatsappNumber || req.body.whatsapp);
+    const contactPhone = cleanPhone(req.body.contactPhone || req.body.phone);
+    const contactEmail = cleanEmail(req.body.contactEmail) || cleanEmail(req.user.email);
+    let topicSlugs = req.body.topicSlugs || req.body.topics || [];
+    if (typeof topicSlugs === 'string') {
+      topicSlugs = topicSlugs.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+    if (!Array.isArray(topicSlugs)) topicSlugs = [];
+    topicSlugs = topicSlugs.map((t) => String(t).trim().toLowerCase().slice(0, 60)).filter(Boolean).slice(0, 12);
+
+    if (displayName.length < 2) {
+      return res.status(400).json({ error: 'Your public journalist name is required.' });
+    }
+    if (!isPlausibleNationalId(nationalIdRaw)) {
+      return res.status(400).json({ error: 'A valid National ID (NIN) is required to register as an independent journalist.' });
+    }
+    if (!districtSlug) {
+      return res.status(400).json({ error: 'Choose your primary reporting district.' });
+    }
+    if (!topicSlugs.length) {
+      return res.status(400).json({ error: 'Choose at least one topic or beat you publish on.' });
+    }
+    if (websiteUrl === false) return res.status(400).json({ error: 'Website URL must start with http:// or https://.' });
+    if (whatsapp === false) return res.status(400).json({ error: 'WhatsApp number looks invalid.' });
+    if (contactPhone === false) return res.status(400).json({ error: 'Contact phone looks invalid.' });
+    if (contactEmail === false || !contactEmail) {
+      return res.status(400).json({ error: 'A valid contact email is required.' });
+    }
+    if (!whatsapp && !contactPhone) {
+      return res.status(400).json({ error: 'Provide a WhatsApp number or contact phone.' });
+    }
+
+    const { rows: districtRows } = await pool.query('select id from districts where slug = $1', [districtSlug]);
+    if (!districtRows.length) return res.status(400).json({ error: 'Unknown district. Pick one from the list.' });
+
+    // Validate topic slugs against categories when provided as known taxonomy.
+    const { rows: catRows } = await pool.query('select slug from categories where slug = any($1::text[])', [topicSlugs]);
+    const known = new Set(catRows.map((r) => r.slug));
+    const unknown = topicSlugs.filter((s) => !known.has(s));
+    if (unknown.length) {
+      return res.status(400).json({ error: `Unknown topic(s): ${unknown.join(', ')}. Choose from the newsroom categories.` });
+    }
+
+    const ninHash = hashNationalId(nationalIdRaw);
+    const { rows: ninClash } = await pool.query(
+      'select id from journalists where national_id_hash = $1 and (user_id is distinct from $2)',
+      [ninHash, req.user.id],
+    );
+    if (ninClash.length) {
+      return res.status(409).json({ error: 'This National ID is already linked to another journalist account.' });
+    }
+
     const { rows: roleRows } = await pool.query("select id from roles where key = 'independent_journalist'");
     await pool.query(
       'insert into user_roles (user_id, role_id, organization_id) values ($1, $2, null) on conflict do nothing',
@@ -104,9 +169,9 @@ router.post('/become-independent-journalist', requireAuth, async (req, res, next
     );
 
     const { rows: existing } = await pool.query('select id from journalists where user_id = $1', [req.user.id]);
+    const beat = topicSlugs.join(', ');
     if (!existing.length) {
-      const name = req.user.displayName || req.user.email.split('@')[0];
-      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'journalist';
+      const baseSlug = displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'journalist';
       let slug = baseSlug;
       let suffix = 1;
       for (;;) {
@@ -116,9 +181,36 @@ router.post('/become-independent-journalist', requireAuth, async (req, res, next
         slug = `${baseSlug}-${suffix}`;
       }
       await pool.query(
-        `insert into journalists (name, slug, user_id, is_independent) values ($1, $2, $3, true)`,
-        [name, slug, req.user.id],
+        `insert into journalists
+          (name, slug, user_id, is_independent, beat, national_id_hash, national_id_last4,
+           district_id, topic_slugs, website_url, whatsapp_number, contact_phone, contact_email,
+           location, identity_status)
+         values ($1,$2,$3,true,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'self_declared')`,
+        [
+          displayName, slug, req.user.id, beat, ninHash, nationalIdLast4(nationalIdRaw),
+          districtRows[0].id, topicSlugs, websiteUrl, whatsapp, contactPhone, contactEmail,
+          districtSlug,
+        ],
       );
+    } else {
+      await pool.query(
+        `update journalists set
+           name = $2, beat = $3, national_id_hash = $4, national_id_last4 = $5,
+           district_id = $6, topic_slugs = $7, website_url = coalesce($8, website_url),
+           whatsapp_number = $9, contact_phone = $10, contact_email = $11,
+           location = $12, is_independent = true, identity_status = 'self_declared',
+           updated_at = now()
+         where user_id = $1`,
+        [
+          req.user.id, displayName, beat, ninHash, nationalIdLast4(nationalIdRaw),
+          districtRows[0].id, topicSlugs, websiteUrl, whatsapp, contactPhone, contactEmail,
+          districtSlug,
+        ],
+      );
+    }
+
+    if (req.user.displayName !== displayName) {
+      await pool.query('update users set display_name = $2, updated_at = now() where id = $1', [req.user.id, displayName]);
     }
 
     res.json({ ok: true });
@@ -130,7 +222,12 @@ router.post('/become-independent-journalist', requireAuth, async (req, res, next
 router.get('/journalist-profile', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      'select id, name, slug, beat, bio, location, website_url, image_url, verified from journalists where user_id = $1',
+      `select j.id, j.name, j.slug, j.beat, j.bio, j.location, j.website_url, j.image_url, j.verified,
+              j.topic_slugs, j.whatsapp_number, j.contact_phone, j.contact_email, j.national_id_last4,
+              j.identity_status, d.slug as district_slug, d.name as district_name
+       from journalists j
+       left join districts d on d.id = j.district_id
+       where j.user_id = $1`,
       [req.user.id],
     );
     if (!rows.length) return res.status(404).json({ error: 'Activate your independent journalist account first.' });

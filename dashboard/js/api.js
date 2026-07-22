@@ -35,3 +35,21 @@ export const api = {
   patch: (path, body) => request(path, { method: 'PATCH', body: body || {} }),
   del: (path) => request(path, { method: 'DELETE' }),
 };
+
+/** Multipart upload (do not set content-type — browser sets boundary). */
+export async function uploadFile(path, formData) {
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: formData,
+  });
+  let data = null;
+  const text = await res.text();
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = null; }
+  }
+  if (!res.ok) {
+    throw new ApiError((data && data.error) || `Upload failed (${res.status})`, res.status);
+  }
+  return data;
+}

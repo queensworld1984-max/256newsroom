@@ -44,18 +44,41 @@ async function uniqueOrgSlug(name) {
 // Creates the organization (visible publicly immediately, badged by its
 // verification_status) and its application record in one transaction, then makes
 // the applicant its publisher_owner. Publishing capability stays gated separately —
-// see requireApprovedOrg in stories.js — until an admin approves the application.
+// see isOrgApproved in storiesCore.js — until an admin approves the application.
+// Requires verifiable org contact details so random accounts cannot casually
+// claim an outlet and start publishing under its name.
 router.post('/', requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
+    const { cleanPhone, cleanEmail, cleanUrl } = require('../identity');
+
     const name = String(req.body.name || '').trim().slice(0, 200);
     const orgType = String(req.body.orgType || 'local_publisher');
-    const websiteUrl = req.body.websiteUrl ? String(req.body.websiteUrl).trim().slice(0, 500) : null;
+    const websiteUrl = cleanUrl(req.body.websiteUrl);
     const description = req.body.description ? String(req.body.description).trim().slice(0, 2000) : null;
-    const editorialContactEmail = req.body.editorialContactEmail ? String(req.body.editorialContactEmail).trim().slice(0, 200) : null;
+    const physicalAddress = String(req.body.physicalAddress || '').trim().slice(0, 500);
+    const contactPersonName = String(req.body.contactPersonName || '').trim().slice(0, 160);
+    const contactPersonTitle = String(req.body.contactPersonTitle || '').trim().slice(0, 120) || null;
+    const contactPersonEmail = cleanEmail(req.body.contactPersonEmail);
+    const contactPersonPhone = cleanPhone(req.body.contactPersonPhone);
+    const contactPersonWhatsapp = cleanPhone(req.body.contactPersonWhatsapp);
+    const editorialContactEmail = cleanEmail(req.body.editorialContactEmail) || contactPersonEmail;
+    const editorialContactPhone = cleanPhone(req.body.editorialContactPhone) || contactPersonPhone;
     const businessDetails = req.body.businessDetails && typeof req.body.businessDetails === 'object' ? req.body.businessDetails : {};
 
     if (!name) return res.status(400).json({ error: 'Organization name is required.' });
+    if (physicalAddress.length < 8) return res.status(400).json({ error: 'Physical address of the organization is required.' });
+    if (contactPersonName.length < 2) return res.status(400).json({ error: 'Contact person full name is required.' });
+    if (contactPersonEmail === false || !contactPersonEmail) {
+      return res.status(400).json({ error: 'A valid contact person email is required.' });
+    }
+    if (contactPersonPhone === false || !contactPersonPhone) {
+      return res.status(400).json({ error: 'A valid contact person phone number is required.' });
+    }
+    if (websiteUrl === false) return res.status(400).json({ error: 'Website URL must start with http:// or https://.' });
+    if (contactPersonWhatsapp === false) return res.status(400).json({ error: 'WhatsApp number looks invalid.' });
+    if (editorialContactEmail === false) return res.status(400).json({ error: 'Editorial contact email looks invalid.' });
+    if (editorialContactPhone === false) return res.status(400).json({ error: 'Editorial contact phone looks invalid.' });
 
     const { rows: existingApp } = await client.query(
       `select pa.id from publisher_applications pa
@@ -72,18 +95,36 @@ router.post('/', requireAuth, async (req, res, next) => {
     await client.query('begin');
     const { rows: orgRows } = await client.query(
       `insert into organizations
-        (name, slug, org_type, description, website_url, editorial_contact_email, verification_status)
-       values ($1, $2, $3, $4, $5, $6, 'unverified')
+        (name, slug, org_type, description, website_url, editorial_contact_email, editorial_contact_phone,
+         physical_address, contact_person_name, contact_person_title, contact_person_email,
+         contact_person_phone, contact_person_whatsapp, verification_status)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'unverified')
        returning id, slug, verification_status`,
-      [name, slug, orgType, description, websiteUrl, editorialContactEmail],
+      [
+        name, slug, orgType, description, websiteUrl, editorialContactEmail, editorialContactPhone,
+        physicalAddress, contactPersonName, contactPersonTitle, contactPersonEmail,
+        contactPersonPhone, contactPersonWhatsapp || null,
+      ],
     );
     const organizationId = orgRows[0].id;
+
+    const enrichedBusinessDetails = {
+      ...businessDetails,
+      physicalAddress,
+      contactPerson: {
+        name: contactPersonName,
+        title: contactPersonTitle,
+        email: contactPersonEmail,
+        phone: contactPersonPhone,
+        whatsapp: contactPersonWhatsapp || null,
+      },
+    };
 
     const { rows: appRows } = await client.query(
       `insert into publisher_applications (organization_id, applicant_user_id, stage, business_details)
        values ($1, $2, 'application', $3)
        returning id, stage, submitted_at`,
-      [organizationId, req.user.id, businessDetails],
+      [organizationId, req.user.id, enrichedBusinessDetails],
     );
 
     await client.query(
@@ -197,7 +238,8 @@ adminRouter.get('/', requireRole('super_admin', 'newsroom_admin'), async (req, r
   try {
     const { rows } = await pool.query(
       `select pa.id, pa.stage, pa.submitted_at, pa.decided_at, pa.review_notes,
-              o.id as organization_id, o.name, o.slug, o.org_type, o.website_url, o.verification_status
+              o.id as organization_id, o.name, o.slug, o.org_type, o.website_url, o.verification_status,
+              o.physical_address, o.contact_person_name, o.contact_person_email, o.contact_person_phone
        from publisher_applications pa
        join organizations o on o.id = pa.organization_id
        where o.excluded_from_verification_queue = false
@@ -212,7 +254,10 @@ adminRouter.get('/', requireRole('super_admin', 'newsroom_admin'), async (req, r
 adminRouter.get('/:id', requireRole('super_admin', 'newsroom_admin'), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `select pa.*, o.name, o.slug, o.org_type, o.website_url, o.verification_status
+      `select pa.*, o.name, o.slug, o.org_type, o.website_url, o.verification_status,
+              o.physical_address, o.contact_person_name, o.contact_person_title,
+              o.contact_person_email, o.contact_person_phone, o.contact_person_whatsapp,
+              o.editorial_contact_email, o.editorial_contact_phone
        from publisher_applications pa
        join organizations o on o.id = pa.organization_id
        where pa.id = $1`,

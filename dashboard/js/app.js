@@ -60,6 +60,7 @@ const INDEPENDENT_NAV = [
     { path: '/stories', label: 'My Stories' },
     { path: '/stories/new', label: 'Create Story' },
     { path: '/stories/scheduled', label: 'Scheduled Stories' },
+    { path: '/media', label: 'Media Library' },
   ] },
   { section: 'Account', items: [
     { path: '/journalist-profile', label: 'My Public Profile' },

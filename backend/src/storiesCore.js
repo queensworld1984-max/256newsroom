@@ -40,6 +40,7 @@ function pickStoryInput(body) {
     imageUrl: body.imageUrl !== undefined ? String(body.imageUrl).slice(0, 1000) : undefined,
     imageCaption: body.imageCaption !== undefined ? String(body.imageCaption).slice(0, 300) : undefined,
     imageCredit: body.imageCredit !== undefined ? String(body.imageCredit).slice(0, 200) : undefined,
+    videoUrl: body.videoUrl !== undefined ? String(body.videoUrl).slice(0, 1000) : undefined,
     categorySlug: body.categorySlug,
     districtSlug: body.districtSlug,
     tags: Array.isArray(body.tags) ? body.tags.map((t) => String(t).slice(0, 40)).slice(0, 20) : undefined,
@@ -60,15 +61,15 @@ async function createStory({ organizationId, journalistId, createdByUserId, inpu
   const { rows } = await pool.query(
     `insert into articles
       (organization_id, journalist_id, created_by_user_id, origin, title, summary, body, body_format,
-       image_url, image_caption, image_credit, tags, external_url, breaking, developing, source_documents,
+       image_url, image_caption, image_credit, video_url, tags, external_url, breaking, developing, source_documents,
        slug, status, url, hidden)
      values
-      ($1,$2,$3,'publisher_authored',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'draft',$17,false)
+      ($1,$2,$3,'publisher_authored',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft',$18,false)
      returning *`,
     [
       organizationId, journalistId, createdByUserId,
       input.title, input.summary || null, input.body || null, input.bodyFormat || 'markdown',
-      input.imageUrl || null, input.imageCaption || null, input.imageCredit || null,
+      input.imageUrl || null, input.imageCaption || null, input.imageCredit || null, input.videoUrl || null,
       input.tags || [], input.externalUrl || null, Boolean(input.breaking), Boolean(input.developing),
       JSON.stringify(input.sourceDocuments || []),
       slug,
@@ -101,6 +102,7 @@ async function applyPatch(articleId, fields, skipTitleCheck = false) {
   if (fields.imageUrl !== undefined) push('image_url', fields.imageUrl);
   if (fields.imageCaption !== undefined) push('image_caption', fields.imageCaption);
   if (fields.imageCredit !== undefined) push('image_credit', fields.imageCredit);
+  if (fields.videoUrl !== undefined) push('video_url', fields.videoUrl);
   if (fields.tags !== undefined) push('tags', fields.tags);
   if (fields.externalUrl !== undefined) push('external_url', fields.externalUrl);
   if (fields.breaking !== undefined) push('breaking', fields.breaking);
