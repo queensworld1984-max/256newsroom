@@ -114,6 +114,73 @@ function enqueueVideoCompression(mediaAssetId) {
   });
 }
 
+const AUDIO_BITRATE = process.env.AUDIO_COMPRESS_BITRATE || '96k';
+const SOUNDBITE_DEFAULT_SECONDS = Number(process.env.SOUNDBITE_DEFAULT_SECONDS || 30);
+const SOUNDBITE_MAX_SECONDS = Number(process.env.SOUNDBITE_MAX_SECONDS || 90);
+
+/** Compress audio to mono MP3 for web playback. */
+async function compressAudioFile(inputAbsPath, outputAbsPath) {
+  fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
+  const args = [
+    '-y',
+    '-i', inputAbsPath,
+    '-vn',
+    '-ac', '1',
+    '-ar', '44100',
+    '-c:a', 'libmp3lame',
+    '-b:a', AUDIO_BITRATE,
+    outputAbsPath,
+  ];
+  await runFfmpeg(args, 30 * 60 * 1000);
+  if (!fs.existsSync(outputAbsPath)) throw new Error('ffmpeg audio output missing.');
+  const stat = fs.statSync(outputAbsPath);
+  if (stat.size < 500) throw new Error('ffmpeg audio output looks empty.');
+  return { outPath: outputAbsPath, sizeBytes: stat.size };
+}
+
+/**
+ * Create a short sound bite (clip) from full audio or video.
+ * durationSeconds: 5–SOUNDBITE_MAX_SECONDS, startSeconds optional.
+ */
+async function createSoundbiteFile(inputAbsPath, outputAbsPath, {
+  durationSeconds = SOUNDBITE_DEFAULT_SECONDS,
+  startSeconds = 0,
+} = {}) {
+  fs.mkdirSync(path.dirname(outputAbsPath), { recursive: true });
+  const dur = Math.max(5, Math.min(SOUNDBITE_MAX_SECONDS, Number(durationSeconds) || SOUNDBITE_DEFAULT_SECONDS));
+  const start = Math.max(0, Number(startSeconds) || 0);
+  const args = [
+    '-y',
+    '-ss', String(start),
+    '-i', inputAbsPath,
+    '-t', String(dur),
+    '-vn',
+    '-ac', '1',
+    '-ar', '44100',
+    '-c:a', 'libmp3lame',
+    '-b:a', AUDIO_BITRATE,
+    outputAbsPath,
+  ];
+  await runFfmpeg(args, 15 * 60 * 1000);
+  if (!fs.existsSync(outputAbsPath)) throw new Error('Sound bite file missing after ffmpeg.');
+  const stat = fs.statSync(outputAbsPath);
+  if (stat.size < 400) throw new Error('Sound bite looks empty.');
+  return { outPath: outputAbsPath, sizeBytes: stat.size, durationSeconds: dur, startSeconds: start };
+}
+
+function enqueueMediaCompression(mediaAssetId) {
+  setImmediate(() => {
+    compressMediaAsset(mediaAssetId).catch((err) => {
+      console.error('[mediaCompress] unhandled', mediaAssetId, err);
+    });
+  });
+}
+
+// Back-compat alias
+function enqueueVideoCompression(mediaAssetId) {
+  return enqueueMediaCompression(mediaAssetId);
+}
+
 async function compressMediaAsset(mediaAssetId) {
   const { rows } = await pool.query(
     `select id, media_type, storage_path, size_bytes, public_id, mime_type, processing_status
@@ -122,7 +189,16 @@ async function compressMediaAsset(mediaAssetId) {
   );
   const asset = rows[0];
   if (!asset) return;
-  if (asset.media_type !== 'video') {
+
+  if (asset.media_type === 'image' || asset.media_type === 'soundbite') {
+    await pool.query(
+      `update media_assets set processing_status = 'ready', compressed_at = now() where id = $1`,
+      [mediaAssetId],
+    );
+    return;
+  }
+
+  if (asset.media_type !== 'video' && asset.media_type !== 'audio') {
     await pool.query(
       `update media_assets set processing_status = 'ready', compressed_at = now() where id = $1`,
       [mediaAssetId],
@@ -157,26 +233,31 @@ async function compressMediaAsset(mediaAssetId) {
   if (!fs.existsSync(inputAbs)) {
     await pool.query(
       `update media_assets set processing_status = 'failed', compression_error = $2 where id = $1`,
-      [mediaAssetId, 'Original video file missing on disk.'],
+      [mediaAssetId, 'Original media file missing on disk.'],
     );
     return;
   }
 
   const originalSize = fs.statSync(inputAbs).size;
-  const outName = `${asset.public_id}.mp4`;
-  const outRel = path.join('videos', outName).replace(/\\/g, '/');
+  const isAudio = asset.media_type === 'audio';
+  const outExt = isAudio ? '.mp3' : '.mp4';
+  const subdir = isAudio ? 'audio' : 'videos';
+  const outName = `${asset.public_id}${outExt}`;
+  const outRel = path.join(subdir, outName).replace(/\\/g, '/');
   const outAbs = path.join(UPLOAD_ROOT, outRel);
-  const tmpAbs = path.join(UPLOAD_ROOT, 'videos', `${asset.public_id}.compressing.mp4`);
+  const tmpAbs = path.join(UPLOAD_ROOT, subdir, `${asset.public_id}.compressing${outExt}`);
 
   try {
-    const { sizeBytes } = await compressVideoFile(inputAbs, tmpAbs);
+    const { sizeBytes } = isAudio
+      ? await compressAudioFile(inputAbs, tmpAbs)
+      : await compressVideoFile(inputAbs, tmpAbs);
 
-    // Prefer compressed only if it is meaningfully smaller (or always if source was not mp4).
-    const isAlreadyMp4 = /\.mp4$/i.test(asset.storage_path) || /mp4/i.test(asset.mime_type || '');
-    const improved = sizeBytes < originalSize * 0.95 || !isAlreadyMp4;
+    const isAlreadyTarget = isAudio
+      ? (/\.mp3$/i.test(asset.storage_path) || /mpeg|mp3/i.test(asset.mime_type || ''))
+      : (/\.mp4$/i.test(asset.storage_path) || /mp4/i.test(asset.mime_type || ''));
+    const improved = sizeBytes < originalSize * 0.95 || !isAlreadyTarget;
 
     if (!improved) {
-      // Keep original; compressed not worth it
       try { fs.unlinkSync(tmpAbs); } catch { /* ignore */ }
       await pool.query(
         `update media_assets set
@@ -191,13 +272,11 @@ async function compressMediaAsset(mediaAssetId) {
       return;
     }
 
-    // Atomic-ish replace: move tmp → final mp4
     if (fs.existsSync(outAbs) && outAbs !== inputAbs) {
       try { fs.unlinkSync(outAbs); } catch { /* ignore */ }
     }
     fs.renameSync(tmpAbs, outAbs);
 
-    // Remove original if different path
     if (path.resolve(inputAbs) !== path.resolve(outAbs)) {
       try { fs.unlinkSync(inputAbs); } catch { /* keep if locked */ }
     }
@@ -210,11 +289,11 @@ async function compressMediaAsset(mediaAssetId) {
          processing_status = 'ready',
          storage_path = $2,
          original_storage_path = $3,
-         mime_type = 'video/mp4',
-         size_bytes = $4,
-         original_size_bytes = $5,
-         compressed_size_bytes = $4,
-         url = $6,
+         mime_type = $4,
+         size_bytes = $5,
+         original_size_bytes = $6,
+         compressed_size_bytes = $5,
+         url = $7,
          compression_error = null,
          compressed_at = now()
        where id = $1`,
@@ -222,6 +301,7 @@ async function compressMediaAsset(mediaAssetId) {
         mediaAssetId,
         outRel,
         asset.storage_path,
+        isAudio ? 'audio/mpeg' : 'video/mp4',
         sizeBytes,
         originalSize,
         newUrl,
@@ -229,7 +309,7 @@ async function compressMediaAsset(mediaAssetId) {
     );
 
     console.log(
-      `[mediaCompress] #${mediaAssetId} ${formatBytes(originalSize)} → ${formatBytes(sizeBytes)} (${Math.round((sizeBytes / originalSize) * 100)}%)`,
+      `[mediaCompress] #${mediaAssetId} ${asset.media_type} ${formatBytes(originalSize)} → ${formatBytes(sizeBytes)} (${Math.round((sizeBytes / originalSize) * 100)}%)`,
     );
   } catch (err) {
     try { if (fs.existsSync(tmpAbs)) fs.unlinkSync(tmpAbs); } catch { /* ignore */ }
@@ -249,8 +329,13 @@ async function compressMediaAsset(mediaAssetId) {
 module.exports = {
   ensureFfmpeg,
   compressVideoFile,
+  compressAudioFile,
+  createSoundbiteFile,
   enqueueVideoCompression,
+  enqueueMediaCompression,
   compressMediaAsset,
+  SOUNDBITE_DEFAULT_SECONDS,
+  SOUNDBITE_MAX_SECONDS,
   FFMPEG,
   FFPROBE,
 };

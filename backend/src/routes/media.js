@@ -8,6 +8,7 @@ const {
   UPLOAD_ROOT,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MAX_AUDIO_BYTES,
   formatBytes,
   ensureUploadDirs,
   mediaTypeForMime,
@@ -18,20 +19,50 @@ const {
   absoluteStoragePath,
   newPublicId,
 } = require('../mediaStorage');
-const { enqueueVideoCompression, ensureFfmpeg } = require('../mediaCompress');
+const {
+  enqueueMediaCompression,
+  ensureFfmpeg,
+  createSoundbiteFile,
+  SOUNDBITE_DEFAULT_SECONDS,
+  SOUNDBITE_MAX_SECONDS,
+} = require('../mediaCompress');
 
 ensureUploadDirs();
 ensureFfmpeg().catch(() => {});
 
 const router = express.Router();
 
+function storageSubdir(mediaType) {
+  if (mediaType === 'video') return 'videos';
+  if (mediaType === 'audio') return 'audio';
+  if (mediaType === 'soundbite') return 'soundbites';
+  return 'images';
+}
+
+function defaultExt(mediaType) {
+  if (mediaType === 'video') return '.mp4';
+  if (mediaType === 'audio' || mediaType === 'soundbite') return '.mp3';
+  return '.jpg';
+}
+
+function storyFieldFor(mediaType) {
+  if (mediaType === 'video') return 'videoUrl';
+  if (mediaType === 'audio') return 'audioUrl';
+  if (mediaType === 'soundbite') return 'soundbiteUrl';
+  return 'imageUrl';
+}
+
 const storage = multer.diskStorage({
   destination(req, file, cb) {
     const mime = resolveMime(file);
     const mediaType = mediaTypeForMime(mime);
-    if (!mediaType) return cb(new Error('Unsupported file type. Attach a photo (JPEG/PNG/WebP/GIF/HEIC) or video (MP4/WebM/MOV) from your device.'));
+    if (!mediaType) {
+      return cb(new Error(
+        'Unsupported file type. Attach a photo (JPEG/PNG/WebP/GIF/HEIC), video (MP4/WebM/MOV), or audio (MP3/M4A/WAV/OGG/AAC/FLAC) from your device.',
+      ));
+    }
     file.mimetype = mime || file.mimetype;
-    const dir = path.join(UPLOAD_ROOT, mediaType === 'video' ? 'videos' : 'images');
+    const dir = path.join(UPLOAD_ROOT, storageSubdir(mediaType));
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -39,7 +70,9 @@ const storage = multer.diskStorage({
     const mime = resolveMime(file);
     const mediaType = mediaTypeForMime(mime);
     const publicId = newPublicId();
-    const ext = extensionForMime(mime) || path.extname(file.originalname || '').slice(0, 10) || (mediaType === 'video' ? '.mp4' : '.jpg');
+    const ext = extensionForMime(mime)
+      || path.extname(file.originalname || '').slice(0, 10)
+      || defaultExt(mediaType);
     req._uploadPublicId = publicId;
     req._uploadMediaType = mediaType;
     req._uploadMime = mime;
@@ -49,14 +82,16 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  // Use the larger video ceiling so big phone photos and long clips are not
+  // Use the larger video ceiling so big phone photos/clips are not
   // rejected by multer before our type-specific checks run.
   limits: { fileSize: MAX_VIDEO_BYTES, fieldSize: 2 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     const mime = resolveMime(file);
     const mediaType = mediaTypeForMime(mime);
     if (!mediaType) {
-      return cb(new Error('Only photos and videos from your device are allowed (JPEG, PNG, WebP, GIF, HEIC, MP4, WebM, MOV).'));
+      return cb(new Error(
+        'Only photos, videos, and audio from your device are allowed (JPEG, PNG, WebP, GIF, HEIC, MP4, WebM, MOV, MP3, M4A, WAV, OGG, AAC, FLAC).',
+      ));
     }
     file.mimetype = mime || file.mimetype;
     cb(null, true);
@@ -67,6 +102,14 @@ function canUseOrg(req, orgId) {
   if (!orgId) return true;
   if (req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key))) return true;
   return req.user.roles.some((r) => Number(r.organizationId) === Number(orgId));
+}
+
+function canAccessAsset(req, asset) {
+  const isOwner = Number(asset.owner_user_id) === Number(req.user.id);
+  const isAdmin = req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key));
+  const isOrgMember = asset.organization_id
+    && req.user.roles.some((r) => Number(r.organizationId) === Number(asset.organization_id));
+  return isOwner || isAdmin || isOrgMember;
 }
 
 // Shared upload for org members and independent journalists.
@@ -81,7 +124,7 @@ router.post(
       if (err) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(413).json({
-            error: `File is too large. Photos up to ${formatBytes(MAX_IMAGE_BYTES)}, videos up to ${formatBytes(MAX_VIDEO_BYTES)}.`,
+            error: `File is too large. Photos up to ${formatBytes(MAX_IMAGE_BYTES)}, audio up to ${formatBytes(MAX_AUDIO_BYTES)}, videos up to ${formatBytes(MAX_VIDEO_BYTES)}.`,
           });
         }
         return res.status(400).json({ error: err.message || 'Upload failed.' });
@@ -106,6 +149,12 @@ router.post(
           error: `Video is too large (${formatBytes(req.file.size)}). Maximum is ${formatBytes(MAX_VIDEO_BYTES)}.`,
         });
       }
+      if (mediaType === 'audio' && req.file.size > MAX_AUDIO_BYTES) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(413).json({
+          error: `Audio is too large (${formatBytes(req.file.size)}). Maximum is ${formatBytes(MAX_AUDIO_BYTES)}.`,
+        });
+      }
       const storedMime = req._uploadMime || resolveMime(req.file) || req.file.mimetype;
 
       const organizationId = req.body.organizationId ? Number(req.body.organizationId) : null;
@@ -128,9 +177,10 @@ router.post(
       const fileUrl = fileUrlFor(publicId);
       const shareUrl = publicUrlFor(publicId, mediaType);
 
-      // Videos start as "processing" while ffmpeg compresses in the background.
+      // Videos and audio start as "processing" while ffmpeg compresses in the background.
       // Images are ready immediately.
-      const processingStatus = mediaType === 'video' ? 'processing' : 'ready';
+      const needsCompress = mediaType === 'video' || mediaType === 'audio';
+      const processingStatus = needsCompress ? 'processing' : 'ready';
 
       const { rows } = await pool.query(
         `insert into media_assets
@@ -157,25 +207,137 @@ router.post(
         ],
       );
 
-      if (mediaType === 'video') {
-        enqueueVideoCompression(rows[0].id);
+      if (needsCompress) {
+        enqueueMediaCompression(rows[0].id);
       }
 
+      const typeLabel = mediaType === 'video' ? 'Video' : mediaType === 'audio' ? 'Audio' : 'Photo';
       res.status(201).json({
         item: rows[0],
         url: fileUrl,
         shareUrl,
         mediaType,
         processingStatus,
-        compressing: mediaType === 'video',
-        // Convenience for story form: images go into imageUrl, videos into videoUrl
-        storyField: mediaType === 'video' ? 'videoUrl' : 'imageUrl',
-        message: mediaType === 'video'
-          ? 'Video received. Compressing for faster playback — this may take a minute.'
+        compressing: needsCompress,
+        storyField: storyFieldFor(mediaType),
+        message: needsCompress
+          ? `${typeLabel} received. Compressing for faster playback — this may take a minute.`
           : 'Upload complete.',
       });
     } catch (err) {
       if (req.file?.path) fs.unlink(req.file.path, () => {});
+      next(err);
+    }
+  },
+);
+
+/**
+ * Create a short sound bite (clip) from an existing audio or video media asset.
+ * Body: { publicId | mediaId, startSeconds?, durationSeconds?, caption?, organizationId? }
+ */
+router.post(
+  '/soundbite',
+  requireAuth,
+  requireRole('independent_journalist', 'publisher_owner', 'publisher_editor', 'journalist', 'super_admin', 'newsroom_admin'),
+  async (req, res, next) => {
+    try {
+      const publicId = req.body.publicId ? String(req.body.publicId).trim() : null;
+      const mediaId = req.body.mediaId ? Number(req.body.mediaId) : null;
+      if (!publicId && !mediaId) {
+        return res.status(400).json({ error: 'Provide publicId or mediaId of the source audio/video.' });
+      }
+
+      const { rows: sourceRows } = await pool.query(
+        publicId
+          ? `select * from media_assets where public_id = $1`
+          : `select * from media_assets where id = $1`,
+        [publicId || mediaId],
+      );
+      const source = sourceRows[0];
+      if (!source) return res.status(404).json({ error: 'Source media not found.' });
+      if (source.media_type !== 'audio' && source.media_type !== 'video') {
+        return res.status(400).json({ error: 'Sound bites can only be created from audio or video files.' });
+      }
+      if (!canAccessAsset(req, source)) {
+        return res.status(403).json({ error: 'Forbidden.' });
+      }
+
+      const abs = absoluteStoragePath(source.storage_path);
+      if (!abs || !fs.existsSync(abs)) {
+        return res.status(404).json({ error: 'Source media file missing on disk.' });
+      }
+
+      const hasFfmpeg = await ensureFfmpeg();
+      if (!hasFfmpeg) {
+        return res.status(503).json({ error: 'Audio processing is not available on this server (ffmpeg missing).' });
+      }
+
+      let durationSeconds = Number(req.body.durationSeconds);
+      if (!Number.isFinite(durationSeconds)) durationSeconds = SOUNDBITE_DEFAULT_SECONDS;
+      durationSeconds = Math.max(5, Math.min(SOUNDBITE_MAX_SECONDS, durationSeconds));
+      let startSeconds = Number(req.body.startSeconds);
+      if (!Number.isFinite(startSeconds) || startSeconds < 0) startSeconds = 0;
+
+      const bitePublicId = newPublicId();
+      const outRel = path.join('soundbites', `${bitePublicId}.mp3`).replace(/\\/g, '/');
+      const outAbs = path.join(UPLOAD_ROOT, outRel);
+      fs.mkdirSync(path.dirname(outAbs), { recursive: true });
+
+      const { sizeBytes, durationSeconds: dur } = await createSoundbiteFile(abs, outAbs, {
+        durationSeconds,
+        startSeconds,
+      });
+
+      const organizationId = req.body.organizationId != null && req.body.organizationId !== ''
+        ? Number(req.body.organizationId)
+        : source.organization_id;
+      if (organizationId && !canUseOrg(req, organizationId)) {
+        try { fs.unlinkSync(outAbs); } catch { /* ignore */ }
+        return res.status(403).json({ error: 'You are not a member of that organization.' });
+      }
+
+      const fileUrl = fileUrlFor(bitePublicId);
+      const shareUrl = publicUrlFor(bitePublicId, 'soundbite');
+      const caption = req.body.caption
+        ? String(req.body.caption).slice(0, 300)
+        : (source.caption ? `Sound bite: ${String(source.caption).slice(0, 250)}` : 'Sound bite');
+
+      const { rows } = await pool.query(
+        `insert into media_assets
+          (organization_id, owner_user_id, url, caption, credit, alt_text, added_by_user_id,
+           media_type, public_id, storage_path, mime_type, size_bytes, original_filename,
+           processing_status, original_size_bytes, parent_media_id, duration_seconds)
+         values ($1,$2,$3,$4,$5,$6,$7,'soundbite',$8::uuid,$9,'audio/mpeg',$10,$11,'ready',$10,$12,$13)
+         returning *`,
+        [
+          organizationId,
+          req.user.id,
+          fileUrl,
+          caption,
+          source.credit || null,
+          req.body.altText ? String(req.body.altText).slice(0, 300) : null,
+          req.user.id,
+          bitePublicId,
+          outRel,
+          sizeBytes,
+          `soundbite-${dur}s.mp3`,
+          source.id,
+          dur,
+        ],
+      );
+
+      res.status(201).json({
+        item: rows[0],
+        url: fileUrl,
+        shareUrl,
+        mediaType: 'soundbite',
+        processingStatus: 'ready',
+        storyField: 'soundbiteUrl',
+        durationSeconds: dur,
+        startSeconds,
+        message: `Sound bite created (${dur}s). Attach it to your story and save.`,
+      });
+    } catch (err) {
       next(err);
     }
   },
@@ -187,18 +349,14 @@ router.get('/status/:publicId', requireAuth, async (req, res, next) => {
     const { rows } = await pool.query(
       `select id, public_id, media_type, processing_status, url, size_bytes,
               original_size_bytes, compressed_size_bytes, compression_error,
-              mime_type, original_filename, owner_user_id, organization_id, compressed_at
+              mime_type, original_filename, owner_user_id, organization_id, compressed_at,
+              duration_seconds, parent_media_id
        from media_assets where public_id = $1`,
       [req.params.publicId],
     );
     const asset = rows[0];
     if (!asset) return res.status(404).json({ error: 'Media not found.' });
-
-    const isOwner = Number(asset.owner_user_id) === Number(req.user.id);
-    const isAdmin = req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key));
-    const isOrgMember = asset.organization_id
-      && req.user.roles.some((r) => Number(r.organizationId) === Number(asset.organization_id));
-    if (!isOwner && !isAdmin && !isOrgMember) {
+    if (!canAccessAsset(req, asset)) {
       return res.status(403).json({ error: 'Forbidden.' });
     }
 
@@ -222,6 +380,8 @@ router.get('/status/:publicId', requireAuth, async (req, res, next) => {
       compressionRatioPercent: ratio,
       compressionError: asset.compression_error,
       compressedAt: asset.compressed_at,
+      durationSeconds: asset.duration_seconds,
+      parentMediaId: asset.parent_media_id,
     });
   } catch (err) {
     next(err);
@@ -258,7 +418,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
   }
 });
 
-// Public file bytes (images + raw video stream)
+// Public file bytes (images + raw video/audio stream)
 router.get('/file/:publicId', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -317,6 +477,62 @@ router.get('/watch/:publicId', async (req, res, next) => {
   <div class="wrap">
     <video controls playsinline preload="metadata" src="${fileUrl}"></video>
     <h1>${safeTitle}</h1>
+    <p>${asset.credit ? `Credit: ${String(asset.credit).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))} · ` : ''}
+      <a href="${fileUrl}">Direct file</a> ·
+      <a href="https://256newsroom.com">256 Newsroom</a>
+    </p>
+  </div>
+</body>
+</html>`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Listen page for uploaded audio and sound bites
+router.get('/listen/:publicId', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `select public_id, url, caption, credit, mime_type, original_filename, media_type,
+              duration_seconds, created_at
+       from media_assets where public_id = $1`,
+      [req.params.publicId],
+    );
+    const asset = rows[0];
+    if (!asset || (asset.media_type !== 'audio' && asset.media_type !== 'soundbite')) {
+      return res.status(404).send('Audio not found.');
+    }
+
+    const fileUrl = fileUrlFor(asset.public_id);
+    const kindLabel = asset.media_type === 'soundbite' ? 'Sound bite' : 'Audio';
+    const title = asset.caption || asset.original_filename || `256 Newsroom ${kindLabel.toLowerCase()}`;
+    const safeTitle = String(title).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+    const dur = asset.duration_seconds ? ` · ${Number(asset.duration_seconds).toFixed(0)}s` : '';
+
+    res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${safeTitle} — 256 Newsroom</title>
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:type" content="music.song">
+  <meta property="og:audio" content="${fileUrl}">
+  <style>
+    body{margin:0;background:#0b0b0b;color:#f5f5f5;font-family:system-ui,sans-serif}
+    .wrap{max-width:640px;margin:0 auto;padding:40px 16px}
+    .badge{display:inline-block;background:#c99a2e;color:#111;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;margin-bottom:12px}
+    audio{width:100%;margin:20px 0}
+    h1{font-size:1.35rem;margin:0 0 8px;line-height:1.3}
+    p{color:#aaa;margin:0;font-size:.9rem}
+    a{color:#c99a2e}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge">${kindLabel}${dur}</div>
+    <h1>${safeTitle}</h1>
+    <audio controls preload="metadata" src="${fileUrl}"></audio>
     <p>${asset.credit ? `Credit: ${String(asset.credit).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))} · ` : ''}
       <a href="${fileUrl}">Direct file</a> ·
       <a href="https://256newsroom.com">256 Newsroom</a>

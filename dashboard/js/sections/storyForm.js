@@ -1,7 +1,7 @@
 import { api, ApiError } from '../api.js';
 import { el, escapeHtml, formatDate, statusBadgeClass } from '../util.js';
 import { storiesBasePath, storyPath } from '../storiesApi.js';
-import { buildDeviceAttach } from '../deviceUpload.js';
+import { buildDeviceAttach, buildSoundbiteCreator } from '../deviceUpload.js';
 
 function toast(container, message, kind = 'error') {
   const existing = container.querySelector('.dash-toast');
@@ -64,7 +64,7 @@ export async function render(container, ctx, { id }) {
     }
     live.appendChild(el('p', {
       style: 'margin:8px 0 0;color:var(--grey);font-size:12.5px;',
-      text: 'Use “Save changes” to update the live page. Photo/video URLs below are what readers see.',
+      text: 'Use “Save changes” to update the live page. Photo, video, audio and sound-bite URLs below are what readers see.',
     }));
     wrap.appendChild(live);
   }
@@ -116,6 +116,28 @@ export async function render(container, ctx, { id }) {
       <div class="device-attach-host" data-kind="video"></div>
       <label class="story-url-fallback">Video URL (auto-filled on upload) <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…"></label>
     </div>
+    <div class="full story-media-block" data-media-slot="audio">
+      <div class="story-media-label">Story audio</div>
+      <p class="story-media-hint">Attach full audio (MP3, M4A, WAV, OGG, AAC, FLAC — up to 200&nbsp;MB). Server compresses to MP3. The listen URL is filled when ready — then Save.</p>
+      <div class="attached-media-preview" data-preview="audio" ${story?.audio_url ? '' : 'hidden'}>
+        <p class="attached-media-label">${story?.audio_url ? `Audio linked: ${escapeHtml(story.audio_url)}` : 'Audio attached'}</p>
+        ${story?.audio_url ? `<audio controls preload="metadata" src="${escapeHtml(toFileMediaUrl(story.audio_url))}"></audio>` : ''}
+      </div>
+      <div class="device-attach-host" data-kind="audio"></div>
+      <label class="story-url-fallback">Audio URL (auto-filled on upload) <input name="audioUrl" type="url" maxlength="1000" value="${escapeHtml(story?.audio_url || '')}" placeholder="https://256newsroom.com/media/listen/…"></label>
+      <label>Audio title <input name="audioTitle" maxlength="200" value="${escapeHtml(story?.audio_title || '')}" placeholder="e.g. Full interview"></label>
+    </div>
+    <div class="full story-media-block" data-media-slot="soundbite">
+      <div class="story-media-label">Sound bite</div>
+      <p class="story-media-hint">Create a short clip (5–90 seconds) from the audio or video you just attached, or paste a listen URL. Readers hear the highlight on the story page.</p>
+      <div class="attached-media-preview" data-preview="soundbite" ${story?.soundbite_url ? '' : 'hidden'}>
+        <p class="attached-media-label">${story?.soundbite_url ? `Sound bite: ${escapeHtml(story.soundbite_url)}` : 'Sound bite ready'}</p>
+        ${story?.soundbite_url ? `<audio controls preload="metadata" src="${escapeHtml(toFileMediaUrl(story.soundbite_url))}"></audio>` : ''}
+      </div>
+      <div class="soundbite-creator-host"></div>
+      <label class="story-url-fallback">Sound bite URL <input name="soundbiteUrl" type="url" maxlength="1000" value="${escapeHtml(story?.soundbite_url || '')}" placeholder="https://256newsroom.com/media/listen/…"></label>
+      <label>Sound bite title <input name="soundbiteTitle" maxlength="200" value="${escapeHtml(story?.soundbite_title || '')}" placeholder="e.g. Key quote (30s)"></label>
+    </div>
     <label>Tags (comma separated) <input name="tags" value="${escapeHtml((story?.tags || []).join(', '))}"></label>
     <label>External URL (source link) <input name="externalUrl" type="url" maxlength="1000" value="${escapeHtml(story?.external_url || '')}"></label>
     <label><span><input type="checkbox" name="breaking" ${story?.breaking ? 'checked' : ''}> Mark as breaking</span></label>
@@ -160,6 +182,10 @@ export async function render(container, ctx, { id }) {
       imageCredit: raw.imageCredit,
       imageCaption: raw.imageCaption,
       videoUrl: raw.videoUrl,
+      audioUrl: raw.audioUrl,
+      audioTitle: raw.audioTitle,
+      soundbiteUrl: raw.soundbiteUrl,
+      soundbiteTitle: raw.soundbiteTitle,
       tags: raw.tags ? raw.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
       externalUrl: raw.externalUrl,
       breaking: form.breaking.checked,
@@ -346,6 +372,20 @@ function buildAiDrafterCard(pageWrap) {
   return card;
 }
 
+/** Convert listen/watch share URLs to direct file URLs for <audio>/<video> elements. */
+function toFileMediaUrl(url) {
+  if (!url) return '';
+  return String(url)
+    .replace('/media/watch/', '/media/file/')
+    .replace('/media/listen/', '/media/file/');
+}
+
+function publicIdFromMediaUrl(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/media\/(?:listen|watch|file)\/([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
 function setMediaPreview(form, kind, url) {
   const box = form.querySelector(`.attached-media-preview[data-preview="${kind}"]`);
   if (!box) return;
@@ -362,6 +402,21 @@ function setMediaPreview(form, kind, url) {
     }
     const label = box.querySelector('.attached-media-label');
     if (label) label.textContent = 'Photo attached — click Save to keep it on the story.';
+  } else if (kind === 'audio' || kind === 'soundbite') {
+    const label = box.querySelector('.attached-media-label');
+    if (label) {
+      label.textContent = kind === 'soundbite'
+        ? `Sound bite ready — click Save to keep it on the story. ${url}`
+        : `Audio linked — click Save to keep it on the story. ${url}`;
+    }
+    let audio = box.querySelector('audio');
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.controls = true;
+      audio.preload = 'metadata';
+      box.appendChild(audio);
+    }
+    audio.src = toFileMediaUrl(url);
   } else {
     const label = box.querySelector('.attached-media-label');
     if (label) label.textContent = `Video linked — click Save to keep it on the story. ${url}`;
@@ -370,23 +425,48 @@ function setMediaPreview(form, kind, url) {
 
 function wireDeviceAttach(form, ctx, pageWrap) {
   const orgId = ctx.mode === 'org' && ctx.orgId ? ctx.orgId : null;
+  // Remember last uploaded audio/video public_id for sound-bite creation.
+  let lastClipSourcePublicId = publicIdFromMediaUrl(form.audioUrl?.value)
+    || publicIdFromMediaUrl(form.videoUrl?.value)
+    || null;
 
   // Live preview when URL fields change (paste)
   form.imageUrl?.addEventListener('change', () => setMediaPreview(form, 'image', form.imageUrl.value));
   form.imageUrl?.addEventListener('input', () => setMediaPreview(form, 'image', form.imageUrl.value));
-  form.videoUrl?.addEventListener('change', () => setMediaPreview(form, 'video', form.videoUrl.value));
+  form.videoUrl?.addEventListener('change', () => {
+    setMediaPreview(form, 'video', form.videoUrl.value);
+    const pid = publicIdFromMediaUrl(form.videoUrl.value);
+    if (pid) lastClipSourcePublicId = pid;
+  });
+  form.audioUrl?.addEventListener('change', () => {
+    setMediaPreview(form, 'audio', form.audioUrl.value);
+    const pid = publicIdFromMediaUrl(form.audioUrl.value);
+    if (pid) lastClipSourcePublicId = pid;
+  });
+  form.soundbiteUrl?.addEventListener('change', () => setMediaPreview(form, 'soundbite', form.soundbiteUrl.value));
 
   form.querySelectorAll('.device-attach-host').forEach((host) => {
     const kind = host.getAttribute('data-kind') || 'image';
+    const label = kind === 'video'
+      ? 'Attach video from device'
+      : kind === 'audio'
+        ? 'Attach audio from device'
+        : 'Attach photo from device';
     host.appendChild(buildDeviceAttach({
       kind,
       organizationId: orgId,
-      label: kind === 'video' ? 'Attach video from device' : 'Attach photo from device',
-      onUploaded: ({ url, shareUrl, mediaType }) => {
+      label,
+      onUploaded: ({ url, shareUrl, mediaType, item }) => {
         if (mediaType === 'video' || kind === 'video') {
           form.videoUrl.value = shareUrl || url;
           setMediaPreview(form, 'video', form.videoUrl.value);
+          if (item?.public_id) lastClipSourcePublicId = item.public_id;
           toast(pageWrap, 'Video attached. Click “Save changes” / “Save draft” to keep it on this story.', 'success');
+        } else if (mediaType === 'audio' || kind === 'audio') {
+          form.audioUrl.value = shareUrl || url;
+          setMediaPreview(form, 'audio', form.audioUrl.value);
+          if (item?.public_id) lastClipSourcePublicId = item.public_id;
+          toast(pageWrap, 'Audio attached. Optionally create a sound bite below, then Save.', 'success');
         } else {
           form.imageUrl.value = url;
           setMediaPreview(form, 'image', url);
@@ -395,6 +475,21 @@ function wireDeviceAttach(form, ctx, pageWrap) {
       },
     }));
   });
+
+  const biteHost = form.querySelector('.soundbite-creator-host');
+  if (biteHost) {
+    biteHost.appendChild(buildSoundbiteCreator({
+      organizationId: orgId,
+      getSourcePublicId: () => lastClipSourcePublicId
+        || publicIdFromMediaUrl(form.audioUrl?.value)
+        || publicIdFromMediaUrl(form.videoUrl?.value),
+      onCreated: ({ shareUrl, url }) => {
+        form.soundbiteUrl.value = shareUrl || url;
+        setMediaPreview(form, 'soundbite', form.soundbiteUrl.value);
+        toast(pageWrap, 'Sound bite created. Click Save to keep it on this story.', 'success');
+      },
+    }));
+  }
 }
 
 function buildWorkflowCard(pageWrap, ctx, story) {

@@ -153,6 +153,8 @@ router.get('/news/:slug', async (req, res, next) => {
     const description = summary.slice(0, 160) || `${story.title} — report attributed to ${story.publisher_name}.`;
     const imageUrl = story.image_url || null;
     const videoUrl = story.video_url && /^https?:\/\//i.test(String(story.video_url)) ? String(story.video_url) : null;
+    const audioUrl = story.audio_url && /^https?:\/\//i.test(String(story.audio_url)) ? String(story.audio_url) : null;
+    const soundbiteUrl = story.soundbite_url && /^https?:\/\//i.test(String(story.soundbite_url)) ? String(story.soundbite_url) : null;
     const originalUrl = externalOriginal ? safeUrl(externalOriginal) : null;
     const publisherLogo = story.publisher_logo
       ? `<img src="${safeUrl(story.publisher_logo)}" alt="${escapeHtml(story.publisher_name)} logo">`
@@ -161,6 +163,25 @@ router.get('/news/:slug', async (req, res, next) => {
       ? (videoUrl.includes('/media/watch/') || videoUrl.includes('/media/file/')
         ? `<div class="story-video"><video controls playsinline preload="metadata" src="${safeUrl(videoUrl.includes('/media/watch/') ? videoUrl.replace('/media/watch/', '/media/file/') : videoUrl)}" style="width:100%;max-height:70vh;background:#000;margin:16px 0;"></video><p><a href="${safeUrl(videoUrl)}" target="_blank" rel="noopener">Open video</a></p></div>`
         : `<p class="story-video-link"><a href="${safeUrl(videoUrl)}" target="_blank" rel="noopener">Watch video →</a></p>`)
+      : '';
+    const toListenFile = (u) => (u.includes('/media/listen/') || u.includes('/media/watch/')
+      ? u.replace('/media/listen/', '/media/file/').replace('/media/watch/', '/media/file/')
+      : u);
+    const soundbiteBlock = soundbiteUrl
+      ? `<div class="story-soundbite" style="background:#111;border:1px solid #333;padding:14px 16px;margin:16px 0;border-radius:4px">
+  <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#c99a2e;margin-bottom:6px">Sound bite</div>
+  <strong style="display:block;margin-bottom:8px">${escapeHtml(story.soundbite_title || 'Key clip')}</strong>
+  <audio controls preload="metadata" src="${safeUrl(toListenFile(soundbiteUrl))}" style="width:100%"></audio>
+  <p style="margin:8px 0 0;font-size:.85rem"><a href="${safeUrl(soundbiteUrl)}" target="_blank" rel="noopener">Open sound bite</a></p>
+</div>`
+      : '';
+    const audioBlock = audioUrl
+      ? `<div class="story-audio" style="background:#0f0f0f;border:1px solid #333;padding:14px 16px;margin:16px 0;border-radius:4px">
+  <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#aaa;margin-bottom:6px">Full audio</div>
+  <strong style="display:block;margin-bottom:8px">${escapeHtml(story.audio_title || 'Listen')}</strong>
+  <audio controls preload="metadata" src="${safeUrl(toListenFile(audioUrl))}" style="width:100%"></audio>
+  <p style="margin:8px 0 0;font-size:.85rem"><a href="${safeUrl(audioUrl)}" target="_blank" rel="noopener">Open audio</a></p>
+</div>`
       : '';
 
     res.set('Cache-Control', 'public, max-age=60');
@@ -194,7 +215,9 @@ router.get('/news/:slug', async (req, res, next) => {
   <p class="eng-note">Loading follow, like, upvote and comments…</p>
 </div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>${escapeHtml(story.image_caption || story.image_credit || `Image · ${story.publisher_name}`)}</figcaption></figure>` : ''}
+${soundbiteBlock}
 ${videoBlock}
+${audioBlock}
 <section class="summary"><h2>${story.body ? 'Full report' : 'What the report says'}</h2>${story.body ? renderArticleBody(story.body) : renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>` : ''}
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
