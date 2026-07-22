@@ -54,6 +54,9 @@ input[name="cattab"], .toggle-input { display: none; }
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   padding: 9px 18px;
 }
+.logo-badge a { display:block; }
+.logo-badge { background:none; border:0; box-shadow:none; padding:0; }
+.logo-badge img { display:block; height:clamp(28px,7.35vw,66px); max-width:none; object-fit:cover; width:min(58vw,520px); }
 .mark { font-family: "DM Serif Display", serif; font-size: 38px; line-height: 1; }
 .two {
   background: linear-gradient(135deg, #7a5608 0%, #f8e08e 30%, #c99a2e 55%, #f8e08e 78%, #7a5608 100%);
@@ -68,7 +71,7 @@ input[name="cattab"], .toggle-input { display: none; }
   background-clip: text;
   color: transparent;
 }
-.tagline {
+.tagline { display:none;
   border-left: 1px solid var(--line-strong);
   color: var(--grey);
   font-family: "Inconsolata", monospace;
@@ -634,13 +637,14 @@ input[name="cattab"], .toggle-input { display: none; }
   padding: 36px 24px;
 }
 .footer-grid { border-bottom: 1px solid rgba(247, 245, 240, 0.12); display: grid; gap: 28px; grid-template-columns: 1.4fr 1fr 1fr 1fr; margin: 0 auto 20px; max-width: 1440px; padding-bottom: 26px; }
-.footer-brand { color: var(--paper); font-family: "DM Serif Display", serif; font-size: 20px; margin-bottom: 8px; }
+.footer-brand { display:block; margin-bottom:12px; }
+.footer-brand img { display:block; height:39px; max-width:310px; object-fit:cover; width:100%; }
 .site-footer h3 { color: var(--gold-bright); font-size: 10.5px; letter-spacing: 0.08em; margin-bottom: 12px; text-transform: uppercase; }
 .site-footer a { color: rgba(247, 245, 240, 0.66); display: block; margin-bottom: 9px; }
 .footer-note { border-top: 1px solid rgba(247, 245, 240, 0.15); margin: 0 auto; max-width: 1440px; padding-top: 18px; }
 .info-page { background:var(--paper); color:var(--ink); }
 .info-header { align-items:center; background:#fff; border-bottom:3px solid var(--ink); display:flex; justify-content:space-between; padding:18px max(20px,calc((100% - 1100px)/2)); }
-.info-brand { font:28px "DM Serif Display",serif; }.info-brand span{color:var(--red)}
+.info-brand img { display:block; height:38px; max-width:300px; object-fit:cover; width:min(45vw,300px); }
 .info-layout { display:grid; gap:50px; grid-template-columns:220px minmax(0,760px); margin:auto; max-width:1100px; padding:55px 20px 90px; }
 .info-nav { align-self:start; display:grid; position:sticky; top:20px; }.info-nav a{border-bottom:1px solid var(--line);font-weight:600;padding:9px 0}
 .info-content section { border-bottom:1px solid var(--line); padding:0 0 38px; scroll-margin-top:24px; }.info-content section+section{padding-top:38px}
@@ -729,5 +733,6 @@ input[name="cattab"], .toggle-input { display: none; }
   .modal-row, .footer-grid { grid-template-columns: 1fr; flex-direction: column; }
 }
 /* Database-driven canonical newsroom navigation */
+.taxonomy-mobile-logo img{display:block;height:20px;object-fit:cover;width:158px}
 .taxonomy-nav{background:#17130c;border-bottom:3px solid #c89a2e;color:#fff;position:relative;z-index:50}.taxonomy-desktop{align-items:stretch;display:flex;margin:auto;max-width:1600px;min-width:0;padding:0 14px;white-space:nowrap}.taxonomy-desktop>a,.taxonomy-desktop>button,.taxonomy-overflow>button{align-items:center;background:none;border:0;color:#fff;display:flex;font-size:13px;font-weight:700;padding:14px 11px;text-decoration:none}.taxonomy-desktop-items{display:flex;min-width:0}.taxonomy-item{position:relative}.taxonomy-item>span{display:flex;height:100%}.taxonomy-item>span>a{align-items:center;color:#fff;display:flex;font-size:13px;font-weight:700;padding:14px 2px 14px 11px;text-decoration:none}.taxonomy-item button{background:none;border:0;color:#d8ad4a;padding:0 8px 0 5px}.taxonomy-item>span>a:hover{color:#efc86b}.taxonomy-dropdown,.taxonomy-overflow-menu{background:#fff;border:1px solid #cdbb91;box-shadow:0 14px 30px #0003;display:grid;left:0;min-width:260px;padding:8px;position:absolute;top:100%;z-index:60}.taxonomy-dropdown[hidden],.taxonomy-overflow-menu[hidden]{display:none}.taxonomy-dropdown a{color:#201a10;font-size:13px;padding:9px 12px;text-decoration:none}.taxonomy-dropdown a:first-child{border-bottom:1px solid #ddd0b3;color:#916a16;font-weight:800}.taxonomy-dropdown a:hover,.taxonomy-dropdown a:focus{background:#f4eddc}.taxonomy-overflow{display:flex;position:relative}.taxonomy-overflow-menu{left:auto;right:0}.taxonomy-overflow-menu>.taxonomy-item>span>a{color:#211b11}.taxonomy-overflow-menu>.taxonomy-item>span{justify-content:space-between}.taxonomy-overflow-menu .taxonomy-dropdown{left:auto;right:100%;top:0}.taxonomy-mobile-bar,.taxonomy-mobile-menu,.taxonomy-mobile-backdrop{display:none}
 @media(max-width:900px){.taxonomy-desktop{display:none}.taxonomy-mobile-bar{align-items:center;display:flex;justify-content:space-between;padding:10px 14px}.taxonomy-mobile-bar button{background:none;border:1px solid #846e3a;color:#fff;padding:8px 10px}.taxonomy-mobile-logo{color:#efc86b;font-family:Georgia,serif;font-size:19px;font-weight:700;text-decoration:none}.taxonomy-mobile-backdrop{background:#0009;display:block;inset:0;position:fixed;z-index:70}.taxonomy-mobile-backdrop[hidden],.taxonomy-mobile-menu[hidden]{display:none}.taxonomy-mobile-menu{background:#fff;color:#17130c;display:block;height:100dvh;left:0;overflow-y:auto;padding:14px;position:fixed;top:0;width:min(90vw,390px);z-index:80}.taxonomy-mobile-head,.taxonomy-mobile-item>span{align-items:center;border-bottom:1px solid #e0d5bb;display:flex;justify-content:space-between}.taxonomy-mobile-head{padding:4px 4px 13px}.taxonomy-mobile-head button{background:none;border:0;color:#17130c;font-size:26px}.taxonomy-mobile-menu>a,.taxonomy-mobile-item a{color:#17130c;display:block;font-weight:700;padding:13px 8px;text-decoration:none}.taxonomy-mobile-item>span a{flex:1}.taxonomy-mobile-item button{background:none;border:0;color:#8b6515;font-size:20px;min-width:44px}.taxonomy-mobile-item>div{background:#f7f1e3;padding:4px 10px}.taxonomy-mobile-item>div[hidden]{display:none}.taxonomy-mobile-item>div a{font-size:13px;font-weight:500;padding:9px}.taxonomy-menu-open{overflow:hidden}}

@@ -57,7 +57,7 @@ function renderRelated(items) {
   if (!items.length) return '<p class="empty-note">No related reports are available yet.</p>';
   return `<div class="related-grid">${items.map((item) => `
     <a class="related-card" href="${escapeHtml(item.internal_url)}">
-      ${item.image_url ? `<img src="${safeUrl(item.image_url)}" alt="" loading="lazy">` : '<span class="related-placeholder">256</span>'}
+      ${item.image_url ? `<img src="${safeUrl(item.image_url)}" alt="" loading="lazy">` : '<img class="related-placeholder" src="/assets/logos/256-newsroom.png" alt="256 Newsroom">'}
       <strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.publisher_name)}</small>
     </a>
   `).join('')}</div>`;
@@ -159,8 +159,8 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260721"></head>
-<body><header class="site-head"><a href="/" class="brand">256 <b>Newsroom</b></a><span>Uganda's Digital News Infrastructure</span></header>
+<link rel="stylesheet" href="/story.css?v=20260722-logo"></head>
+<body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>Story summary</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
 <h1>${escapeHtml(story.title)}</h1>
@@ -170,7 +170,7 @@ ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.ti
 <a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
-</article></main><footer>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</footer></body></html>`);
+</article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer></body></html>`);
   } catch (err) {
     next(err);
   }

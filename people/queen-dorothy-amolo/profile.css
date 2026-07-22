@@ -7,9 +7,7 @@
   justify-content: space-between;
   padding: 16px 24px;
 }
-.profile-brand { font-family: "DM Serif Display", serif; font-size: 26px; }
-.profile-brand span:first-child { color: var(--red); }
-.profile-brand span:last-child { color: var(--gold); }
+.profile-brand img { display:block; height:39px; max-width:310px; object-fit:cover; width:min(48vw,310px); }
 .breadcrumb { color: var(--grey); font-family: "Inconsolata", monospace; font-size: 11px; }
 .breadcrumb a { color: var(--red); }
 .profile-container { margin: 0 auto; max-width: 1180px; padding: 0 24px 60px; }

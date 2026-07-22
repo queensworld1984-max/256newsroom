@@ -8,6 +8,8 @@
   <style>
     body { padding: 24px; }
     .admin-wrap { max-width: 1180px; margin: 0 auto; }
+    .admin-logo { display:block; margin-bottom:20px; max-width:430px; }
+    .admin-logo img { display:block; height:auto; width:100%; }
     .admin-grid { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .admin-card { background: #fff; border: 1px solid var(--line-strong); padding: 18px; }
     input, select, textarea, button { border: 1px solid var(--line-strong); font: inherit; padding: 10px 12px; }
@@ -21,7 +23,8 @@
 </head>
 <body>
   <main class="admin-wrap">
-    <div class="section-header"><h2>256 Newsroom Admin</h2><span>MODERATION</span></div>
+    <a class="admin-logo" href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a>
+    <div class="section-header"><h2>Newsroom Admin</h2><span>MODERATION</span></div>
     <p style="margin-bottom:16px;color:var(--grey);">Enter the admin token from the backend environment to manage sources, crawl logs, articles, and citizen reports.</p>
     <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
       <input id="token" type="password" placeholder="Admin token" style="flex:1;min-width:220px;">
