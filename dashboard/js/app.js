@@ -13,6 +13,7 @@ import * as taxonomy from './sections/taxonomy.js';
 import * as corrections from './sections/corrections.js';
 import * as analytics from './sections/analytics.js';
 import * as orgProfile from './sections/orgProfile.js';
+import * as subscribers from './sections/subscribers.js';
 import * as verification from './sections/verification.js';
 import * as rssDistribution from './sections/rssDistribution.js';
 import * as settings from './sections/settings.js';
@@ -48,6 +49,7 @@ const ORG_NAV = [
   { section: 'Distribution', items: [
     { path: '/external-rss', label: 'External RSS' },
     { path: '/rss-distribution', label: 'RSS Distribution' },
+    { path: '/subscribers', label: 'Subscribers & updates' },
   ] },
   { section: 'Organization', items: [
     { path: '/journalists', label: 'Journalists' },
@@ -109,6 +111,7 @@ const ROUTES = [
   { pattern: /^\/profile$/, render: (m, c) => orgProfile.render(contentEl, c) },
   { pattern: /^\/verification$/, render: (m, c) => verification.render(contentEl, c) },
   { pattern: /^\/rss-distribution$/, render: (m, c) => rssDistribution.render(contentEl, c) },
+  { pattern: /^\/subscribers$/, render: (m, c) => subscribers.render(contentEl, c) },
   { pattern: /^\/settings$/, render: (m, c) => settings.render(contentEl, c) },
   { pattern: /^\/journalist-profile$/, render: () => journalistProfile.render(contentEl) },
   { pattern: /^\/admin\/?$/, render: () => adminCommandCenter.render(contentEl) },

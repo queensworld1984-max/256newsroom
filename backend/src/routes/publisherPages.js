@@ -52,6 +52,7 @@ router.get('/publisher/:slug', async (req, res, next) => {
       { rows: followerRows },
       { rows: likeRows },
       { rows: articleCountRows },
+      { rows: subscriberRows },
       { rows: stories },
       { rows: work },
       { rows: journalists },
@@ -61,6 +62,10 @@ router.get('/publisher/:slug', async (req, res, next) => {
       pool.query(
         `select count(*)::int as c from articles
          where organization_id = $1 and status = 'published' and hidden = false`,
+        [org.id],
+      ),
+      pool.query(
+        'select count(*)::int as c from publisher_subscribers where organization_id = $1 and active = true',
         [org.id],
       ),
       pool.query(
@@ -88,6 +93,7 @@ router.get('/publisher/:slug', async (req, res, next) => {
     const followers = followerRows[0].c;
     const likes = likeRows[0].c;
     const articles = articleCountRows[0].c;
+    const subscribers = subscriberRows[0].c;
     const badge = org.is_official
       ? 'Official 256 Update'
       : (org.verification_status === 'approved' ? 'Verified publisher' : 'Registered publisher');
@@ -148,8 +154,8 @@ router.get('/publisher/:slug', async (req, res, next) => {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(org.name)} · Publisher · 256 Newsroom</title>
 <meta name="description" content="${escapeHtml(bio || org.tagline || `${org.name} on 256 Newsroom`)}">
-<link rel="stylesheet" href="/story.css?v=20260722-pub-card">
-<link rel="stylesheet" href="/engagement.css?v=20260722-pub-card">
+<link rel="stylesheet" href="/story.css?v=20260722-share-sub">
+<link rel="stylesheet" href="/engagement.css?v=20260722-share-sub">
 </head>
 <body class="publisher-page">
 <header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a></header>
@@ -173,16 +179,26 @@ router.get('/publisher/:slug', async (req, res, next) => {
         <div class="pub-stat"><strong data-follower-count>${followers}</strong><span>Followers</span></div>
         <div class="pub-stat"><strong data-pub-likes>${likes}</strong><span>Likes</span></div>
         <div class="pub-stat"><strong data-pub-articles>${articles}</strong><span>Publications</span></div>
-        <div class="pub-stat"><strong>${journalists.length}</strong><span>Journalists</span></div>
+        <div class="pub-stat"><strong data-pub-subscribers>${subscribers}</strong><span>Subscribers</span></div>
       </div>
 
       <div class="publisher-actions" id="publisher-actions">
         <button type="button" class="eng-btn eng-follow" data-action="follow-org" data-org-id="${org.id}">Follow publisher</button>
         <button type="button" class="eng-chip" data-action="like-org" data-org-id="${org.id}">♥ Like publisher <b data-pub-likes-btn>${likes}</b></button>
+        <button type="button" class="eng-btn eng-secondary" data-action="subscribe-org" data-org-id="${org.id}">Subscribe to news updates</button>
         ${org.website_url ? `<a class="eng-btn eng-secondary" href="${safeUrl(org.website_url)}" target="_blank" rel="noopener">Website</a>` : ''}
         <a class="eng-btn eng-secondary" href="/dashboard/login.html?next=${encodeURIComponent(`/publisher/${org.slug}`)}">Sign in to engage</a>
       </div>
-      <p class="eng-note">Follow and like this publisher here. Agree / disagree debate happens on each article page.</p>
+      <div class="pub-subscribe-box" data-subscribe-box data-org-id="${org.id}" hidden>
+        <p class="eng-note">Get articles, press releases and updates from this publisher.</p>
+        <form class="pub-subscribe-form" data-subscribe-form>
+          <input type="email" name="email" placeholder="Your email" required maxlength="200">
+          <input type="text" name="displayName" placeholder="Name (optional)" maxlength="200">
+          <button type="submit" class="eng-btn">Confirm subscription</button>
+        </form>
+        <p class="eng-note" data-subscribe-status></p>
+      </div>
+      <p class="eng-note">Follow, like, or subscribe to updates. Debate (agree / disagree) is on each article page.</p>
     </div>
   </header>
 
@@ -214,7 +230,7 @@ router.get('/publisher/:slug', async (req, res, next) => {
   </section>
 </main>
 <footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a><p>Registered publishers on 256 Newsroom.</p></footer>
-<script src="/engagement.js?v=20260722-pub-card" defer></script>
+<script src="/engagement.js?v=20260722-share-sub" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);

@@ -82,6 +82,7 @@ app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
 app.use('/api/admin/people', adminPeopleRoutes);
 app.use('/api/engagement', engagementRoutes);
+app.use('/api/publishers', require('./routes/publisherSubscribers'));
 app.use('/api/platforms', platformNewsRoutes);
 app.use(storyPageRoutes);
 app.use(publisherPageRoutes);

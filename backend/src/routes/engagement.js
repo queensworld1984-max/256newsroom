@@ -498,12 +498,16 @@ router.post('/articles/:id/comments', ...requireContributor, async (req, res, ne
 });
 
 async function organizationPublicStats(orgId, userId = null) {
-  const [followers, likes, articles, following, liked] = await Promise.all([
+  const [followers, likes, articles, subscribers, following, liked, subscribed] = await Promise.all([
     pool.query('select count(*)::int as c from publisher_follows where organization_id = $1', [orgId]),
     pool.query('select count(*)::int as c from publisher_likes where organization_id = $1', [orgId]),
     pool.query(
       `select count(*)::int as c from articles
        where organization_id = $1 and status = 'published' and hidden = false`,
+      [orgId],
+    ),
+    pool.query(
+      'select count(*)::int as c from publisher_subscribers where organization_id = $1 and active = true',
       [orgId],
     ),
     userId
@@ -518,13 +522,21 @@ async function organizationPublicStats(orgId, userId = null) {
         [userId, orgId],
       )
       : Promise.resolve({ rows: [] }),
+    userId
+      ? pool.query(
+        'select 1 from publisher_subscribers where user_id = $1 and organization_id = $2 and active = true',
+        [userId, orgId],
+      )
+      : Promise.resolve({ rows: [] }),
   ]);
   return {
     followerCount: followers.rows[0].c,
     likeCount: likes.rows[0].c,
     articleCount: articles.rows[0].c,
+    subscriberCount: subscribers.rows[0].c,
     following: following.rows.length > 0,
     liked: liked.rows.length > 0,
+    subscribed: subscribed.rows.length > 0,
   };
 }
 
@@ -581,6 +593,182 @@ router.post('/publishers/follow', ...requireContributor, async (req, res, next) 
       );
     }
     res.json({ ok: true, following });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/engagement/publishers/subscribe
+ * Body: { organizationId, email?, displayName? }
+ * Logged-in contributors subscribe with their account; guests can pass email.
+ * Also auto-follows when the user is logged in.
+ */
+router.post('/publishers/subscribe', async (req, res, next) => {
+  try {
+    const organizationId = req.body.organizationId ? Number(req.body.organizationId) : null;
+    if (!organizationId) return res.status(400).json({ error: 'organizationId is required.' });
+
+    const { rows: orgs } = await pool.query(
+      'select id, name, slug from organizations where id = $1 and active = true',
+      [organizationId],
+    );
+    if (!orgs.length) return res.status(404).json({ error: 'Publisher not found.' });
+
+    const userId = req.user?.id || null;
+    let email = req.body.email ? String(req.body.email).trim().toLowerCase() : null;
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'A valid email address is required.' });
+    }
+    if (!userId && !email) {
+      return res.status(400).json({
+        error: 'Sign in or provide an email to subscribe to publisher updates.',
+        loginUrl: '/dashboard/login.html?next=' + encodeURIComponent(req.get('referer') || '/'),
+      });
+    }
+    if (userId && !email) {
+      email = req.user.email || null;
+    }
+    const displayName = req.body.displayName
+      ? String(req.body.displayName).trim().slice(0, 200)
+      : (req.user?.displayName || null);
+
+    // Upsert active subscription (reactivate if previously unsubscribed)
+    if (userId) {
+      const { rows: existing } = await pool.query(
+        `select id, active from publisher_subscribers
+         where organization_id = $1 and user_id = $2
+         order by active desc, id desc limit 1`,
+        [organizationId, userId],
+      );
+      if (existing.length) {
+        await pool.query(
+          `update publisher_subscribers set
+             active = true, unsubscribed_at = null, subscribed_at = now(),
+             email = coalesce($3, email),
+             display_name = coalesce($4, display_name)
+           where id = $1`,
+          [existing[0].id, organizationId, email, displayName],
+        );
+      } else {
+        await pool.query(
+          `insert into publisher_subscribers
+            (organization_id, user_id, email, display_name, active, source)
+           values ($1, $2, $3, $4, true, $5)`,
+          [organizationId, userId, email, displayName, isContributor(req.user) ? 'follow' : 'public_form'],
+        );
+      }
+      await pool.query(
+        `insert into publisher_follows (user_id, organization_id) values ($1, $2) on conflict do nothing`,
+        [userId, organizationId],
+      );
+    } else {
+      const { rows: existing } = await pool.query(
+        `select id from publisher_subscribers
+         where organization_id = $1 and lower(email) = $2
+         order by active desc, id desc limit 1`,
+        [organizationId, email],
+      );
+      if (existing.length) {
+        await pool.query(
+          `update publisher_subscribers set
+             active = true, unsubscribed_at = null, subscribed_at = now(),
+             display_name = coalesce($2, display_name)
+           where id = $1`,
+          [existing[0].id, displayName],
+        );
+      } else {
+        await pool.query(
+          `insert into publisher_subscribers (organization_id, email, display_name, active, source)
+           values ($1, $2, $3, true, 'public_form')`,
+          [organizationId, email, displayName],
+        );
+      }
+    }
+
+    const { rows: countRows } = await pool.query(
+      'select count(*)::int as c from publisher_subscribers where organization_id = $1 and active = true',
+      [organizationId],
+    );
+
+    res.status(201).json({
+      ok: true,
+      subscribed: true,
+      subscriberCount: countRows[0].c,
+      message: `You are subscribed to updates from ${orgs[0].name}.`,
+    });
+  } catch (err) {
+    // Partial unique indexes can still collide on re-subscribe; recover.
+    if (err.code === '23505') {
+      return res.json({ ok: true, subscribed: true, message: 'Already subscribed.' });
+    }
+    next(err);
+  }
+});
+
+// POST /api/engagement/publishers/unsubscribe { organizationId, email? }
+router.post('/publishers/unsubscribe', async (req, res, next) => {
+  try {
+    const organizationId = req.body.organizationId ? Number(req.body.organizationId) : null;
+    if (!organizationId) return res.status(400).json({ error: 'organizationId is required.' });
+    const userId = req.user?.id || null;
+    const email = req.body.email ? String(req.body.email).trim().toLowerCase() : null;
+
+    if (userId) {
+      await pool.query(
+        `update publisher_subscribers set active = false, unsubscribed_at = now()
+         where organization_id = $1 and user_id = $2 and active = true`,
+        [organizationId, userId],
+      );
+    } else if (email) {
+      await pool.query(
+        `update publisher_subscribers set active = false, unsubscribed_at = now()
+         where organization_id = $1 and lower(email) = $2 and active = true`,
+        [organizationId, email],
+      );
+    } else {
+      return res.status(400).json({ error: 'Sign in or provide email to unsubscribe.' });
+    }
+
+    res.json({ ok: true, subscribed: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/engagement/me/updates — inbox of publisher broadcasts for this user
+router.get('/me/updates', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `select d.id, d.status, d.created_at, d.read_at,
+              b.subject, b.body, b.kind, b.link_url, b.sent_at,
+              o.name as publisher_name, o.slug as publisher_slug, o.logo_url
+       from publisher_broadcast_deliveries d
+       join publisher_broadcasts b on b.id = d.broadcast_id
+       join organizations o on o.id = b.organization_id
+       where d.user_id = $1
+       order by d.created_at desc
+       limit 100`,
+      [req.user.id],
+    );
+    res.json({
+      items: rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        subject: r.subject,
+        body: r.body,
+        kind: r.kind,
+        linkUrl: r.link_url,
+        sentAt: r.sent_at || r.created_at,
+        readAt: r.read_at,
+        publisher: {
+          name: r.publisher_name,
+          slug: r.publisher_slug,
+          logoUrl: r.logo_url,
+          profileUrl: `/publisher/${r.publisher_slug}`,
+        },
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -701,10 +889,12 @@ router.get('/publishers/:slug', async (req, res, next) => {
         followerCount: stats.followerCount,
         likeCount: stats.likeCount,
         articleCount: stats.articleCount,
+        subscriberCount: stats.subscriberCount,
         memberSince: org.created_at,
       },
       following: stats.following,
       liked: stats.liked,
+      subscribed: stats.subscribed,
       stats,
       canEngage: isContributor(req.user),
       authenticated: Boolean(req.user),

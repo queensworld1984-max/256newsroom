@@ -315,8 +315,8 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260722-pub-card">
-<link rel="stylesheet" href="/engagement.css?v=20260722-pub-card"></head>
+<link rel="stylesheet" href="/story.css?v=20260722-share-sub">
+<link rel="stylesheet" href="/engagement.css?v=20260722-share-sub"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
@@ -338,6 +338,7 @@ ${story.organization_id && story.publisher_slug ? (() => {
   <div class="pub-card-actions">
     <button type="button" class="eng-btn eng-follow" data-action="follow-org" data-org-id="${story.organization_id}">Follow publisher</button>
     <button type="button" class="eng-chip" data-action="like-org" data-org-id="${story.organization_id}">♥ Like <b data-pub-likes>${publisherStats?.likes ?? 0}</b></button>
+    <button type="button" class="eng-btn eng-secondary" data-action="subscribe-org" data-org-id="${story.organization_id}">Subscribe to updates</button>
   </div>
   <div class="pub-card-stats">
     <span><b data-pub-followers>${publisherStats?.followers ?? 0}</b> followers</span>
@@ -353,6 +354,25 @@ ${story.organization_id && story.publisher_slug ? (() => {
     <span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span>
   </div>
 </div>`}
+${(() => {
+  const shareUrl = internalCanonical;
+  const shareTitle = story.title;
+  const shareText = `${story.title} — via 256 Newsroom`;
+  const wa = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`;
+  const mail = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
+  const sms = `sms:?&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`;
+  return `<div class="story-share" data-share-bar data-share-url="${escapeHtml(shareUrl)}" data-share-title="${escapeHtml(shareTitle)}" data-share-text="${escapeHtml(shareText)}">
+  <span class="story-share-label">Share</span>
+  <div class="story-share-actions">
+    <a class="share-btn share-wa" href="${escapeHtml(wa)}" target="_blank" rel="noopener" data-share="whatsapp">WhatsApp</a>
+    <a class="share-btn share-mail" href="${escapeHtml(mail)}" data-share="email">Email</a>
+    <a class="share-btn share-sms" href="${escapeHtml(sms)}" data-share="sms">Text / SMS</a>
+    <button type="button" class="share-btn share-copy" data-share="copy">Copy link</button>
+    <button type="button" class="share-btn share-native" data-share="native" hidden>Share…</button>
+  </div>
+  <p class="share-status" data-share-status hidden></p>
+</div>`;
+})()}
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>${escapeHtml(story.image_caption || story.image_credit || `Image · ${story.publisher_name}`)}</figcaption></figure>` : ''}
 ${soundbiteBlock}
 ${videoBlock}
@@ -377,7 +397,7 @@ ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank
 </section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
 </article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer>
-<script src="/engagement.js?v=20260722-pub-card" defer></script>
+<script src="/engagement.js?v=20260722-share-sub" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);

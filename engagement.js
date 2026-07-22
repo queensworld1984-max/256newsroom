@@ -392,9 +392,11 @@
   function paintPublisherState(root, data) {
     const following = Boolean(data.following);
     const liked = Boolean(data.liked);
+    const subscribed = Boolean(data.subscribed);
     const followers = data.followerCount ?? data.stats?.followerCount ?? data.organization?.followerCount;
     const likes = data.likeCount ?? data.stats?.likeCount ?? data.organization?.likeCount;
     const articles = data.articleCount ?? data.stats?.articleCount ?? data.organization?.articleCount;
+    const subscribers = data.subscriberCount ?? data.stats?.subscriberCount ?? data.organization?.subscriberCount;
 
     root.querySelectorAll('[data-action="follow-org"]').forEach((btn) => {
       btn.textContent = following ? 'Following' : 'Follow publisher';
@@ -402,6 +404,10 @@
     });
     root.querySelectorAll('[data-action="like-org"]').forEach((btn) => {
       btn.classList.toggle('is-on', liked);
+    });
+    root.querySelectorAll('[data-action="subscribe-org"]').forEach((btn) => {
+      btn.textContent = subscribed ? 'Subscribed to updates' : 'Subscribe to updates';
+      btn.classList.toggle('is-on', subscribed);
     });
     if (followers != null) {
       root.querySelectorAll('[data-follower-count], [data-pub-followers]').forEach((el) => {
@@ -418,6 +424,11 @@
         el.textContent = articles;
       });
     }
+    if (subscribers != null) {
+      root.querySelectorAll('[data-pub-subscribers]').forEach((el) => {
+        el.textContent = subscribers;
+      });
+    }
   }
 
   function wirePublisherActions(root, orgId) {
@@ -425,23 +436,122 @@
     root.dataset.pubWired = '1';
 
     root.addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-action="follow-org"], [data-action="like-org"]');
+      const btn = e.target.closest('[data-action="follow-org"], [data-action="like-org"], [data-action="subscribe-org"]');
       if (!btn || !root.contains(btn)) return;
       e.preventDefault();
-      if (!(await ensureCanEngage())) return;
       const action = btn.getAttribute('data-action');
       try {
-        if (action === 'follow-org') {
-          const r = await api('/publishers/follow', { method: 'POST', body: { organizationId: orgId } });
-          paintPublisherState(root, r);
-        } else if (action === 'like-org') {
-          const r = await api('/publishers/like', { method: 'POST', body: { organizationId: orgId } });
-          paintPublisherState(root, r);
+        if (action === 'follow-org' || action === 'like-org') {
+          if (!(await ensureCanEngage())) return;
+          if (action === 'follow-org') {
+            const r = await api('/publishers/follow', { method: 'POST', body: { organizationId: orgId } });
+            paintPublisherState(root, r);
+          } else {
+            const r = await api('/publishers/like', { method: 'POST', body: { organizationId: orgId } });
+            paintPublisherState(root, r);
+          }
+        } else if (action === 'subscribe-org') {
+          // Logged-in: subscribe immediately. Guest: show email form if present, else prompt.
+          try {
+            const me = await api('/me');
+            if (me.authenticated) {
+              const r = await api('/publishers/subscribe', { method: 'POST', body: { organizationId: orgId } });
+              paintPublisherState(root, {
+                subscribed: true,
+                subscriberCount: r.subscriberCount,
+              });
+              btn.textContent = 'Subscribed to updates';
+              btn.classList.add('is-on');
+              alert(r.message || 'Subscribed to publisher updates.');
+              return;
+            }
+          } catch { /* fall through to form */ }
+
+          const box = root.querySelector('[data-subscribe-box]')
+            || document.querySelector(`[data-subscribe-box][data-org-id="${orgId}"]`);
+          if (box) {
+            box.hidden = false;
+            box.querySelector('input[type="email"]')?.focus();
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } else {
+            const email = window.prompt('Enter your email to subscribe to news updates from this publisher:');
+            if (!email) return;
+            const r = await api('/publishers/subscribe', {
+              method: 'POST',
+              body: { organizationId: orgId, email },
+            });
+            alert(r.message || 'Subscribed.');
+            btn.textContent = 'Subscribed to updates';
+            btn.classList.add('is-on');
+          }
         }
       } catch (err) {
         if (err.status === 401) location.href = loginNext();
         else alert(err.message || 'Could not update publisher engagement.');
       }
+    });
+
+    const form = root.querySelector('[data-subscribe-form]');
+    if (form && form.dataset.wired !== '1') {
+      form.dataset.wired = '1';
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const status = root.querySelector('[data-subscribe-status]');
+        try {
+          const r = await api('/publishers/subscribe', {
+            method: 'POST',
+            body: {
+              organizationId: orgId,
+              email: String(fd.get('email') || ''),
+              displayName: String(fd.get('displayName') || '') || undefined,
+            },
+          });
+          if (status) status.textContent = r.message || 'Subscribed.';
+          paintPublisherState(root, { subscribed: true, subscriberCount: r.subscriberCount });
+          form.reset();
+        } catch (err) {
+          if (status) status.textContent = err.message || 'Could not subscribe.';
+          else alert(err.message || 'Could not subscribe.');
+        }
+      });
+    }
+  }
+
+  function initShareBars() {
+    document.querySelectorAll('[data-share-bar]').forEach((bar) => {
+      const url = bar.getAttribute('data-share-url') || location.href;
+      const title = bar.getAttribute('data-share-title') || document.title;
+      const text = bar.getAttribute('data-share-text') || title;
+      const status = bar.querySelector('[data-share-status]');
+      const nativeBtn = bar.querySelector('[data-share="native"]');
+      if (nativeBtn && typeof navigator.share === 'function') {
+        nativeBtn.hidden = false;
+      }
+
+      bar.addEventListener('click', async (e) => {
+        const el = e.target.closest('[data-share]');
+        if (!el) return;
+        const kind = el.getAttribute('data-share');
+        if (kind === 'copy') {
+          e.preventDefault();
+          try {
+            await navigator.clipboard.writeText(url);
+            if (status) {
+              status.hidden = false;
+              status.textContent = 'Link copied.';
+            }
+          } catch {
+            window.prompt('Copy this link:', url);
+          }
+        } else if (kind === 'native') {
+          e.preventDefault();
+          try {
+            await navigator.share({ title, text, url });
+          } catch { /* cancelled */ }
+        }
+        // whatsapp / email / sms use their hrefs
+      });
     });
   }
 
@@ -459,9 +569,11 @@
           paintPublisherState(card, {
             following: data.following,
             liked: data.liked,
+            subscribed: data.subscribed,
             followerCount: data.organization?.followerCount ?? data.stats?.followerCount,
             likeCount: data.organization?.likeCount ?? data.stats?.likeCount,
             articleCount: data.organization?.articleCount ?? data.stats?.articleCount,
+            subscriberCount: data.organization?.subscriberCount ?? data.stats?.subscriberCount,
           });
         } catch { /* keep server-rendered counts */ }
       }
@@ -489,15 +601,18 @@
         paintPublisherState(shell, {
           following: data.following,
           liked: data.liked,
+          subscribed: data.subscribed,
           followerCount: data.organization?.followerCount ?? data.stats?.followerCount,
           likeCount: data.organization?.likeCount ?? data.stats?.likeCount,
           articleCount: data.organization?.articleCount ?? data.stats?.articleCount,
+          subscriberCount: data.organization?.subscriberCount ?? data.stats?.subscriberCount,
         });
       } catch { /* ignore */ }
     }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    initShareBars();
     initPublisherCards();
     initPublisherPage();
     initArticle();

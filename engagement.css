@@ -140,6 +140,33 @@
   .pub-journalists { grid-template-columns: 1fr; }
 }
 
+/* Article share bar */
+.story-share {
+  align-items: center; border: 1px solid var(--line, #d8d2c5); background: #fff;
+  display: flex; flex-wrap: wrap; gap: 10px 12px; margin: 16px 0 20px; padding: 12px 14px;
+}
+.story-share-label {
+  color: var(--gold, #8b6508); font-family: Inconsolata, monospace; font-size: 11px;
+  font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+}
+.story-share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.share-btn {
+  background: #fff; border: 1px solid var(--ink, #0d0f0c); color: var(--ink, #0d0f0c);
+  cursor: pointer; font-family: Inconsolata, monospace; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; padding: 8px 12px; text-decoration: none; text-transform: uppercase;
+}
+.share-btn.share-wa { background: #128c7e; border-color: #128c7e; color: #fff; }
+.share-btn.share-mail { background: #0d0f0c; border-color: #0d0f0c; color: #fff; }
+.share-status { color: #16783c; font-size: 13px; margin: 0; width: 100%; }
+
+.pub-subscribe-box {
+  background: #f6f3ec; border: 1px solid var(--line, #d8d2c5); margin-top: 12px; padding: 12px 14px;
+}
+.pub-subscribe-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pub-subscribe-form input {
+  border: 1px solid var(--line, #d8d2c5); flex: 1 1 160px; font: inherit; min-width: 140px; padding: 8px 10px;
+}
+
 /* Publisher profile page */
 .publisher-hero { display: grid; gap: 20px; grid-template-columns: 96px 1fr; margin-bottom: 36px; }
 .publisher-logo.large { height: 96px; width: 96px; font-size: 28px; }
