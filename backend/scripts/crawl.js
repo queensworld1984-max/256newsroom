@@ -215,8 +215,31 @@ function isPublicArticleUrl(value) {
   }
 }
 
+// Confirmed by direct testing to either reject our crawler (401/402/403) or
+// stall the connection until timeout (npr.org, washingtonpost.com) rather
+// than fail fast. Skipping them outright avoids burning a 10s timeout per
+// article on every crawl cycle that touches them.
+const BOT_BLOCKED_DOMAINS = [
+  'nytimes.com',
+  'npr.org',
+  'washingtonpost.com',
+  'wsj.com',
+  'politico.com',
+  'ft.com',
+  'eatingwell.com',
+];
+
+function isBotBlockedDomain(pageUrl) {
+  try {
+    const hostname = new URL(pageUrl).hostname.toLowerCase();
+    return BOT_BLOCKED_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return true;
+  }
+}
+
 async function imageFromArticlePage(articleUrl) {
-  if (!isPublicArticleUrl(articleUrl)) return { imageUrl: null, finalUrl: null };
+  if (!isPublicArticleUrl(articleUrl) || isBotBlockedDomain(articleUrl)) return { imageUrl: null, finalUrl: null };
   try {
     const res = await fetch(articleUrl, {
       headers: {

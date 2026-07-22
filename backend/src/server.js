@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const cron = require('node-cron');
 const pool = require('./db');
-const { crawlAllSources, crawlNewsApiSources } = require('../scripts/crawl');
+const { crawlAllSources, crawlNewsApiSources, backfillMissingArticleImages } = require('../scripts/crawl');
 const { loadSessionUser, requireRole } = require('./auth');
 const authRoutes = require('./routes/auth');
 const publisherApplicationRoutes = require('./routes/publisherApplications');
@@ -613,6 +613,13 @@ if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
   const minutes = Math.max(5, Number(process.env.FEED_IMPORT_INTERVAL_MINUTES || 15));
   cron.schedule(`*/${minutes} * * * *`, () => {
     pollDueFeeds().catch((err) => console.error('Scheduled feed import failed:', err));
+  });
+}
+
+if (process.env.IMAGE_BACKFILL_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.IMAGE_BACKFILL_INTERVAL_MINUTES || 30));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    backfillMissingArticleImages(100).catch((err) => console.error('Scheduled image backfill failed:', err));
   });
 }
 
