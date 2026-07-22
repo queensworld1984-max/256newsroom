@@ -1,9 +1,13 @@
 import { ApiError, uploadFile } from './api.js';
 import { el } from './util.js';
 
+// Keep in sync with backend defaults (MEDIA_MAX_IMAGE_MB / MEDIA_MAX_VIDEO_MB).
+const MAX_IMAGE_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_VIDEO_BYTES = 2048 * 1024 * 1024; // 2 GB
+
 /**
  * Device-first media picker: opens the phone/computer file picker (gallery)
- * or camera, uploads immediately, returns public URLs.
+ * or camera, uploads immediately (including large files), returns public URLs.
  *
  * @param {object} opts
  * @param {'image'|'video'|'both'} opts.kind
@@ -23,7 +27,19 @@ export function buildDeviceAttach(opts) {
   previewImg.hidden = true;
   previewVideo.hidden = true;
 
+  const progressWrap = el('div', { class: 'device-upload-progress', hidden: true });
+  const progressBar = el('div', { class: 'device-upload-progress-bar' });
+  progressWrap.appendChild(progressBar);
+
   const status = el('p', { class: 'device-attach-status' });
+  const limits = el('p', {
+    class: 'device-attach-limits',
+    text: kind === 'video'
+      ? `Large videos supported — up to ${formatBytes(MAX_VIDEO_BYTES)}.`
+      : kind === 'both'
+        ? `Large files supported — photos up to ${formatBytes(MAX_IMAGE_BYTES)}, videos up to ${formatBytes(MAX_VIDEO_BYTES)}.`
+        : `Large photos supported — up to ${formatBytes(MAX_IMAGE_BYTES)}.`,
+  });
 
   const galleryInput = el('input', {
     type: 'file',
@@ -61,7 +77,18 @@ export function buildDeviceAttach(opts) {
     const file = fileList?.[0];
     if (!file) return;
 
-    status.textContent = `Uploading ${file.name || 'file'}…`;
+    const isVideo = isVideoFile(file);
+    const limit = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    if (file.size > limit) {
+      status.textContent = `${isVideo ? 'Video' : 'Photo'} is too large (${formatBytes(file.size)}). Maximum is ${formatBytes(limit)}.`;
+      status.classList.add('is-error');
+      return;
+    }
+
+    status.classList.remove('is-error');
+    status.textContent = `Uploading ${file.name || 'file'} (${formatBytes(file.size)})… Large files may take a few minutes.`;
+    progressWrap.hidden = false;
+    progressBar.style.width = '0%';
     galleryBtn.disabled = true;
     if (cameraBtn) cameraBtn.disabled = true;
 
@@ -71,10 +98,16 @@ export function buildDeviceAttach(opts) {
       const fd = new FormData();
       fd.append('file', file);
       if (opts.organizationId) fd.append('organizationId', String(opts.organizationId));
-      const result = await uploadFile('/media/upload', fd);
+      const result = await uploadFile('/media/upload', fd, {
+        onProgress: (pct, loaded, total) => {
+          progressBar.style.width = `${pct}%`;
+          status.textContent = `Uploading ${formatBytes(loaded)} / ${formatBytes(total)} (${pct}%)…`;
+        },
+      });
+      progressBar.style.width = '100%';
       const url = result.url;
       const shareUrl = result.shareUrl || result.url;
-      const mediaType = result.mediaType || (file.type.startsWith('video/') ? 'video' : 'image');
+      const mediaType = result.mediaType || (isVideo ? 'video' : 'image');
       status.textContent = mediaType === 'video'
         ? 'Video attached from your device. Watch URL is ready.'
         : 'Photo attached from your device.';
@@ -84,12 +117,16 @@ export function buildDeviceAttach(opts) {
     } catch (err) {
       status.textContent = err instanceof ApiError ? err.message : 'Could not upload from device.';
       status.classList.add('is-error');
+      progressBar.style.width = '0%';
     } finally {
       galleryBtn.disabled = false;
       if (cameraBtn) cameraBtn.disabled = false;
       galleryInput.value = '';
       cameraInput.value = '';
-      setTimeout(() => status.classList.remove('is-error'), 4000);
+      setTimeout(() => {
+        status.classList.remove('is-error');
+        progressWrap.hidden = true;
+      }, 5000);
     }
   }
 
@@ -100,7 +137,9 @@ export function buildDeviceAttach(opts) {
   wrap.appendChild(actions);
   wrap.appendChild(galleryInput);
   wrap.appendChild(cameraInput);
+  wrap.appendChild(progressWrap);
   wrap.appendChild(status);
+  wrap.appendChild(limits);
   return wrap;
 }
 
@@ -111,10 +150,23 @@ function acceptFor(kind) {
   return 'image/*,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif';
 }
 
+function isVideoFile(file) {
+  if (file.type && file.type.startsWith('video/')) return true;
+  return /\.(mp4|m4v|webm|mov|3gp)$/i.test(file.name || '');
+}
+
+function formatBytes(n) {
+  const bytes = Number(n) || 0;
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 function showLocalPreview(file, preview, previewImg, previewVideo) {
   const objectUrl = URL.createObjectURL(file);
   preview.hidden = false;
-  if (file.type.startsWith('video/')) {
+  if (isVideoFile(file)) {
     previewImg.hidden = true;
     previewVideo.hidden = false;
     previewVideo.src = objectUrl;

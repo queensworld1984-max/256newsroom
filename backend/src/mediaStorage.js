@@ -15,8 +15,24 @@ const VIDEO_MIME = new Set([
   'video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v', 'video/3gpp',
 ]);
 
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024; // 12 MB
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+// Large phone photos (incl. HEIC) and newsroom video clips.
+// Override with MEDIA_MAX_IMAGE_MB / MEDIA_MAX_VIDEO_MB (megabytes).
+function envBytes(name, defaultMb) {
+  const mb = Number(process.env[name]);
+  if (Number.isFinite(mb) && mb > 0) return Math.floor(mb * 1024 * 1024);
+  return defaultMb * 1024 * 1024;
+}
+
+const MAX_IMAGE_BYTES = envBytes('MEDIA_MAX_IMAGE_MB', 100); // 100 MB photos
+const MAX_VIDEO_BYTES = envBytes('MEDIA_MAX_VIDEO_MB', 2048); // 2 GB videos
+
+function formatBytes(n) {
+  const bytes = Number(n) || 0;
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 const EXT_TO_MIME = {
   '.jpg': 'image/jpeg',
@@ -104,6 +120,7 @@ module.exports = {
   VIDEO_MIME,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  formatBytes,
   ensureUploadDirs,
   mediaTypeForMime,
   resolveMime,

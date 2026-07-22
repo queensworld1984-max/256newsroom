@@ -8,6 +8,7 @@ const {
   UPLOAD_ROOT,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  formatBytes,
   ensureUploadDirs,
   mediaTypeForMime,
   resolveMime,
@@ -46,7 +47,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: MAX_VIDEO_BYTES },
+  // Use the larger video ceiling so big phone photos and long clips are not
+  // rejected by multer before our type-specific checks run.
+  limits: { fileSize: MAX_VIDEO_BYTES, fieldSize: 2 * 1024 * 1024 },
   fileFilter(req, file, cb) {
     const mime = resolveMime(file);
     const mediaType = mediaTypeForMime(mime);
@@ -73,18 +76,33 @@ router.post(
   requireRole('independent_journalist', 'publisher_owner', 'publisher_editor', 'journalist', 'super_admin', 'newsroom_admin'),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
-      if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({
+            error: `File is too large. Photos up to ${formatBytes(MAX_IMAGE_BYTES)}, videos up to ${formatBytes(MAX_VIDEO_BYTES)}.`,
+          });
+        }
+        return res.status(400).json({ error: err.message || 'Upload failed.' });
+      }
       next();
     });
   },
   async (req, res, next) => {
     try {
-      if (!req.file) return res.status(400).json({ error: 'Choose a file to upload.' });
+      if (!req.file) return res.status(400).json({ error: 'Choose a file from your device to attach.' });
 
       const mediaType = req._uploadMediaType || mediaTypeForMime(resolveMime(req.file));
       if (mediaType === 'image' && req.file.size > MAX_IMAGE_BYTES) {
         fs.unlink(req.file.path, () => {});
-        return res.status(400).json({ error: 'Photos must be 12 MB or smaller.' });
+        return res.status(413).json({
+          error: `Photo is too large (${formatBytes(req.file.size)}). Maximum is ${formatBytes(MAX_IMAGE_BYTES)}.`,
+        });
+      }
+      if (mediaType === 'video' && req.file.size > MAX_VIDEO_BYTES) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(413).json({
+          error: `Video is too large (${formatBytes(req.file.size)}). Maximum is ${formatBytes(MAX_VIDEO_BYTES)}.`,
+        });
       }
       const storedMime = req._uploadMime || resolveMime(req.file) || req.file.mimetype;
 
