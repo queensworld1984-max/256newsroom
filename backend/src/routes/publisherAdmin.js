@@ -113,28 +113,32 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
     }
 
     // Display name — at most once every 30 days (first correction always allowed).
-    // Global admins may always force a rename (typo / legal corrections).
+    // Global admins may always force a rename. If cooldown blocks rename, other fields still save.
+    let nameChangeBlocked = null;
     if (fields.name !== undefined) {
       const newName = String(fields.name || '').trim().slice(0, 200);
-      if (!newName) return res.status(400).json({ error: 'Publisher name cannot be empty.' });
-      if (newName !== current.name) {
+      if (!newName) {
+        // Ignore empty name rather than failing the whole profile save.
+      } else if (newName !== current.name) {
         const isGlobalAdmin = (req.user?.roles || []).some((r) =>
           ['super_admin', 'newsroom_admin'].includes(r.key));
         if (current.name_changed_at && !isGlobalAdmin) {
           const nextAllowed = new Date(current.name_changed_at);
           nextAllowed.setDate(nextAllowed.getDate() + NAME_CHANGE_COOLDOWN_DAYS);
           if (nextAllowed > new Date()) {
-            return res.status(429).json({
-              error: `Publisher name can only be changed once every ${NAME_CHANGE_COOLDOWN_DAYS} days. Next change allowed after ${nextAllowed.toISOString().slice(0, 10)}. Ask a 256 Newsroom admin for an urgent spelling fix.`,
+            nameChangeBlocked = {
+              error: `Other profile fields were saved, but the name can only be changed once every ${NAME_CHANGE_COOLDOWN_DAYS} days. Next rename after ${nextAllowed.toISOString().slice(0, 10)}.`,
               nextAllowedAt: nextAllowed.toISOString(),
               cooldownDays: NAME_CHANGE_COOLDOWN_DAYS,
-            });
+            };
           }
         }
-        sets.push(`name = $${i}`);
-        values.push(newName);
-        i += 1;
-        sets.push('name_changed_at = now()');
+        if (!nameChangeBlocked) {
+          sets.push(`name = $${i}`);
+          values.push(newName);
+          i += 1;
+          sets.push('name_changed_at = now()');
+        }
       }
     }
 
@@ -171,7 +175,20 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
       }
     }
 
-    if (!sets.length) return res.status(400).json({ error: 'No updatable fields provided.' });
+    if (!sets.length) {
+      if (nameChangeBlocked) {
+        return res.status(429).json(nameChangeBlocked);
+      }
+      // Idempotent save: return current org so the UI still treats this as success.
+      return res.json({
+        organization: current,
+        publicUrl: current.short_path
+          ? `https://256newsroom.com/${current.short_path}`
+          : `https://256newsroom.com/publisher/${current.slug}`,
+        ok: true,
+        unchanged: true,
+      });
+    }
     sets.push('updated_at = now()');
     values.push(orgId);
     const { rows } = await pool.query(
@@ -181,6 +198,8 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
     const org = rows[0];
     res.json({
       organization: org,
+      ok: true,
+      warning: nameChangeBlocked ? nameChangeBlocked.error : null,
       publicUrl: org.short_path
         ? `https://256newsroom.com/${org.short_path}`
         : `https://256newsroom.com/publisher/${org.slug}`,

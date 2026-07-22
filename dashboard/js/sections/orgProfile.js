@@ -2,11 +2,24 @@ import { api, ApiError } from '../api.js';
 import { el, escapeHtml } from '../util.js';
 
 export async function render(container, ctx) {
-  const [{ organization: org }, workRes] = await Promise.all([
-    api.get(`/publishers/${ctx.orgId}`),
-    api.get(`/publishers/${ctx.orgId}/work-profiles`).catch(() => ({ items: [] })),
-  ]);
-  const workItems = workRes.items || [];
+  if (!ctx.orgId) {
+    container.innerHTML = '<p class="dash-empty">No organization workspace selected.</p>';
+    return;
+  }
+
+  let org;
+  let workItems = [];
+  try {
+    const [orgRes, workRes] = await Promise.all([
+      api.get(`/publishers/${ctx.orgId}`),
+      api.get(`/publishers/${ctx.orgId}/work-profiles`).catch(() => ({ items: [] })),
+    ]);
+    org = orgRes.organization || orgRes;
+    workItems = workRes.items || [];
+  } catch (err) {
+    container.innerHTML = `<p class="dash-empty" style="color:var(--red);">${escapeHtml(err instanceof ApiError ? err.message : 'Could not load organization profile.')}</p>`;
+    return;
+  }
 
   const wrap = el('div');
   wrap.appendChild(el('h2', { text: 'Organization Profile', style: 'margin-bottom:8px;' }));
@@ -15,34 +28,36 @@ export async function render(container, ctx) {
     text: 'Public profile shown above each story and on your publisher page (LinkedIn-style biography, practice areas, and work history).',
   }));
 
-  const publicLink = org.slug
-    ? el('p', { style: 'margin:0 0 16px;' }, [
+  const publicPath = org.short_path
+    ? `/${org.short_path}`
+    : (org.slug ? `/publisher/${org.slug}` : null);
+  if (publicPath) {
+    wrap.appendChild(el('p', { style: 'margin:0 0 16px;' }, [
       el('a', {
-        href: `/publisher/${org.slug}`,
+        href: publicPath,
         target: '_blank',
         rel: 'noopener',
-        text: `View public profile → /publisher/${org.slug}`,
+        text: `View public profile → ${publicPath}`,
         style: 'font-weight:700;color:var(--gold);',
       }),
-    ])
-    : null;
-  if (publicLink) wrap.appendChild(publicLink);
+    ]));
+  }
 
-  const form = el('form', { class: 'dash-form dash-card' });
+  const form = el('form', { class: 'dash-form dash-card', novalidate: 'novalidate' });
   const areas = Array.isArray(org.areas_of_practice)
     ? org.areas_of_practice.join(', ')
     : (org.areas_of_practice || '');
   form.innerHTML = `
     <label class="full"><strong>Organization name</strong>
-      <input name="name" maxlength="200" required value="${escapeHtml(org.name || '')}"
+      <input name="name" maxlength="200" value="${escapeHtml(org.name || '')}"
         ${ctx.isEditor ? '' : 'readonly'}
         style="font-size:16px;font-weight:600;"
         placeholder="Correct spelling of your organization">
     </label>
     <p class="full" style="margin:0 0 10px;color:var(--grey);font-size:12.5px;">
       ${ctx.isEditor
-    ? 'You can correct the public name here (once every 30 days). Example: change Syatems → Systems.'
-    : 'Only an owner or editor can rename the organization.'}
+    ? 'You can correct the public name here (once every 30 days). Other fields save anytime.'
+    : 'Only an owner or editor can edit the organization profile.'}
     </p>
     <label class="full">Tagline <input name="tagline" maxlength="200" value="${escapeHtml(org.tagline || '')}" placeholder="Short public line under your name"></label>
     <label class="full">Short description <textarea name="description" rows="3">${escapeHtml(org.description || '')}</textarea></label>
@@ -51,42 +66,77 @@ export async function render(container, ctx) {
     <label>Years in journalism <input name="yearsInJournalism" type="number" min="0" max="120" value="${org.years_in_journalism ?? ''}"></label>
     <label>Founded year <input name="foundedYear" type="number" min="1800" max="2100" value="${org.founded_year ?? ''}"></label>
     <label>Headquarters <input name="headquarters" maxlength="200" value="${escapeHtml(org.headquarters || '')}" placeholder="Kampala, Uganda"></label>
-    <label>Logo URL <input name="logoUrl" type="url" value="${escapeHtml(org.logo_url || '')}"></label>
-    <label>Website URL <input name="websiteUrl" type="url" value="${escapeHtml(org.website_url || '')}"></label>
+    <label class="full">Logo URL <input name="logoUrl" value="${escapeHtml(org.logo_url || '')}" placeholder="https://… or leave blank"></label>
+    <label class="full">Website URL <input name="websiteUrl" value="${escapeHtml(org.website_url || '')}" placeholder="https://…"></label>
     <label>Editorial contact email <input name="editorialContactEmail" type="email" value="${escapeHtml(org.editorial_contact_email || '')}"></label>
     <label>Editorial contact phone <input name="editorialContactPhone" value="${escapeHtml(org.editorial_contact_phone || '')}"></label>
   `;
-  const disabled = !ctx.isEditor;
-  if (disabled) {
+
+  const status = el('p', {
+    class: 'full',
+    style: 'margin:4px 0 0;font-size:13.5px;min-height:1.2em;',
+  });
+
+  if (!ctx.isEditor) {
     form.querySelectorAll('input, textarea').forEach((i) => { i.disabled = true; });
-  }
-  const actions = el('div', { class: 'dash-actions full' });
-  if (ctx.isEditor) {
-    const btn = el('button', { type: 'submit', text: 'Save Profile' });
-    actions.appendChild(btn);
-    form.appendChild(actions);
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const raw = Object.fromEntries(new FormData(form).entries());
-      try {
-        const payload = {
-          ...raw,
-          yearsInJournalism: raw.yearsInJournalism === '' ? null : Number(raw.yearsInJournalism),
-          foundedYear: raw.foundedYear === '' ? null : Number(raw.foundedYear),
-        };
-        if (raw.name) payload.name = String(raw.name).trim();
-        await api.patch(`/publishers/${ctx.orgId}`, payload);
-        render(container, ctx);
-      } catch (err) {
-        alert(err instanceof ApiError ? err.message : 'Something went wrong.');
-      }
-    });
-  } else {
     form.appendChild(el('p', {
       class: 'full',
       style: 'color:var(--grey);font-size:12.5px;',
       text: 'Only an owner or editor can edit the organization profile.',
     }));
+  } else {
+    const actions = el('div', { class: 'dash-actions full' });
+    const btn = el('button', { type: 'submit', text: 'Save Profile' });
+    actions.appendChild(btn);
+    form.appendChild(actions);
+    form.appendChild(status);
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      status.style.color = '';
+      status.textContent = 'Saving…';
+      btn.disabled = true;
+
+      const raw = Object.fromEntries(new FormData(form).entries());
+      const payload = {
+        name: String(raw.name || '').trim() || undefined,
+        tagline: raw.tagline ?? '',
+        description: raw.description ?? '',
+        biography: raw.biography ?? '',
+        areasOfPractice: raw.areasOfPractice ?? '',
+        yearsInJournalism: raw.yearsInJournalism === '' || raw.yearsInJournalism == null
+          ? null
+          : Number(raw.yearsInJournalism),
+        foundedYear: raw.foundedYear === '' || raw.foundedYear == null
+          ? null
+          : Number(raw.foundedYear),
+        headquarters: raw.headquarters ?? '',
+        logoUrl: raw.logoUrl ?? '',
+        websiteUrl: raw.websiteUrl ?? '',
+        editorialContactEmail: raw.editorialContactEmail ?? '',
+        editorialContactPhone: raw.editorialContactPhone ?? '',
+      };
+      if (payload.yearsInJournalism != null && Number.isNaN(payload.yearsInJournalism)) {
+        payload.yearsInJournalism = null;
+      }
+      if (payload.foundedYear != null && Number.isNaN(payload.foundedYear)) {
+        payload.foundedYear = null;
+      }
+
+      try {
+        const r = await api.patch(`/publishers/${ctx.orgId}`, payload);
+        status.style.color = '#16783c';
+        status.textContent = r.warning
+          ? `Saved. ${r.warning}`
+          : 'Profile saved successfully.';
+        setTimeout(() => render(container, ctx), 800);
+      } catch (err) {
+        status.style.color = 'var(--red)';
+        status.textContent = err instanceof ApiError ? err.message : 'Could not save profile.';
+        btn.disabled = false;
+      }
+    });
   }
   wrap.appendChild(form);
 
@@ -159,7 +209,7 @@ export async function render(container, ctx) {
           location: raw.location || null,
           startYear: raw.startYear || null,
           endYear: raw.endYear || null,
-          isCurrent: Boolean(addForm.isCurrent?.checked),
+          isCurrent: Boolean(addForm.querySelector('[name="isCurrent"]')?.checked),
           description: raw.description || null,
         });
         render(container, ctx);

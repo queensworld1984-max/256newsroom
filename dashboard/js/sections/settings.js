@@ -92,7 +92,7 @@ export async function render(container, ctx) {
     pubCard.appendChild(imgSection);
 
     // Name + short URL form — name is always shown first and editable for editors
-    const form = el('form', { class: 'dash-form' });
+    const form = el('form', { class: 'dash-form', novalidate: 'novalidate' });
     const canRename = Boolean(ctx.isEditor) && nameChange.canChangeNow !== false;
     const nextName = nameChange.nextAllowedAt
       ? new Date(nameChange.nextAllowedAt).toLocaleDateString('en-UG', { dateStyle: 'medium' })
@@ -139,14 +139,15 @@ export async function render(container, ctx) {
       form.appendChild(msg);
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        msg.textContent = '';
+        e.stopPropagation();
+        msg.textContent = 'Saving…';
         msg.style.color = '';
         const raw = Object.fromEntries(new FormData(form).entries());
         const body = {
-          tagline: raw.tagline,
+          tagline: raw.tagline ?? '',
           shortPath: (raw.shortPath || '').trim() || null,
         };
-        // Always send name when the field is editable so typo fixes are not dropped.
+        // Send name when field is not locked by cooldown.
         if (canRename && raw.name) {
           body.name = String(raw.name).trim();
         }
@@ -154,10 +155,11 @@ export async function render(container, ctx) {
           const r = await api.patch(`/publishers/${ctx.orgId}`, body);
           msg.style.color = '#16783c';
           const newName = r.organization?.name || body.name || org.name;
-          msg.textContent = r.publicUrl
+          const base = r.publicUrl
             ? `Saved as “${newName}”. Public page: ${r.publicUrl}`
             : `Saved as “${newName}”.`;
-          setTimeout(() => render(container, ctx), 700);
+          msg.textContent = r.warning ? `${base} ${r.warning}` : base;
+          setTimeout(() => render(container, ctx), 900);
         } catch (err) {
           msg.style.color = 'var(--red)';
           msg.textContent = err instanceof ApiError ? err.message : 'Could not save settings.';
