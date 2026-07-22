@@ -2,8 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ensureFfmpeg, compressVideoFile, FFMPEG } = require('../mediaCompress');
-const { UPLOAD_ROOT, ensureUploadDirs } = require('../mediaStorage');
+const { ensureFfmpeg, compressVideoFile, FFMPEG } = require('../src/mediaCompress');
+const { UPLOAD_ROOT, ensureUploadDirs } = require('../src/mediaStorage');
 
 (async () => {
   ensureUploadDirs();
