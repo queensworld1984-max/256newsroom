@@ -106,12 +106,14 @@ router.get('/publisher/:slug', async (req, res, next) => {
     const storyCards = stories.length
       ? stories.map((s) => {
         const href = escapeHtml(s.internal_url || (s.slug ? `/news/${s.slug}` : '#'));
-        return `<a class="pub-story" href="${href}">
+        return `<a class="pub-story lux-story" href="${href}">
           ${s.image_url ? `<img src="${safeUrl(s.image_url)}" alt="" loading="lazy">` : '<div class="pub-story-ph"></div>'}
-          <div><strong>${escapeHtml(s.title)}</strong>
-          <small>${escapeHtml(formatDate(s.published_at))}</small>
-          <p>${escapeHtml(String(s.summary || '').slice(0, 160))}</p>
-          <span class="pub-story-engage">Open article to debate</span></div>
+          <div class="lux-story-body">
+            <small>${escapeHtml(formatDate(s.published_at))}</small>
+            <strong>${escapeHtml(s.title)}</strong>
+            <p>${escapeHtml(String(s.summary || '').slice(0, 160))}</p>
+            <span class="pub-story-engage">Read full report →</span>
+          </div>
         </a>`;
       }).join('')
       : '<p class="empty-note">No published stories yet.</p>';
@@ -154,83 +156,111 @@ router.get('/publisher/:slug', async (req, res, next) => {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(org.name)} · Publisher · 256 Newsroom</title>
 <meta name="description" content="${escapeHtml(bio || org.tagline || `${org.name} on 256 Newsroom`)}">
-<link rel="stylesheet" href="/story.css?v=20260722-share-sub">
-<link rel="stylesheet" href="/engagement.css?v=20260722-share-sub">
+<link rel="stylesheet" href="/story.css?v=20260722-lux-profile">
+<link rel="stylesheet" href="/engagement.css?v=20260722-lux-profile">
 </head>
-<body class="publisher-page">
+<body class="publisher-page lux-profile">
 <header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a></header>
-<main class="story-shell publisher-shell" data-publisher-org-id="${org.id}" data-publisher-slug="${escapeHtml(org.slug)}" data-publisher-profile="1">
-  <nav class="crumbs"><a href="/">Home</a> / <span>Publisher profile</span></nav>
+<main class="publisher-shell lux-shell" data-publisher-org-id="${org.id}" data-publisher-slug="${escapeHtml(org.slug)}" data-publisher-profile="1">
+  <nav class="crumbs lux-crumbs"><a href="/">Home</a> <span aria-hidden="true">·</span> <span>Publisher house</span></nav>
 
-  <header class="publisher-hero pub-profile-hero">
-    <div class="publisher-logo large">${logo}</div>
-    <div class="publisher-hero-text">
-      <p class="story-kicker">${escapeHtml(badge)}</p>
-      <h1>${escapeHtml(org.name)}</h1>
-      ${org.tagline ? `<p class="publisher-tagline">${escapeHtml(org.tagline)}</p>` : ''}
-      <p class="publisher-meta">
-        ${(org.org_type || '').replace(/_/g, ' ')}
-        ${org.headquarters ? ` · ${escapeHtml(org.headquarters)}` : ''}
-        ${org.founded_year ? ` · Est. ${Number(org.founded_year)}` : ''}
-        ${org.years_in_journalism ? ` · ${Number(org.years_in_journalism)} years in journalism` : ''}
-      </p>
-
-      <div class="pub-stats-grid" aria-label="Publisher statistics">
-        <div class="pub-stat"><strong data-follower-count>${followers}</strong><span>Followers</span></div>
-        <div class="pub-stat"><strong data-pub-likes>${likes}</strong><span>Likes</span></div>
-        <div class="pub-stat"><strong data-pub-articles>${articles}</strong><span>Publications</span></div>
-        <div class="pub-stat"><strong data-pub-subscribers>${subscribers}</strong><span>Subscribers</span></div>
+  <section class="lux-hero">
+    <div class="lux-hero-glow" aria-hidden="true"></div>
+    <div class="lux-hero-inner">
+      <div class="lux-identity">
+        <div class="lux-logo-ring">
+          <div class="publisher-logo large lux-logo">${logo}</div>
+        </div>
+        <div class="lux-identity-text">
+          <p class="lux-badge"><span class="lux-badge-dot"></span>${escapeHtml(badge)}</p>
+          <h1 class="lux-name">${escapeHtml(org.name)}</h1>
+          ${org.tagline ? `<p class="lux-tagline">${escapeHtml(org.tagline)}</p>` : '<p class="lux-tagline lux-tagline-soft">Trusted publishing on 256 Newsroom</p>'}
+          <p class="lux-meta">
+            <span>${escapeHtml((org.org_type || 'publisher').replace(/_/g, ' '))}</span>
+            ${org.headquarters ? `<span class="lux-meta-sep">·</span><span>${escapeHtml(org.headquarters)}</span>` : ''}
+            ${org.founded_year ? `<span class="lux-meta-sep">·</span><span>Est. ${Number(org.founded_year)}</span>` : ''}
+            ${org.years_in_journalism ? `<span class="lux-meta-sep">·</span><span>${Number(org.years_in_journalism)} years in journalism</span>` : ''}
+          </p>
+        </div>
       </div>
 
-      <div class="publisher-actions" id="publisher-actions">
-        <button type="button" class="eng-btn eng-follow" data-action="follow-org" data-org-id="${org.id}">Follow publisher</button>
-        <button type="button" class="eng-chip" data-action="like-org" data-org-id="${org.id}">♥ Like publisher <b data-pub-likes-btn>${likes}</b></button>
-        <button type="button" class="eng-btn eng-secondary" data-action="subscribe-org" data-org-id="${org.id}">Subscribe to news updates</button>
-        ${org.website_url ? `<a class="eng-btn eng-secondary" href="${safeUrl(org.website_url)}" target="_blank" rel="noopener">Website</a>` : ''}
-        <a class="eng-btn eng-secondary" href="/dashboard/login.html?next=${encodeURIComponent(`/publisher/${org.slug}`)}">Sign in to engage</a>
+      <div class="lux-stats" aria-label="Publisher statistics">
+        <article class="lux-stat lux-stat-followers">
+          <div class="lux-stat-icon" aria-hidden="true">◈</div>
+          <strong data-follower-count>${followers}</strong>
+          <span>Followers</span>
+          <em>Community reach</em>
+        </article>
+        <article class="lux-stat lux-stat-likes">
+          <div class="lux-stat-icon" aria-hidden="true">♥</div>
+          <strong data-pub-likes>${likes}</strong>
+          <span>Likes</span>
+          <em>Reader admiration</em>
+        </article>
+        <article class="lux-stat lux-stat-pubs">
+          <div class="lux-stat-icon" aria-hidden="true">▣</div>
+          <strong data-pub-articles>${articles}</strong>
+          <span>Publications</span>
+          <em>Stories on record</em>
+        </article>
+        <article class="lux-stat lux-stat-subs">
+          <div class="lux-stat-icon" aria-hidden="true">✉</div>
+          <strong data-pub-subscribers>${subscribers}</strong>
+          <span>Subscribers</span>
+          <em>News update list</em>
+        </article>
       </div>
-      <div class="pub-subscribe-box" data-subscribe-box data-org-id="${org.id}" hidden>
-        <p class="eng-note">Get articles, press releases and updates from this publisher.</p>
+
+      <div class="lux-actions publisher-actions" id="publisher-actions">
+        <button type="button" class="lux-btn lux-btn-primary eng-follow" data-action="follow-org" data-org-id="${org.id}">Follow publisher</button>
+        <button type="button" class="lux-btn lux-btn-like" data-action="like-org" data-org-id="${org.id}">♥ Like <b data-pub-likes-btn>${likes}</b></button>
+        <button type="button" class="lux-btn lux-btn-sub" data-action="subscribe-org" data-org-id="${org.id}">Subscribe to updates</button>
+        ${org.website_url ? `<a class="lux-btn lux-btn-ghost" href="${safeUrl(org.website_url)}" target="_blank" rel="noopener">Website</a>` : ''}
+        <a class="lux-btn lux-btn-ghost" href="/dashboard/login.html?next=${encodeURIComponent(`/publisher/${org.slug}`)}">Sign in</a>
+      </div>
+      <div class="pub-subscribe-box lux-subscribe" data-subscribe-box data-org-id="${org.id}" hidden>
+        <p class="eng-note">Receive articles, press releases and exclusive updates from this house.</p>
         <form class="pub-subscribe-form" data-subscribe-form>
           <input type="email" name="email" placeholder="Your email" required maxlength="200">
           <input type="text" name="displayName" placeholder="Name (optional)" maxlength="200">
-          <button type="submit" class="eng-btn">Confirm subscription</button>
+          <button type="submit" class="lux-btn lux-btn-primary">Confirm subscription</button>
         </form>
         <p class="eng-note" data-subscribe-status></p>
       </div>
-      <p class="eng-note">Follow, like, or subscribe to updates. Debate (agree / disagree) is on each article page.</p>
     </div>
-  </header>
-
-  <section class="pub-section">
-    <h2>About</h2>
-    ${bio ? `<div class="publisher-desc pub-bio">${escapeHtml(bio).replace(/\n/g, '<br>')}</div>` : '<p class="empty-note">No biography yet.</p>'}
   </section>
 
-  <section class="pub-section">
-    <h2>Areas of practice</h2>
-    ${areasHtml}
-  </section>
+  <div class="lux-body story-shell">
+    <section class="lux-panel pub-section">
+      <div class="lux-panel-head"><span class="lux-kicker">House brief</span><h2>About</h2></div>
+      ${bio ? `<div class="publisher-desc pub-bio">${escapeHtml(bio).replace(/\n/g, '<br>')}</div>` : '<p class="empty-note">No biography yet.</p>'}
+    </section>
 
-  <section class="pub-section">
-    <h2>Work &amp; experience</h2>
-    <p class="eng-note">Career and newsroom roles (LinkedIn-style).</p>
-    ${workHtml}
-  </section>
+    <section class="lux-panel pub-section">
+      <div class="lux-panel-head"><span class="lux-kicker">Expertise</span><h2>Areas of practice</h2></div>
+      ${areasHtml}
+    </section>
 
-  <section class="pub-section">
-    <h2>Journalists</h2>
-    ${journosHtml}
-  </section>
+    <section class="lux-panel pub-section">
+      <div class="lux-panel-head"><span class="lux-kicker">Career</span><h2>Work &amp; experience</h2></div>
+      <p class="eng-note">Newsroom roles and professional milestones.</p>
+      ${workHtml}
+    </section>
 
-  <section class="pub-section">
-    <h2>Publications</h2>
-    <p class="eng-note">${articles} published stories on 256 Newsroom.</p>
-    <div class="pub-story-list">${storyCards}</div>
-  </section>
+    <section class="lux-panel pub-section">
+      <div class="lux-panel-head"><span class="lux-kicker">Newsroom</span><h2>Journalists</h2></div>
+      ${journosHtml}
+    </section>
+
+    <section class="lux-panel pub-section">
+      <div class="lux-panel-head"><span class="lux-kicker">Archive</span><h2>Publications</h2></div>
+      <p class="eng-note">${articles} published ${articles === 1 ? 'story' : 'stories'} on 256 Newsroom.</p>
+      <div class="pub-story-list lux-story-list">${storyCards}</div>
+    </section>
+  </div>
 </main>
 <footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a><p>Registered publishers on 256 Newsroom.</p></footer>
-<script src="/engagement.js?v=20260722-share-sub" defer></script>
+<script src="/engagement.js?v=20260722-lux-profile" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);
