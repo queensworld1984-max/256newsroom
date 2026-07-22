@@ -63,14 +63,21 @@ function renderRelated(items) {
   `).join('')}</div>`;
 }
 
-/** More stories by the same journalist, or by journalists under the same publisher. */
-function renderJournalistStories(items, { journalistName, publisherName, journalistSlug }) {
+/** More stories from the same publisher or journalist (boost other publications). */
+function renderJournalistStories(items, {
+  journalistName, publisherName, journalistSlug, profileHref,
+}) {
   if (!items.length) {
-    return '<p class="empty-note">No other published stories from this journalist yet.</p>';
+    return '<p class="empty-note">No other published stories from this publisher yet.</p>';
   }
-  const profile = journalistSlug
-    ? `<p class="journalist-more-link"><a href="/journalists/profile.html?slug=${escapeHtml(journalistSlug)}">View ${escapeHtml(journalistName || 'journalist')} profile →</a></p>`
-    : '';
+  const profileLabel = publisherName
+    ? `View ${publisherName} profile →`
+    : `View ${journalistName || 'journalist'} profile →`;
+  const profile = profileHref
+    ? `<p class="journalist-more-link"><a href="${escapeHtml(profileHref)}">${escapeHtml(profileLabel)}</a></p>`
+    : (journalistSlug
+      ? `<p class="journalist-more-link"><a href="/journalists/profile.html?slug=${escapeHtml(journalistSlug)}">${escapeHtml(profileLabel)}</a></p>`
+      : '');
   return `${profile}<div class="related-grid journalist-stories-grid">${items.map((item) => {
     const href = escapeHtml(item.internal_url || (item.slug ? `/news/${item.slug}` : '#'));
     const byline = item.journalist_name
@@ -143,8 +150,10 @@ router.get('/news/:slug', async (req, res, next) => {
     const story = rows[0];
     if (!story) return res.status(404).type('html').send('<!doctype html><title>Story not found | 256 Newsroom</title><h1>Story not found</h1><p><a href="/">Return to 256 Newsroom</a></p>');
 
-    // More stories: same journalist first; if none, all journalists under this publisher org.
-    const journalistStoriesQuery = story.journalist_id
+    // More from this publisher / journalist — boost other publications on the article page.
+    // Prefer ALL published stories from the same organization (e.g. Voxpopuli 256), even when
+    // articles have no journalist_id. Fall back to same journalist / author when no org.
+    const moreStoriesQuery = story.organization_id
       ? pool.query(
         `select a.id, a.title, a.slug, a.internal_url, a.image_url, a.published_at, a.summary,
                 j.name as journalist_name, j.slug as journalist_slug,
@@ -155,16 +164,13 @@ router.get('/news/:slug', async (req, res, next) => {
          left join sources s on s.id = a.source_id
          where a.hidden = false and a.status = 'published'
            and a.id <> $1
-           and (
-             a.journalist_id = $2
-             or ($3::bigint is not null and a.created_by_user_id = $3)
-           )
+           and a.organization_id = $2
            and (a.internal_url is not null or a.slug is not null)
          order by a.published_at desc nulls last
-         limit 24`,
-        [story.id, story.journalist_id, story.journalist_user_id || story.created_by_user_id || null],
+         limit 36`,
+        [story.id, story.organization_id],
       )
-      : story.organization_id
+      : story.journalist_id
         ? pool.query(
           `select a.id, a.title, a.slug, a.internal_url, a.image_url, a.published_at, a.summary,
                   j.name as journalist_name, j.slug as journalist_slug,
@@ -175,18 +181,14 @@ router.get('/news/:slug', async (req, res, next) => {
            left join sources s on s.id = a.source_id
            where a.hidden = false and a.status = 'published'
              and a.id <> $1
-             and a.organization_id = $2
              and (
-               a.journalist_id is not null
-               or a.created_by_user_id in (
-                 select user_id from journalists
-                 where organization_id = $2 and user_id is not null
-               )
+               a.journalist_id = $2
+               or ($3::bigint is not null and a.created_by_user_id = $3)
              )
              and (a.internal_url is not null or a.slug is not null)
            order by a.published_at desc nulls last
-           limit 24`,
-          [story.id, story.organization_id],
+           limit 36`,
+          [story.id, story.journalist_id, story.journalist_user_id || story.created_by_user_id || null],
         )
         : story.created_by_user_id
           ? pool.query(
@@ -205,7 +207,7 @@ router.get('/news/:slug', async (req, res, next) => {
                and a.created_by_user_id = $2
                and (a.internal_url is not null or a.slug is not null)
              order by a.id, a.published_at desc nulls last
-             limit 24`,
+             limit 36`,
             [story.id, story.created_by_user_id],
           )
           : Promise.resolve({ rows: [] });
@@ -251,7 +253,7 @@ router.get('/news/:slug', async (req, res, next) => {
           and (a.category_id = $2 or ($3::bigint is not null and a.district_id = $3))
         order by (a.district_id = $3) desc nulls last, a.published_at desc nulls last limit 6
       `, [story.id, story.category_id, story.district_id]),
-      journalistStoriesQuery,
+      moreStoriesQuery,
       publisherStatsQuery,
     ]);
 
@@ -390,15 +392,19 @@ ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank
 </div>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section class="journalist-more-stories">
-  <h2>${story.journalist_id && story.journalist_name
-    ? `More stories by ${escapeHtml(story.journalist_name)}`
-    : story.organization_id
-      ? `More stories by journalists at ${escapeHtml(story.publisher_name)}`
+  <h2>${story.organization_id
+    ? `More from ${escapeHtml(story.publisher_name)}`
+    : story.journalist_id && story.journalist_name
+      ? `More stories by ${escapeHtml(story.journalist_name)}`
       : 'More stories by this journalist'}</h2>
+  <p class="eng-note" style="margin:0 0 12px;">Other publications from this ${story.organization_id ? 'publisher' : 'journalist'} — open any story without leaving the article page.</p>
   ${renderJournalistStories(journalistStoriesResult.rows, {
     journalistName: story.journalist_name,
     publisherName: story.publisher_name,
     journalistSlug: story.journalist_slug,
+    profileHref: story.organization_id && story.publisher_slug
+      ? (publisherStats?.shortPath ? `/${publisherStats.shortPath}` : `/publisher/${story.publisher_slug}`)
+      : (story.journalist_slug ? `/journalists/profile.html?slug=${encodeURIComponent(story.journalist_slug)}` : null),
   })}
 </section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
