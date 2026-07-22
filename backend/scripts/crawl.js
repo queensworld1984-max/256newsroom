@@ -171,13 +171,14 @@ function scoreArticle(item) {
 }
 
 function imageFromItem(item) {
-  if (item.enclosure && likelyStoryImage(item.enclosure.url)) return normalizeImageUrl(item.enclosure.url);
-  if (item.mediaContent && item.mediaContent.$ && likelyStoryImage(item.mediaContent.$.url)) return normalizeImageUrl(item.mediaContent.$.url);
-  if (item.mediaThumbnail && item.mediaThumbnail.$ && likelyStoryImage(item.mediaThumbnail.$.url)) return normalizeImageUrl(item.mediaThumbnail.$.url);
-  if (item['media:content'] && item['media:content'].$ && likelyStoryImage(item['media:content'].$.url)) return normalizeImageUrl(item['media:content'].$.url);
+  const baseUrl = item.link || item.guid;
+  if (item.enclosure && likelyStoryImage(item.enclosure.url)) return normalizeImageUrl(item.enclosure.url, baseUrl);
+  if (item.mediaContent && item.mediaContent.$ && likelyStoryImage(item.mediaContent.$.url)) return normalizeImageUrl(item.mediaContent.$.url, baseUrl);
+  if (item.mediaThumbnail && item.mediaThumbnail.$ && likelyStoryImage(item.mediaThumbnail.$.url)) return normalizeImageUrl(item.mediaThumbnail.$.url, baseUrl);
+  if (item['media:content'] && item['media:content'].$ && likelyStoryImage(item['media:content'].$.url)) return normalizeImageUrl(item['media:content'].$.url, baseUrl);
   const html = item.contentEncoded || item['content:encoded'] || item.content || '';
   const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match && likelyStoryImage(match[1]) ? normalizeImageUrl(match[1]) : null;
+  return match && likelyStoryImage(match[1]) ? normalizeImageUrl(match[1], baseUrl) : null;
 }
 
 function likelyStoryImage(value) {
@@ -188,8 +189,15 @@ function likelyStoryImage(value) {
     && !/\.svg(?:\?|$)/.test(url);
 }
 
-function normalizeImageUrl(value) {
-  return value ? String(value).replace(/&amp;/g, '&') : null;
+function normalizeImageUrl(value, baseUrl) {
+  if (!value) return null;
+  const cleaned = String(value).replace(/&amp;/g, '&').trim();
+  try {
+    const resolved = new URL(cleaned, baseUrl).toString();
+    return /^https?:\/\//i.test(resolved) ? resolved : null;
+  } catch {
+    return null;
+  }
 }
 
 function isPublicArticleUrl(value) {

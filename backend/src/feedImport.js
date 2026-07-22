@@ -24,12 +24,20 @@ function cleanText(value) {
 }
 
 function imageFromItem(item) {
-  if (item.enclosure && item.enclosure.url) return item.enclosure.url;
-  if (item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url) return item.mediaContent.$.url;
-  if (item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url) return item.mediaThumbnail.$.url;
+  const baseUrl = item.link || item.guid;
+  const resolve = (value) => {
+    if (!value) return null;
+    try {
+      const url = new URL(String(value).replace(/&amp;/g, '&').trim(), baseUrl);
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+    } catch { return null; }
+  };
+  if (item.enclosure && item.enclosure.url) return resolve(item.enclosure.url);
+  if (item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url) return resolve(item.mediaContent.$.url);
+  if (item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url) return resolve(item.mediaThumbnail.$.url);
   const html = item.contentEncoded || item.content || '';
   const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match ? match[1] : null;
+  return match ? resolve(match[1]) : null;
 }
 
 async function fetchAndParseFeed(feedUrl) {
