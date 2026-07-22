@@ -178,6 +178,64 @@ function imageFromItem(item) {
   return match ? match[1] : null;
 }
 
+function metaTagContent(html, propName) {
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)=["']${propName}["'][^>]+content=["']([^"']+)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${propName}["']`, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// Confirmed by direct testing to either reject our crawler (401/402/403) or
+// stall the connection until timeout (npr.org, washingtonpost.com) rather
+// than fail fast. Skipping them outright avoids burning a timeout per article.
+// news.google.com is here for a different reason: it returns 200, but every
+// article's redirect page is the same JS shell with a fixed og:image (Google's
+// own icon, og:title "Google News") - not the article's photo - so treating
+// it as a real hit would stamp one generic image across many unrelated stories.
+const BOT_BLOCKED_DOMAINS = [
+  'nytimes.com',
+  'npr.org',
+  'washingtonpost.com',
+  'wsj.com',
+  'politico.com',
+  'ft.com',
+  'eatingwell.com',
+  'news.google.com',
+];
+
+function isBotBlockedDomain(pageUrl) {
+  try {
+    const hostname = new URL(pageUrl).hostname.toLowerCase();
+    return BOT_BLOCKED_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return true;
+  }
+}
+
+// Fallback for feeds that don't carry an image: fetch the article page and
+// read its og:image/twitter:image meta tag, same as link previews do.
+async function fetchOgImage(pageUrl) {
+  if (!/^https?:\/\//i.test(pageUrl) || isBotBlockedDomain(pageUrl)) return null;
+  try {
+    const res = await fetch(pageUrl, {
+      headers: { 'User-Agent': FEED_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const image = metaTagContent(html, 'og:image') || metaTagContent(html, 'twitter:image');
+    if (!image) return null;
+    return new URL(image, pageUrl).href;
+  } catch {
+    return null;
+  }
+}
+
 async function idFor(table, slug) {
   if (!slug) return null;
   const { rows } = await pool.query(`select id from ${table} where slug = $1 limit 1`, [slug]);
@@ -224,6 +282,7 @@ async function crawlSource(source) {
       const score = scoreArticle(item);
       const clusterId = await upsertCluster({ title, summary, categoryId, districtId, score });
       const publishedAt = item.isoDate || item.pubDate ? new Date(item.isoDate || item.pubDate) : null;
+      const imageUrl = imageFromItem(item) || await fetchOgImage(url);
 
       const result = await pool.query(`
         insert into articles
@@ -238,7 +297,7 @@ async function crawlSource(source) {
           score = greatest(articles.score, excluded.score),
           updated_at = now()
         returning (xmax = 0) as inserted
-      `, [source.id, clusterId, categoryId, districtId, title, summary, url, imageFromItem(item), item.creator || item.author || null, publishedAt, score]);
+      `, [source.id, clusterId, categoryId, districtId, title, summary, url, imageUrl, item.creator || item.author || null, publishedAt, score]);
 
       if (result.rows[0] && result.rows[0].inserted) inserted += 1;
     }
@@ -303,6 +362,7 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
       const score = scoreArticle({ isoDate: item.publishedAt });
       const clusterId = await upsertCluster({ title, summary, categoryId, districtId, score });
       const publishedAt = item.publishedAt ? new Date(item.publishedAt) : null;
+      const imageUrl = item.imageUrl || await fetchOgImage(url);
 
       const result = await pool.query(`
         insert into articles
@@ -317,7 +377,7 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
           score = greatest(articles.score, excluded.score),
           updated_at = now()
         returning (xmax = 0) as inserted
-      `, [sourceId, clusterId, categoryId, districtId, title, summary, url, item.imageUrl || null, item.author || null, publishedAt, score]);
+      `, [sourceId, clusterId, categoryId, districtId, title, summary, url, imageUrl, item.author || null, publishedAt, score]);
 
       if (result.rows[0] && result.rows[0].inserted) inserted += 1;
     }
