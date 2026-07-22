@@ -102,12 +102,10 @@ function imageClass(item) {
   return item.district?.slug || item.category?.slug || 'trade';
 }
 
-const STORY_IMAGE_FALLBACK = '/assets/images/newsroom-fallback.png';
-
 function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
-  const imageUrl = /^https?:\/\//i.test(raw) ? raw : STORY_IMAGE_FALLBACK;
-  const cssSafe = imageUrl.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+  if (!/^https?:\/\//i.test(raw)) return '';
+  const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
   return ` data-bg-image="${cssSafe}"`;
 }
 
@@ -123,7 +121,10 @@ function loadBackgroundImage(element) {
   };
   const image = new Image();
   image.onload = () => paint(url);
-  image.onerror = () => paint(STORY_IMAGE_FALLBACK);
+  image.onerror = () => {
+    element.style.removeProperty('background-image');
+    element.classList.add('image-unavailable');
+  };
   image.src = url;
 }
 
