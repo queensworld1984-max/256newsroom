@@ -66,7 +66,8 @@ router.get('/publisher/:slug', async (req, res, next) => {
           ${s.image_url ? `<img src="${safeUrl(s.image_url)}" alt="" loading="lazy">` : '<div class="pub-story-ph"></div>'}
           <div><strong>${escapeHtml(s.title)}</strong>
           <small>${escapeHtml(formatDate(s.published_at))}</small>
-          <p>${escapeHtml(String(s.summary || '').slice(0, 160))}</p></div>
+          <p>${escapeHtml(String(s.summary || '').slice(0, 160))}</p>
+          <span class="pub-story-engage">Open article to like, agree &amp; comment</span></div>
         </a>`;
       }).join('')
       : '<p class="empty-note">No published stories yet.</p>';
@@ -78,8 +79,8 @@ router.get('/publisher/:slug', async (req, res, next) => {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(org.name)} · Publisher · 256 Newsroom</title>
 <meta name="description" content="${escapeHtml(org.description || `${org.name} on 256 Newsroom`)}">
-<link rel="stylesheet" href="/story.css?v=20260722-engagement">
-<link rel="stylesheet" href="/engagement.css?v=20260722-engagement">
+<link rel="stylesheet" href="/story.css?v=20260722-article-eng">
+<link rel="stylesheet" href="/engagement.css?v=20260722-article-eng">
 </head>
 <body class="publisher-page">
 <header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a></header>
@@ -97,16 +98,17 @@ router.get('/publisher/:slug', async (req, res, next) => {
         ${org.website_url ? `<a class="eng-btn eng-secondary" href="${safeUrl(org.website_url)}" target="_blank" rel="noopener">Website</a>` : ''}
         <a class="eng-btn eng-secondary" href="/dashboard/login.html?next=${encodeURIComponent(`/publisher/${org.slug}`)}">Journalist / publisher login</a>
       </div>
-      <p class="eng-note">Follow is available to registered 256 Newsroom journalists and publishers.</p>
+      <p class="eng-note">You can follow this publisher here. To like, agree with, or comment on a story, open that article — reactions are not posted on the publisher profile.</p>
     </div>
   </header>
   <section>
     <h2>Stories from this publisher</h2>
+    <p class="eng-note">Like, agree, and comment live on each article page, not on this profile.</p>
     <div class="pub-story-list">${storyCards}</div>
   </section>
 </main>
 <footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a><p>Registered publishers on 256 Newsroom.</p></footer>
-<script src="/engagement.js?v=20260722-engagement" defer></script>
+<script src="/engagement.js?v=20260722-article-eng" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);

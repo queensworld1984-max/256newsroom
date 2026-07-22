@@ -1,13 +1,21 @@
-/* Engagement bar — follow / like / upvote / comment */
-.eng-panel { border: 1px solid var(--line, #d8d2c5); background: var(--white, #fff); margin: 22px 0 28px; padding: 16px 18px; }
-.eng-publisher-row { align-items: center; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; margin-bottom: 14px; }
-.eng-publisher-link { align-items: center; display: flex; gap: 12px; text-decoration: none; min-width: 0; }
-.eng-publisher-avatar { align-items: center; background: var(--ink, #0d0f0c); border-radius: 50%; color: #fff; display: flex; font-family: Inconsolata, monospace; font-weight: 700; height: 52px; justify-content: center; overflow: hidden; width: 52px; flex-shrink: 0; }
-.eng-publisher-avatar img { height: 100%; object-fit: cover; width: 100%; }
-.eng-publisher-meta strong { display: block; font-size: 18px; line-height: 1.2; }
-.eng-publisher-meta small { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.eng-publisher-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Article engagement — like / agree / comment on one article only */
+.eng-panel { border: 1px solid var(--line, #d8d2c5); background: var(--white, #fff); margin: 28px 0 32px; padding: 18px 18px 20px; }
+.eng-article-head { margin-bottom: 14px; }
+.eng-kicker {
+  color: var(--gold, #8b6508); font-family: Inconsolata, monospace; font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; margin: 0 0 4px; text-transform: uppercase;
+}
+.eng-article-title { border: 0; font-size: 22px; margin: 0 0 6px; padding: 0; }
+.eng-scope-note { margin-top: 0 !important; }
+.eng-sr-only {
+  border: 0; clip: rect(0 0 0 0); height: 1px; margin: -1px; overflow: hidden;
+  padding: 0; position: absolute; width: 1px;
+}
 .eng-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.pub-story-engage {
+  color: var(--ink, #0d0f0c); display: inline-block; font-family: Inconsolata, monospace;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; margin-top: 10px; text-transform: uppercase;
+}
 .eng-btn, .eng-chip {
   background: var(--ink, #0d0f0c); border: 1px solid var(--ink, #0d0f0c); color: #fff; cursor: pointer;
   font-family: Inconsolata, monospace; font-size: 12px; font-weight: 700; letter-spacing: .04em;

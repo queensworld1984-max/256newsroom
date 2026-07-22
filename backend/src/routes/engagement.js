@@ -126,6 +126,9 @@ router.get('/articles/:id', async (req, res, next) => {
 
     res.json({
       articleId,
+      title: a.title,
+      // Reactions (like / agree / comment) are always scoped to this article id only.
+      scope: 'article',
       canEngage: isContributor(req.user),
       authenticated: Boolean(req.user),
       following,

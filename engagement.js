@@ -1,6 +1,7 @@
 /**
- * 256 Newsroom engagement client — follow publisher, like, upvote, comment.
- * Restricted to logged-in registered journalists/publishers (server-enforced).
+ * 256 Newsroom article engagement — like, agree, and comment on a single article.
+ * Follow publisher lives only on the publisher profile page (not mixed with article comments).
+ * Actions are restricted to logged-in registered journalists/publishers (server-enforced).
  */
 (function () {
   const api = async (path, options = {}) => {
@@ -22,9 +23,6 @@
     return data;
   };
 
-  function $(sel, root = document) { return root.querySelector(sel); }
-  function $all(sel, root = document) { return [...root.querySelectorAll(sel)]; }
-
   function loginNext() {
     return `/dashboard/login.html?next=${encodeURIComponent(location.pathname + location.search + location.hash)}`;
   }
@@ -36,81 +34,16 @@
       return null;
     }
     if (!me.canEngage) {
-      alert('Only registered 256 Newsroom journalists and publishers can follow, like, comment, or upvote.');
+      alert('Only registered 256 Newsroom journalists and publishers can like, agree with, or comment on an article.');
       return null;
     }
     return me;
-  }
-
-  function paintArticleBar(root, data) {
-    const pub = data.publisher || {};
-    const eng = data.engagement || {};
-    const can = data.canEngage;
-
-    const followLabel = data.following ? 'Following' : 'Follow publisher';
-    const followBtn = pub.followable
-      ? `<button type="button" class="eng-btn eng-follow${data.following ? ' is-on' : ''}" data-action="follow" data-type="${pub.type}" data-id="${pub.id}">${followLabel}</button>`
-      : '';
-
-    root.innerHTML = `
-      <div class="eng-publisher-row">
-        <a class="eng-publisher-link" href="${pub.profileUrl || '#'}">
-          <span class="eng-publisher-avatar">${pub.logoUrl ? `<img src="${pub.logoUrl}" alt="">` : (pub.name || 'P').slice(0, 1)}</span>
-          <span class="eng-publisher-meta">
-            <strong>${escapeHtml(pub.name || 'Publisher')}</strong>
-            <small>${escapeHtml(pub.badge || 'Publisher')} · View profile</small>
-          </span>
-        </a>
-        <div class="eng-publisher-actions">
-          ${followBtn}
-          ${!data.authenticated ? `<a class="eng-btn eng-secondary" href="${loginNext()}">Sign in to engage</a>` : ''}
-        </div>
-      </div>
-      <div class="eng-actions">
-        <button type="button" class="eng-chip${eng.liked ? ' is-on' : ''}" data-action="like" ${can ? '' : 'data-need-auth="1"'}>
-          ♥ Like <b data-count="likes">${eng.likes || 0}</b>
-        </button>
-        <button type="button" class="eng-chip${eng.upvoted ? ' is-on' : ''}" data-action="upvote" ${can ? '' : 'data-need-auth="1"'}>
-          ▲ Upvote <b data-count="upvotes">${eng.upvotes || 0}</b>
-        </button>
-        <button type="button" class="eng-chip" data-action="focus-comment" ${can ? '' : 'data-need-auth="1"'}>
-          💬 Comment <b data-count="comments">${eng.comments || 0}</b>
-        </button>
-      </div>
-      <div class="eng-comments" id="eng-comments">
-        <h3 class="eng-comments-title">Comments from registered journalists &amp; publishers</h3>
-        <div class="eng-comment-list" data-comment-list>Loading comments…</div>
-        <form class="eng-comment-form" data-comment-form ${can ? '' : 'hidden'}>
-          <textarea name="body" rows="3" maxlength="2000" placeholder="Add a professional comment…" required></textarea>
-          <button type="submit" class="eng-btn">Post comment</button>
-        </form>
-        ${can ? '' : `<p class="eng-note">Only registered 256 Newsroom journalists and publishers can comment. <a href="${loginNext()}">Sign in</a></p>`}
-      </div>
-    `;
   }
 
   function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
-  }
-
-  function renderComments(listEl, items) {
-    if (!items.length) {
-      listEl.innerHTML = '<p class="eng-empty">No comments yet. Be the first registered journalist or publisher to comment.</p>';
-      return;
-    }
-    listEl.innerHTML = items.map((c) => `
-      <article class="eng-comment">
-        <header>
-          ${c.author?.profileUrl
-            ? `<a href="${escapeHtml(c.author.profileUrl)}"><strong>${escapeHtml(c.author.name)}</strong></a>`
-            : `<strong>${escapeHtml(c.author?.name || 'Member')}</strong>`}
-          <time>${escapeHtml(formatWhen(c.createdAt))}</time>
-        </header>
-        <p>${escapeHtml(c.body)}</p>
-      </article>
-    `).join('');
   }
 
   function formatWhen(v) {
@@ -122,17 +55,76 @@
     }
   }
 
+  /**
+   * Article-only engagement UI. Like / Agree / Comment are scoped to this articleId.
+   * Publisher follow is not shown here — use the publisher profile page.
+   */
+  function paintArticleBar(root, data) {
+    const eng = data.engagement || {};
+    const can = data.canEngage;
+    const articleTitle = data.title ? escapeHtml(data.title) : 'this article';
+
+    root.innerHTML = `
+      <div class="eng-article-head">
+        <p class="eng-kicker">On this article only</p>
+        <h2 class="eng-article-title">Like, agree, or comment</h2>
+        <p class="eng-note eng-scope-note">Your reaction applies to this story alone — not the publisher’s profile.</p>
+      </div>
+      <div class="eng-actions" role="group" aria-label="Reactions for this article">
+        <button type="button" class="eng-chip${eng.liked ? ' is-on' : ''}" data-action="like" ${can ? '' : 'data-need-auth="1"'} title="Like this article">
+          ♥ Like <b data-count="likes">${eng.likes || 0}</b>
+        </button>
+        <button type="button" class="eng-chip${eng.upvoted ? ' is-on' : ''}" data-action="agree" ${can ? '' : 'data-need-auth="1"'} title="Agree with this article">
+          ✓ Agree <b data-count="agrees">${eng.upvotes || 0}</b>
+        </button>
+        <button type="button" class="eng-chip" data-action="focus-comment" ${can ? '' : 'data-need-auth="1"'} title="Comment on this article">
+          💬 Comment <b data-count="comments">${eng.comments || 0}</b>
+        </button>
+        ${!data.authenticated ? `<a class="eng-btn eng-secondary" href="${loginNext()}">Sign in to react</a>` : ''}
+      </div>
+      <div class="eng-comments" id="eng-comments">
+        <h3 class="eng-comments-title">Comments on this article</h3>
+        <p class="eng-note">Each comment is stored against this story only.</p>
+        <div class="eng-comment-list" data-comment-list>Loading comments…</div>
+        <form class="eng-comment-form" data-comment-form ${can ? '' : 'hidden'}>
+          <label class="eng-sr-only" for="eng-comment-body">Comment on ${articleTitle}</label>
+          <textarea id="eng-comment-body" name="body" rows="3" maxlength="2000" placeholder="Write a comment on this article…" required></textarea>
+          <button type="submit" class="eng-btn">Post comment on this article</button>
+        </form>
+        ${can ? '' : `<p class="eng-note">Only registered 256 Newsroom journalists and publishers can comment on articles. <a href="${loginNext()}">Sign in</a></p>`}
+      </div>
+    `;
+  }
+
+  function renderComments(listEl, items) {
+    if (!items.length) {
+      listEl.innerHTML = '<p class="eng-empty">No comments on this article yet. Be the first to comment here.</p>';
+      return;
+    }
+    listEl.innerHTML = items.map((c) => `
+      <article class="eng-comment" data-comment-id="${c.id}">
+        <header>
+          ${c.author?.profileUrl
+            ? `<a href="${escapeHtml(c.author.profileUrl)}"><strong>${escapeHtml(c.author.name)}</strong></a>`
+            : `<strong>${escapeHtml(c.author?.name || 'Member')}</strong>`}
+          <time>${escapeHtml(formatWhen(c.createdAt))}</time>
+        </header>
+        <p>${escapeHtml(c.body)}</p>
+      </article>
+    `).join('');
+  }
+
   function updateCounts(root, eng) {
     const likes = root.querySelector('[data-count="likes"]');
-    const ups = root.querySelector('[data-count="upvotes"]');
+    const agrees = root.querySelector('[data-count="agrees"]');
     const com = root.querySelector('[data-count="comments"]');
     if (likes) likes.textContent = eng.likes || 0;
-    if (ups) ups.textContent = eng.upvotes || 0;
+    if (agrees) agrees.textContent = eng.upvotes || 0;
     if (com) com.textContent = eng.comments || 0;
     const likeBtn = root.querySelector('[data-action="like"]');
-    const upBtn = root.querySelector('[data-action="upvote"]');
+    const agreeBtn = root.querySelector('[data-action="agree"]');
     if (likeBtn) likeBtn.classList.toggle('is-on', Boolean(eng.liked));
-    if (upBtn) upBtn.classList.toggle('is-on', Boolean(eng.upvoted));
+    if (agreeBtn) agreeBtn.classList.toggle('is-on', Boolean(eng.upvoted));
   }
 
   async function initArticle() {
@@ -140,6 +132,12 @@
     if (!root) return;
     const articleId = root.getAttribute('data-engagement-article-id');
     if (!articleId) return;
+
+    // Guard: never mount article reactions on a publisher profile shell.
+    if (document.querySelector('[data-publisher-org-id]') && !root.closest('article')) {
+      root.innerHTML = '';
+      return;
+    }
 
     try {
       const data = await api(`/articles/${articleId}`);
@@ -154,29 +152,23 @@
         if (!btn) return;
         const action = btn.getAttribute('data-action');
 
-        if (btn.getAttribute('data-need-auth') === '1' || action === 'follow' || action === 'like' || action === 'upvote') {
-          if (!(await ensureCanEngage())) return;
-        }
-
         try {
           if (action === 'like') {
+            if (!(await ensureCanEngage())) return;
             const r = await api(`/articles/${articleId}/like`, { method: 'POST', body: {} });
             updateCounts(root, r.engagement);
-          } else if (action === 'upvote') {
+          } else if (action === 'agree') {
+            if (!(await ensureCanEngage())) return;
+            // Server endpoint remains /upvote; UI label is "Agree".
             const r = await api(`/articles/${articleId}/upvote`, { method: 'POST', body: {} });
             updateCounts(root, r.engagement);
-          } else if (action === 'follow') {
-            const type = btn.getAttribute('data-type');
-            const id = Number(btn.getAttribute('data-id'));
-            const body = type === 'organization' ? { organizationId: id } : { journalistId: id };
-            const r = await api('/publishers/follow', { method: 'POST', body });
-            btn.textContent = r.following ? 'Following' : 'Follow publisher';
-            btn.classList.toggle('is-on', Boolean(r.following));
           } else if (action === 'focus-comment') {
+            if (btn.getAttribute('data-need-auth') === '1' && !(await ensureCanEngage())) return;
             const form = root.querySelector('[data-comment-form]');
             if (form) {
               form.hidden = false;
               form.querySelector('textarea')?.focus();
+              form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
           }
         } catch (err) {
@@ -201,18 +193,26 @@
             const listEl2 = root.querySelector('[data-comment-list]');
             if (listEl2) renderComments(listEl2, list.items || []);
           } catch (err) {
-            alert(err.message || 'Could not post comment.');
+            if (err.status === 401) location.href = loginNext();
+            else alert(err.message || 'Could not post comment on this article.');
           }
         });
       }
     } catch (err) {
-      root.innerHTML = `<p class="eng-note">Engagement unavailable (${escapeHtml(err.message || 'error')}).</p>`;
+      root.innerHTML = `<p class="eng-note">Article engagement unavailable (${escapeHtml(err.message || 'error')}).</p>`;
     }
   }
 
+  /** Publisher profile: follow only — never like/agree/comment on the profile. */
   async function initPublisherPage() {
     const shell = document.querySelector('[data-publisher-org-id]');
     if (!shell) return;
+
+    // Strip any accidental article engagement mounts on the profile page.
+    shell.querySelectorAll('[data-engagement-article-id]').forEach((node) => {
+      node.remove();
+    });
+
     const orgId = Number(shell.getAttribute('data-publisher-org-id'));
     const slug = shell.getAttribute('data-publisher-slug');
     const followBtn = shell.querySelector('[data-action="follow-org"]');
