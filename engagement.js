@@ -111,15 +111,17 @@
         </div>
       </div>
 
-      <div class="eng-comments" id="eng-comments">
-        <h3 class="eng-comments-title">Further comments</h3>
-        <p class="eng-note">Use this for replies and follow-up discussion on this article.</p>
-        <div class="eng-comment-list" data-comment-list>Loading comments…</div>
-        <form class="eng-comment-form" data-comment-form ${can ? '' : 'hidden'}>
-          <textarea name="body" rows="3" maxlength="2000" placeholder="Add a comment on this article…" required></textarea>
-          <button type="submit" class="eng-btn">Post comment</button>
-        </form>
-        ${can ? '' : `<p class="eng-note">Only registered 256 Newsroom journalists and publishers can debate. <a href="${loginNext()}">Sign in</a></p>`}
+      <div class="fb-comments" id="eng-comments" data-comments-root>
+        <h3 class="fb-comments-title">Comments <span class="fb-comments-count" data-count="comments">${eng.comments || 0}</span></h3>
+        <div class="fb-composer" data-comment-composer ${can ? '' : 'hidden'}>
+          <div class="fb-avatar fb-avatar-me" aria-hidden="true">You</div>
+          <form class="fb-composer-form" data-comment-form>
+            <textarea name="body" rows="1" maxlength="2000" placeholder="Write a comment…" required></textarea>
+            <button type="submit" class="fb-post-btn">Post</button>
+          </form>
+        </div>
+        ${can ? '' : `<p class="eng-note">Only registered journalists and publishers can comment. <a href="${loginNext()}">Sign in</a></p>`}
+        <div class="fb-comment-list" data-comment-list>Loading comments…</div>
       </div>
     `;
 
@@ -149,23 +151,94 @@
     `).join('');
   }
 
+  function avatarHtml(author) {
+    if (author?.avatarUrl) {
+      return `<div class="fb-avatar"><img src="${escapeHtml(author.avatarUrl)}" alt=""></div>`;
+    }
+    const initial = escapeHtml(author?.avatarInitial || (author?.name || 'M').slice(0, 1).toUpperCase());
+    return `<div class="fb-avatar" aria-hidden="true">${initial}</div>`;
+  }
+
+  function commentCardHtml(c, isReply = false) {
+    const name = escapeHtml(c.author?.name || 'Member');
+    const nameHtml = c.author?.profileUrl
+      ? `<a class="fb-name" href="${escapeHtml(c.author.profileUrl)}">${name}</a>`
+      : `<span class="fb-name">${name}</span>`;
+    const edited = c.edited ? ' · <span class="fb-edited">Edited</span>' : '';
+    const ownActions = c.isOwn
+      ? `<button type="button" class="fb-action" data-c-action="edit" data-comment-id="${c.id}">Edit</button>
+         <button type="button" class="fb-action" data-c-action="delete" data-comment-id="${c.id}">Delete</button>`
+      : '';
+    const replies = (!isReply && Array.isArray(c.replies) && c.replies.length)
+      ? `<div class="fb-replies">${c.replies.map((r) => commentCardHtml(r, true)).join('')}</div>`
+      : '';
+
+    return `
+      <div class="fb-comment ${isReply ? 'is-reply' : ''}" data-comment-id="${c.id}" data-parent-id="${c.parentId || ''}">
+        ${avatarHtml(c.author)}
+        <div class="fb-comment-main">
+          <div class="fb-bubble">
+            ${nameHtml}
+            <div class="fb-body" data-comment-body>${escapeHtml(c.body)}</div>
+          </div>
+          <div class="fb-meta">
+            <time class="fb-time">${escapeHtml(formatWhen(c.createdAt))}</time>${edited}
+            <button type="button" class="fb-action" data-c-action="reply" data-comment-id="${c.id}" data-reply-to="${name}">Reply</button>
+            ${ownActions}
+          </div>
+          <div class="fb-inline-form" data-inline-form hidden></div>
+          ${replies}
+        </div>
+      </div>`;
+  }
+
   function renderComments(listEl, items) {
     if (!listEl) return;
     if (!items.length) {
-      listEl.innerHTML = '<p class="eng-empty">No further comments yet.</p>';
+      listEl.innerHTML = '<p class="fb-empty">No comments yet. Be the first to comment.</p>';
       return;
     }
-    listEl.innerHTML = items.map((c) => `
-      <article class="eng-comment" data-comment-id="${c.id}">
-        <header>
-          ${c.author?.profileUrl
-            ? `<a href="${escapeHtml(c.author.profileUrl)}"><strong>${escapeHtml(c.author.name)}</strong></a>`
-            : `<strong>${escapeHtml(c.author?.name || 'Member')}</strong>`}
-          <time>${escapeHtml(formatWhen(c.createdAt))}</time>
-        </header>
-        <p>${escapeHtml(c.body)}</p>
-      </article>
-    `).join('');
+    listEl.innerHTML = items.map((c) => commentCardHtml(c, false)).join('');
+  }
+
+  async function refreshComments(root, articleId) {
+    const list = await api(`/articles/${articleId}/comments`);
+    renderComments(root.querySelector('[data-comment-list]'), list.items || []);
+    if (list.count != null) {
+      root.querySelectorAll('[data-count="comments"]').forEach((n) => {
+        n.textContent = list.count;
+      });
+    }
+    return list;
+  }
+
+  function showInlineForm(container, { placeholder, initial = '', submitLabel, onSubmit, onCancel }) {
+    container.hidden = false;
+    container.innerHTML = `
+      <form class="fb-inline-compose">
+        <textarea rows="2" maxlength="2000" placeholder="${escapeHtml(placeholder)}" required></textarea>
+        <div class="fb-inline-actions">
+          <button type="submit" class="fb-post-btn">${escapeHtml(submitLabel)}</button>
+          <button type="button" class="fb-cancel-btn" data-cancel>Cancel</button>
+        </div>
+      </form>`;
+    const form = container.querySelector('form');
+    const ta = form.querySelector('textarea');
+    ta.value = initial;
+    ta.focus();
+    form.querySelector('[data-cancel]').addEventListener('click', () => {
+      container.hidden = true;
+      container.innerHTML = '';
+      if (onCancel) onCancel();
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = (ta.value || '').trim();
+      if (!body) return;
+      await onSubmit(body);
+      container.hidden = true;
+      container.innerHTML = '';
+    });
   }
 
   function updateCounts(root, eng) {
@@ -253,10 +326,74 @@
 
       await refreshDebate(root, articleId);
 
-      const comments = await api(`/articles/${articleId}/comments`);
-      renderComments(root.querySelector('[data-comment-list]'), comments.items || []);
+      await refreshComments(root, articleId);
 
       root.addEventListener('click', async (e) => {
+        // Facebook-style comment actions (reply / edit / delete)
+        const cBtn = e.target.closest('[data-c-action]');
+        if (cBtn && root.contains(cBtn)) {
+          const cAction = cBtn.getAttribute('data-c-action');
+          const commentId = Number(cBtn.getAttribute('data-comment-id'));
+          const card = root.querySelector(`.fb-comment[data-comment-id="${commentId}"]`);
+          try {
+            if (cAction === 'reply') {
+              if (!(await ensureCanEngage())) return;
+              const formHost = card?.querySelector('[data-inline-form]');
+              if (!formHost) return;
+              const replyTo = cBtn.getAttribute('data-reply-to') || '';
+              showInlineForm(formHost, {
+                placeholder: replyTo ? `Reply to ${replyTo}…` : 'Write a reply…',
+                submitLabel: 'Reply',
+                onSubmit: async (body) => {
+                  const r = await api(`/articles/${articleId}/comments`, {
+                    method: 'POST',
+                    body: { body, parentId: commentId },
+                  });
+                  if (r.engagement) {
+                    engState = r.engagement;
+                    updateCounts(root, engState);
+                  }
+                  await refreshComments(root, articleId);
+                },
+              });
+            } else if (cAction === 'edit') {
+              if (!(await ensureCanEngage())) return;
+              const formHost = card?.querySelector('[data-inline-form]');
+              const current = card?.querySelector('[data-comment-body]')?.textContent || '';
+              if (!formHost) return;
+              showInlineForm(formHost, {
+                placeholder: 'Edit your comment…',
+                initial: current,
+                submitLabel: 'Save',
+                onSubmit: async (body) => {
+                  const r = await api(`/articles/${articleId}/comments/${commentId}`, {
+                    method: 'PATCH',
+                    body: { body },
+                  });
+                  if (r.engagement) {
+                    engState = r.engagement;
+                    updateCounts(root, engState);
+                  }
+                  await refreshComments(root, articleId);
+                },
+              });
+            } else if (cAction === 'delete') {
+              if (!(await ensureCanEngage())) return;
+              if (!confirm('Delete this comment?')) return;
+              const r = await api(`/articles/${articleId}/comments/${commentId}`, { method: 'DELETE' });
+              if (r.engagement) {
+                engState = r.engagement;
+                updateCounts(root, engState);
+              }
+              await refreshComments(root, articleId);
+            }
+          } catch (err) {
+            if (err.status === 401) location.href = loginNext();
+            else alert(err.message || 'Comment action failed.');
+          }
+          return;
+        }
+
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const action = btn.getAttribute('data-action');
@@ -290,11 +427,12 @@
           } else if (action === 'focus-comment') {
             if (btn.getAttribute('data-need-auth') === '1' && !(await ensureCanEngage())) return;
             const form = root.querySelector('[data-comment-form]');
+            const section = root.querySelector('#eng-comments');
             if (form) {
               form.hidden = false;
               form.querySelector('textarea')?.focus();
-              form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
+            section?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
         } catch (err) {
           if (err.status === 401) location.href = loginNext();
@@ -368,7 +506,7 @@
           if (!(await ensureCanEngage())) return;
           const ta = commentForm.querySelector('textarea');
           const body = (ta?.value || '').trim();
-          if (body.length < 2) return;
+          if (body.length < 1) return;
           try {
             const r = await api(`/articles/${articleId}/comments`, { method: 'POST', body: { body } });
             ta.value = '';
@@ -376,8 +514,7 @@
               engState = r.engagement;
               updateCounts(root, engState);
             }
-            const list = await api(`/articles/${articleId}/comments`);
-            renderComments(root.querySelector('[data-comment-list]'), list.items || []);
+            await refreshComments(root, articleId);
           } catch (err) {
             if (err.status === 401) location.href = loginNext();
             else alert(err.message || 'Could not post comment.');

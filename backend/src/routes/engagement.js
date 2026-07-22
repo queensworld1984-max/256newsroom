@@ -421,77 +421,182 @@ router.post('/articles/:id/upvote', ...requireContributor, async (req, res, next
   }
 });
 
-// GET /api/engagement/articles/:id/comments
+function mapCommentRow(r, currentUserId = null) {
+  const author = mapAuthor(r);
+  const name = author.name || 'Member';
+  return {
+    id: r.id,
+    body: r.body,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    parentId: r.parent_id,
+    edited: Boolean(r.updated_at && r.created_at
+      && new Date(r.updated_at).getTime() - new Date(r.created_at).getTime() > 2000),
+    isOwn: currentUserId != null && Number(r.user_id) === Number(currentUserId),
+    author: {
+      ...author,
+      avatarInitial: String(name).trim().slice(0, 1).toUpperCase() || 'M',
+    },
+  };
+}
+
+// GET /api/engagement/articles/:id/comments — threaded list for Facebook-style UI
 router.get('/articles/:id/comments', async (req, res, next) => {
   try {
     const articleId = Number(req.params.id);
+    const currentUserId = req.user?.id || null;
     const { rows } = await pool.query(
-      `select c.id, c.body, c.created_at, c.parent_id,
-              u.id as user_id, u.display_name, u.email,
-              j.name as journalist_name, j.slug as journalist_slug
+      `select c.id, c.body, c.created_at, c.updated_at, c.parent_id,
+              u.id as user_id, u.display_name, u.email, u.avatar_url,
+              j.name as journalist_name, j.slug as journalist_slug, j.image_url as journalist_image
        from article_comments c
        join users u on u.id = c.user_id
        left join journalists j on j.user_id = u.id
        where c.article_id = $1 and c.hidden = false
        order by c.created_at asc
-       limit 200`,
+       limit 500`,
       [articleId],
     );
+    const flat = rows.map((r) => {
+      const item = mapCommentRow(r, currentUserId);
+      if (r.journalist_image || r.avatar_url) {
+        item.author.avatarUrl = r.journalist_image || r.avatar_url;
+      }
+      return item;
+    });
+
+    // Nest replies under top-level comments (one level of nesting, FB-style)
+    const byId = new Map(flat.map((c) => [c.id, { ...c, replies: [] }]));
+    const roots = [];
+    for (const c of byId.values()) {
+      if (c.parentId && byId.has(c.parentId)) {
+        byId.get(c.parentId).replies.push(c);
+      } else if (c.parentId) {
+        // Orphan reply: treat as top-level if parent missing
+        roots.push(c);
+      } else {
+        roots.push(c);
+      }
+    }
+
     res.json({
-      items: rows.map((r) => ({
-        id: r.id,
-        body: r.body,
-        createdAt: r.created_at,
-        parentId: r.parent_id,
-        author: mapAuthor(r),
-      })),
+      items: roots,
+      flat,
+      count: flat.length,
+      currentUserId,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/engagement/articles/:id/comments
+// POST /api/engagement/articles/:id/comments  body: { body, parentId? }
 router.post('/articles/:id/comments', ...requireContributor, async (req, res, next) => {
   try {
     const articleId = Number(req.params.id);
     const body = String(req.body.body || req.body.comment || '').trim();
-    if (body.length < 2) return res.status(400).json({ error: 'Comment is too short.' });
+    if (body.length < 1) return res.status(400).json({ error: 'Comment is too short.' });
     if (body.length > 2000) return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
 
     if (!(await requirePublishedArticle(articleId))) {
       return res.status(404).json({ error: 'Article not found.' });
     }
 
-    const parentId = req.body.parentId ? Number(req.body.parentId) : null;
+    let parentId = req.body.parentId ? Number(req.body.parentId) : null;
     if (parentId) {
       const { rows: p } = await pool.query(
-        'select id from article_comments where id = $1 and article_id = $2 and hidden = false',
+        'select id, parent_id from article_comments where id = $1 and article_id = $2 and hidden = false',
         [parentId, articleId],
       );
       if (!p.length) return res.status(400).json({ error: 'Parent comment not found.' });
+      // Flatten deep threads: reply-to-reply attaches under the top-level parent
+      if (p[0].parent_id) parentId = p[0].parent_id;
     }
 
     const { rows } = await pool.query(
       `insert into article_comments (article_id, user_id, body, parent_id)
        values ($1, $2, $3, $4)
-       returning id, body, created_at, parent_id`,
+       returning id, body, created_at, updated_at, parent_id, user_id`,
       [articleId, req.user.id, body, parentId],
     );
     const summary = await articleEngagementSummary(articleId, req.user.id);
+    const name = req.user.displayName || req.user.email.split('@')[0];
     res.status(201).json({
       item: {
         id: rows[0].id,
         body: rows[0].body,
         createdAt: rows[0].created_at,
+        updatedAt: rows[0].updated_at,
         parentId: rows[0].parent_id,
+        edited: false,
+        isOwn: true,
         author: {
           id: req.user.id,
-          name: req.user.displayName || req.user.email.split('@')[0],
+          name,
+          avatarInitial: String(name).slice(0, 1).toUpperCase(),
         },
+        replies: [],
       },
       engagement: summary,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/engagement/articles/:id/comments/:commentId — edit own comment
+router.patch('/articles/:id/comments/:commentId', ...requireContributor, async (req, res, next) => {
+  try {
+    const articleId = Number(req.params.id);
+    const commentId = Number(req.params.commentId);
+    const body = String(req.body.body || req.body.comment || '').trim();
+    if (body.length < 1) return res.status(400).json({ error: 'Comment is too short.' });
+    if (body.length > 2000) return res.status(400).json({ error: 'Comment is too long (max 2000 characters).' });
+
+    const isAdmin = req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key));
+    const { rows } = await pool.query(
+      `update article_comments set body = $1, updated_at = now()
+       where id = $2 and article_id = $3 and hidden = false
+         and ($4::boolean or user_id = $5)
+       returning id, body, created_at, updated_at, parent_id, user_id`,
+      [body, commentId, articleId, isAdmin, req.user.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Comment not found or you cannot edit it.' });
+
+    const summary = await articleEngagementSummary(articleId, req.user.id);
+    res.json({
+      item: {
+        id: rows[0].id,
+        body: rows[0].body,
+        createdAt: rows[0].created_at,
+        updatedAt: rows[0].updated_at,
+        parentId: rows[0].parent_id,
+        edited: true,
+        isOwn: Number(rows[0].user_id) === Number(req.user.id),
+      },
+      engagement: summary,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/engagement/articles/:id/comments/:commentId — soft-delete own comment
+router.delete('/articles/:id/comments/:commentId', ...requireContributor, async (req, res, next) => {
+  try {
+    const articleId = Number(req.params.id);
+    const commentId = Number(req.params.commentId);
+    const isAdmin = req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key));
+    const { rows } = await pool.query(
+      `update article_comments set hidden = true, updated_at = now()
+       where id = $1 and article_id = $2 and hidden = false
+         and ($3::boolean or user_id = $4)
+       returning id`,
+      [commentId, articleId, isAdmin, req.user.id],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Comment not found or you cannot delete it.' });
+    const summary = await articleEngagementSummary(articleId, req.user.id);
+    res.json({ ok: true, engagement: summary });
   } catch (err) {
     next(err);
   }
