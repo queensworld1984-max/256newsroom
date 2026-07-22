@@ -465,7 +465,20 @@ input[name="cattab"], .toggle-input { display: none; }
 .eco-platform-grid { display: grid; gap: 20px; grid-template-columns: repeat(4, 1fr); }
 .grid-card { flex: 0 0 var(--carousel-card); scroll-snap-align: start; transition: transform 0.15s ease; }
 .grid-card:hover, .eco-card:hover { transform: translateY(-2px); }
-.grid-card h3, .story-card h3, .district-card h3 { font-family: "DM Serif Display", serif; font-size: 16px; font-weight: 400; line-height: 1.3; margin-bottom: 8px; }
+.grid-card h3, .story-card h3, .district-card h3 {
+  color: #0a0b09;
+  font-family: "DM Serif Display", serif;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.22;
+  margin-bottom: 8px;
+}
+.grid-card p, .story-card p, .district-card p {
+  color: #53534d;
+  font-size: 14px;
+  line-height: 1.45;
+}
 .thumb, .story-thumb, .district-card-thumb, .social-thumb, .citizen-thumb, .eco-card-thumb {
   aspect-ratio: var(--carousel-media-ratio);
   background: linear-gradient(135deg, #dfd9ca, #c7c0a9);
