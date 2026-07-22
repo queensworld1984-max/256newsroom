@@ -1,0 +1,48 @@
+/* Engagement bar — follow / like / upvote / comment */
+.eng-panel { border: 1px solid var(--line, #d8d2c5); background: var(--white, #fff); margin: 22px 0 28px; padding: 16px 18px; }
+.eng-publisher-row { align-items: center; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; margin-bottom: 14px; }
+.eng-publisher-link { align-items: center; display: flex; gap: 12px; text-decoration: none; min-width: 0; }
+.eng-publisher-avatar { align-items: center; background: var(--ink, #0d0f0c); border-radius: 50%; color: #fff; display: flex; font-family: Inconsolata, monospace; font-weight: 700; height: 52px; justify-content: center; overflow: hidden; width: 52px; flex-shrink: 0; }
+.eng-publisher-avatar img { height: 100%; object-fit: cover; width: 100%; }
+.eng-publisher-meta strong { display: block; font-size: 18px; line-height: 1.2; }
+.eng-publisher-meta small { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.eng-publisher-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.eng-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.eng-btn, .eng-chip {
+  background: var(--ink, #0d0f0c); border: 1px solid var(--ink, #0d0f0c); color: #fff; cursor: pointer;
+  font-family: Inconsolata, monospace; font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  padding: 10px 14px; text-decoration: none; text-transform: uppercase;
+}
+.eng-btn.eng-secondary, .eng-chip { background: #fff; color: var(--ink, #0d0f0c); }
+.eng-btn.is-on, .eng-chip.is-on, .eng-follow.is-on { background: #16783c; border-color: #16783c; color: #fff; }
+.eng-chip b { font-family: "DM Serif Display", Georgia, serif; font-size: 15px; font-weight: 400; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+.eng-note, .eng-empty { color: var(--grey, #53534d); font-size: 13px; margin: 10px 0 0; }
+.eng-comments { border-top: 1px solid var(--line, #d8d2c5); margin-top: 14px; padding-top: 14px; }
+.eng-comments-title { border: 0; font-size: 20px; margin: 0 0 12px; padding: 0; }
+.eng-comment { border-bottom: 1px solid var(--line, #d8d2c5); padding: 12px 0; }
+.eng-comment header { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; margin-bottom: 6px; }
+.eng-comment time { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 11px; }
+.eng-comment p { font-size: 17px; line-height: 1.5; margin: 0; }
+.eng-comment-form { display: grid; gap: 10px; margin-top: 14px; }
+.eng-comment-form textarea { border: 1px solid var(--line, #d8d2c5); font: inherit; min-height: 90px; padding: 10px 12px; width: 100%; }
+
+/* Publisher profile page */
+.publisher-hero { display: grid; gap: 20px; grid-template-columns: 96px 1fr; margin-bottom: 36px; }
+.publisher-logo.large { height: 96px; width: 96px; font-size: 28px; }
+.publisher-meta { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 12px; text-transform: uppercase; }
+.publisher-desc { font-size: 18px; line-height: 1.55; max-width: 60ch; }
+.publisher-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.pub-story-list { display: grid; gap: 14px; }
+.pub-story { background: #fff; border: 1px solid var(--line, #d8d2c5); display: grid; gap: 14px; grid-template-columns: 140px 1fr; text-decoration: none; }
+.pub-story img, .pub-story-ph { background: #eee; height: 100%; min-height: 110px; object-fit: cover; width: 100%; }
+.pub-story div { padding: 12px 14px 14px 0; }
+.pub-story strong { display: block; font-size: 20px; line-height: 1.25; margin-bottom: 4px; }
+.pub-story small { color: var(--gold, #8b6508); font-family: Inconsolata, monospace; font-size: 11px; text-transform: uppercase; }
+.pub-story p { color: var(--grey, #53534d); font-size: 15px; line-height: 1.4; margin: 8px 0 0; }
+
+@media (max-width: 650px) {
+  .publisher-hero { grid-template-columns: 1fr; }
+  .pub-story { grid-template-columns: 1fr; }
+  .pub-story img, .pub-story-ph { height: 160px; }
+  .pub-story div { padding: 12px; }
+}

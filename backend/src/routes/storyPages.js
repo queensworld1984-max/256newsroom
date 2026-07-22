@@ -99,13 +99,16 @@ router.get('/sitemap.xml', async (_req, res, next) => {
 router.get('/news/:slug', async (req, res, next) => {
   try {
     const { rows } = await pool.query(`
-      select a.*, coalesce(s.name, o.name, '256 Newsroom') as publisher_name,
-        s.slug as publisher_slug, s.homepage_url, o.website_url as platform_website_url, o.logo_url as publisher_logo,
+      select a.*, coalesce(s.name, o.name, j.name, '256 Newsroom') as publisher_name,
+        coalesce(o.slug, s.slug) as publisher_slug, s.homepage_url, o.website_url as platform_website_url,
+        coalesce(o.logo_url, j.image_url) as publisher_logo,
+        o.id as organization_id, j.id as journalist_id, j.slug as journalist_slug, j.is_independent,
         c.name as category_name, c.slug as category_slug,
         d.name as district_name, d.slug as district_slug
       from articles a
       left join sources s on s.id = a.source_id
       left join organizations o on o.id = a.organization_id
+      left join journalists j on j.id = a.journalist_id
       left join categories c on c.id = a.category_id
       left join districts d on d.id = a.district_id
       where a.slug = $1 and a.hidden = false and a.status = 'published'
@@ -172,19 +175,33 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260722-dm-serif"></head>
+<link rel="stylesheet" href="/story.css?v=20260722-engagement">
+<link rel="stylesheet" href="/engagement.css?v=20260722-engagement"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
 <h1>${escapeHtml(story.title)}</h1>
-<div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
+<div class="publisher">
+  <div class="publisher-logo">${publisherLogo}</div>
+  <div class="publisher-text">
+    <strong>${story.organization_id && story.publisher_slug
+      ? `<a class="publisher-name-link" href="/publisher/${escapeHtml(story.publisher_slug)}">${escapeHtml(story.publisher_name)}</a>`
+      : escapeHtml(story.publisher_name)}</strong>
+    <span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}${story.organization_id && story.publisher_slug ? ` · <a href="/publisher/${escapeHtml(story.publisher_slug)}">View publisher profile</a>` : ''}</span>
+  </div>
+</div>
+<div class="eng-panel" data-engagement-article-id="${story.id}" aria-label="Publisher engagement">
+  <p class="eng-note">Loading follow, like, upvote and comments…</p>
+</div>
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>${escapeHtml(story.image_caption || story.image_credit || `Image · ${story.publisher_name}`)}</figcaption></figure>` : ''}
 ${videoBlock}
 <section class="summary"><h2>${story.body ? 'Full report' : 'What the report says'}</h2>${story.body ? renderArticleBody(story.body) : renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>` : ''}
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
-</article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer></body></html>`);
+</article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer>
+<script src="/engagement.js?v=20260722-engagement" defer></script>
+</body></html>`);
   } catch (err) {
     next(err);
   }

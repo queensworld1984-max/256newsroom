@@ -11,8 +11,11 @@ a { color:inherit; }
 h1 { font-family:"DM Serif Display",Georgia,serif; font-size:clamp(38px,6vw,68px); font-weight:400; line-height:1.08; margin:12px 0 24px; }
 h2 { border-bottom:2px solid var(--ink); font-family:"DM Serif Display",Georgia,serif; font-size:26px; font-weight:400; margin:38px 0 18px; padding-bottom:8px; }
 .publisher { align-items:center; border-bottom:1px solid var(--line); border-top:1px solid var(--line); display:flex; gap:12px; padding:14px 0; }
-.publisher-logo { align-items:center; background:var(--ink); border-radius:50%; color:var(--white); display:flex; font-family:Inconsolata,monospace; font-weight:700; height:48px; justify-content:center; overflow:hidden; width:48px; }.publisher-logo img { height:100%; object-fit:contain; width:100%; }
+.publisher-logo { align-items:center; background:var(--ink); border-radius:50%; color:var(--white); display:flex; font-family:Inconsolata,monospace; font-weight:700; height:48px; justify-content:center; overflow:hidden; width:48px; flex-shrink:0; }.publisher-logo img { height:100%; object-fit:contain; width:100%; }
 .publisher strong,.publisher span { display:block; }.publisher span { color:var(--grey); font-size:13px; margin-top:3px; }
+.publisher-name-link { color:inherit; text-decoration:none; border-bottom:1px solid transparent; }
+.publisher-name-link:hover { border-bottom-color:var(--ink); }
+.publisher span a { color:var(--red); font-weight:700; text-decoration:none; }
 figure { margin:30px 0; }figure img { display:block; max-height:540px; object-fit:cover; width:100%; }figcaption { color:var(--grey); font-size:11px; margin-top:7px; }
 .summary p { font-family:"EB Garamond",Garamond,"Times New Roman",serif; font-size:22px; line-height:1.7; }
 .quality-note { background:#eee8dc; border-left:4px solid var(--gold); color:var(--grey); font-size:13px; line-height:1.5; margin:20px 0; padding:14px 16px; }

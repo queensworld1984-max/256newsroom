@@ -23,6 +23,8 @@ const sectionPageRoutes = require('./routes/sectionPages');
 const mediaRoutes = require('./routes/media');
 const aiDraftRoutes = require('./routes/aiDraft');
 const adminPeopleRoutes = require('./routes/adminPeople');
+const engagementRoutes = require('./routes/engagement');
+const publisherPageRoutes = require('./routes/publisherPages');
 const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
 const { generateStorySummary, generatePendingStorySummaries } = require('./storySummaries');
 const { ensureUploadDirs } = require('./mediaStorage');
@@ -79,8 +81,10 @@ app.use('/api', taxonomyRoutes);
 app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
 app.use('/api/admin/people', adminPeopleRoutes);
+app.use('/api/engagement', engagementRoutes);
 app.use('/api/platforms', platformNewsRoutes);
 app.use(storyPageRoutes);
+app.use(publisherPageRoutes);
 app.use(sectionPageRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
