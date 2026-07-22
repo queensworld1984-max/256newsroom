@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const cron = require('node-cron');
 const pool = require('./db');
-const { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics } = require('../scripts/crawl');
+const { crawlAllSources, crawlNewsApiSources } = require('../scripts/crawl');
 const { loadSessionUser, requireRole } = require('./auth');
 const authRoutes = require('./routes/auth');
 const publisherApplicationRoutes = require('./routes/publisherApplications');
@@ -459,12 +459,7 @@ app.post('/api/crawl/run-newsapi', requireAdmin, async (_req, res, next) => {
 });
 
 app.post('/api/crawl/run-googlenews', requireAdmin, async (_req, res, next) => {
-  try {
-    const result = await crawlGoogleNewsTopics();
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
+  res.status(410).json({ error: 'Google News ingestion is disabled.' });
 });
 
 app.post('/api/admin/articles/:id/generate-summary', requireAdmin, async (req, res, next) => {
@@ -611,13 +606,6 @@ if (process.env.NEWSAPI_KEY && process.env.NEWSAPI_INTERVAL_MINUTES !== '0') {
   const hours = Math.max(1, Math.round(minutes / 60));
   cron.schedule(`0 */${hours} * * *`, () => {
     crawlNewsApiSources().catch((err) => console.error('Scheduled NewsAPI crawl failed:', err));
-  });
-}
-
-if (process.env.GOOGLENEWS_INTERVAL_MINUTES !== '0') {
-  const minutes = Math.max(15, Number(process.env.GOOGLENEWS_INTERVAL_MINUTES || 30));
-  cron.schedule(`*/${minutes} * * * *`, () => {
-    crawlGoogleNewsTopics().catch((err) => console.error('Scheduled Google News crawl failed:', err));
   });
 }
 
