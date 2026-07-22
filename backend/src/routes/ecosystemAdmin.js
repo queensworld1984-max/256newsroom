@@ -4,7 +4,7 @@ const { requireRole } = require('../auth');
 const { discoverSource, DomainNotApprovedError } = require('../contentDiscovery');
 const { runGenerationJob } = require('../ecosystemGenerate');
 const { runEcosystemAutomationCycle, isGloballyPaused, setGloballyPaused } = require('../ecosystemScheduler');
-const { withdrawStory, rejectStory, archiveStory } = require('../storiesCore');
+const { publishStory, withdrawStory, rejectStory, archiveStory } = require('../storiesCore');
 
 const router = express.Router();
 router.use(requireRole('super_admin', 'newsroom_admin'));
@@ -270,7 +270,7 @@ router.get('/articles', async (req, res, next) => {
       where += ` and a.organization_id = $${params.length}`;
     }
     const { rows } = await pool.query(
-      `select a.id, a.title, a.summary, a.status, a.content_type, a.source_domain, a.external_url,
+      `select a.id, a.title, a.summary, a.body, a.status, a.content_type, a.source_domain, a.external_url,
               a.fact_verification_status, a.generated_at, a.published_at, a.rejected_reason, a.withdrawn_reason,
               o.name as platform_name, o.slug as platform_slug
        from articles a
@@ -280,6 +280,20 @@ router.get('/articles', async (req, res, next) => {
       params,
     );
     res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/articles/:id(\\d+)/approve', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      "select id from articles where id = $1 and origin = 'ecosystem_ai_generated' and status in ('draft', 'pending_review')",
+      [req.params.id],
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Only a generated draft can be approved.' });
+    const item = await publishStory(req.params.id);
+    res.json({ item });
   } catch (err) {
     next(err);
   }
