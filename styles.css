@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap');
+
 :root {
   --ink: #0d0f0c;
   --paper: #f7f5f0;
@@ -14,7 +16,10 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--paper); color: var(--ink); font-family: "Outfit", sans-serif; -webkit-font-smoothing: antialiased; }
+body { background: var(--paper); color: var(--ink); font-family:"EB Garamond",Garamond,"Times New Roman",serif; font-size:18px; line-height:1.55; -webkit-font-smoothing: antialiased; }
+h1,h2 { font-family:Poppins,Arial,sans-serif !important; }
+p,li,blockquote { font-family:"EB Garamond",Garamond,"Times New Roman",serif; font-size:18px; line-height:1.65; }
+main p,.site-footer p { font-family:"EB Garamond",Garamond,"Times New Roman",serif !important; font-size:19px !important; line-height:1.65 !important; }
 a { color: inherit; text-decoration: none; }
 input[name="cattab"], .toggle-input { display: none; }
 
