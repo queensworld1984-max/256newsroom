@@ -39,7 +39,8 @@ router.get('/publisher/:slug', async (req, res, next) => {
     const { rows } = await pool.query(
       `select id, name, slug, short_path, org_type, description, biography, logo_url, website_url,
               verification_status, is_official, active, tagline, headquarters,
-              areas_of_practice, years_in_journalism, founded_year, created_at
+              areas_of_practice, years_in_journalism, founded_year, created_at,
+              coalesce(nullif(profile_theme, ''), 'gold') as profile_theme
        from organizations where slug = $1 or lower(short_path) = lower($1)`,
       [req.params.slug],
     );
@@ -47,6 +48,10 @@ router.get('/publisher/:slug', async (req, res, next) => {
     if (!org || !org.active) {
       return res.status(404).type('html').send('<!doctype html><title>Publisher not found</title><h1>Publisher not found</h1><p><a href="/">256 Newsroom</a></p>');
     }
+    const allowedThemes = new Set(['gold', 'mono', 'crimson', 'forest', 'slate']);
+    const theme = allowedThemes.has(String(org.profile_theme || '').toLowerCase())
+      ? String(org.profile_theme).toLowerCase()
+      : 'gold';
 
     const [
       { rows: followerRows },
@@ -156,12 +161,12 @@ router.get('/publisher/:slug', async (req, res, next) => {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(org.name)} · Publisher · 256 Newsroom</title>
 <meta name="description" content="${escapeHtml(bio || org.tagline || `${org.name} on 256 Newsroom`)}">
-<link rel="stylesheet" href="/story.css?v=20260722-lux-profile">
-<link rel="stylesheet" href="/engagement.css?v=20260722-lux-profile">
+<link rel="stylesheet" href="/story.css?v=20260722-pub-themes">
+<link rel="stylesheet" href="/engagement.css?v=20260722-pub-themes">
 </head>
-<body class="publisher-page lux-profile">
+<body class="publisher-page lux-profile theme-${theme}">
 <header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a></header>
-<main class="publisher-shell lux-shell" data-publisher-org-id="${org.id}" data-publisher-slug="${escapeHtml(org.slug)}" data-publisher-profile="1">
+<main class="publisher-shell lux-shell" data-publisher-org-id="${org.id}" data-publisher-slug="${escapeHtml(org.slug)}" data-publisher-profile="1" data-profile-theme="${theme}">
   <nav class="crumbs lux-crumbs"><a href="/">Home</a> <span aria-hidden="true">·</span> <span>Publisher house</span></nav>
 
   <section class="lux-hero">
@@ -260,7 +265,7 @@ router.get('/publisher/:slug', async (req, res, next) => {
   </div>
 </main>
 <footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a><p>Registered publishers on 256 Newsroom.</p></footer>
-<script src="/engagement.js?v=20260722-lux-profile" defer></script>
+<script src="/engagement.js?v=20260722-pub-themes" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);

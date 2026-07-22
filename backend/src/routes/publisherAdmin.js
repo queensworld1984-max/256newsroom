@@ -93,7 +93,9 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
       yearsInJournalism: 'years_in_journalism',
       foundedYear: 'founded_year',
       areasOfPractice: 'areas_of_practice',
+      profileTheme: 'profile_theme',
     };
+    const PROFILE_THEMES = new Set(['gold', 'mono', 'crimson', 'forest', 'slate']);
     for (const [key, column] of Object.entries(allowed)) {
       if (fields[key] !== undefined) {
         sets.push(`${column} = $${i}`);
@@ -106,6 +108,14 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
         }
         if (key === 'yearsInJournalism' || key === 'foundedYear') {
           val = val === '' || val == null ? null : Number(val);
+        }
+        if (key === 'profileTheme') {
+          val = String(val || 'gold').toLowerCase().trim();
+          if (!PROFILE_THEMES.has(val)) {
+            return res.status(400).json({
+              error: 'Invalid profile theme. Choose gold, mono, crimson, forest, or slate.',
+            });
+          }
         }
         values.push(val);
         i += 1;

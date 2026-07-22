@@ -129,6 +129,28 @@ export async function render(container, ctx) {
         <input name="tagline" maxlength="200" value="${escapeHtml(org.tagline || '')}"
           placeholder="Short line under your name" ${ctx.isEditor ? '' : 'disabled'}>
       </label>
+      <fieldset class="full theme-picker" ${ctx.isEditor ? '' : 'disabled'}>
+        <legend>Public profile colour theme</legend>
+        <p style="margin:0 0 10px;color:var(--grey);font-size:12.5px;font-weight:400;text-transform:none;letter-spacing:0;font-family:inherit;">
+          Choose a calm, high-contrast look for your full public profile page.
+        </p>
+        <div class="theme-picker-grid">
+          ${[
+    { id: 'gold', label: 'Gold', hint: 'Ink & gold (default)' },
+    { id: 'mono', label: 'Black & white', hint: 'Minimal mono' },
+    { id: 'crimson', label: 'Crimson', hint: 'Red on light cream' },
+    { id: 'forest', label: 'Forest', hint: 'Deep green' },
+    { id: 'slate', label: 'Slate', hint: 'Blue-grey calm' },
+  ].map((t) => {
+    const checked = (org.profile_theme || 'gold') === t.id ? 'checked' : '';
+    return `<label class="theme-option theme-option-${t.id}">
+            <input type="radio" name="profileTheme" value="${t.id}" ${checked} ${ctx.isEditor ? '' : 'disabled'}>
+            <span class="theme-swatch" aria-hidden="true"></span>
+            <span class="theme-option-text"><strong>${t.label}</strong><small>${t.hint}</small></span>
+          </label>`;
+  }).join('')}
+        </div>
+      </fieldset>
     `;
 
     const msg = el('p', { class: 'full', style: 'margin:8px 0 0;font-size:13px;' });
@@ -146,6 +168,7 @@ export async function render(container, ctx) {
         const body = {
           tagline: raw.tagline ?? '',
           shortPath: (raw.shortPath || '').trim() || null,
+          profileTheme: raw.profileTheme || 'gold',
         };
         // Send name when field is not locked by cooldown.
         if (canRename && raw.name) {
