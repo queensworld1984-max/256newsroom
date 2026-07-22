@@ -18,8 +18,10 @@ const {
   absoluteStoragePath,
   newPublicId,
 } = require('../mediaStorage');
+const { enqueueVideoCompression, ensureFfmpeg } = require('../mediaCompress');
 
 ensureUploadDirs();
+ensureFfmpeg().catch(() => {});
 
 const router = express.Router();
 
@@ -126,11 +128,16 @@ router.post(
       const fileUrl = fileUrlFor(publicId);
       const shareUrl = publicUrlFor(publicId, mediaType);
 
+      // Videos start as "processing" while ffmpeg compresses in the background.
+      // Images are ready immediately.
+      const processingStatus = mediaType === 'video' ? 'processing' : 'ready';
+
       const { rows } = await pool.query(
         `insert into media_assets
           (organization_id, owner_user_id, url, caption, credit, alt_text, added_by_user_id,
-           media_type, public_id, storage_path, mime_type, size_bytes, original_filename)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9::uuid,$10,$11,$12,$13)
+           media_type, public_id, storage_path, mime_type, size_bytes, original_filename,
+           processing_status, original_size_bytes)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9::uuid,$10,$11,$12,$13,$14,$12)
          returning *`,
         [
           organizationId,
@@ -146,16 +153,26 @@ router.post(
           storedMime,
           req.file.size,
           String(req.file.originalname || '').slice(0, 255) || null,
+          processingStatus,
         ],
       );
+
+      if (mediaType === 'video') {
+        enqueueVideoCompression(rows[0].id);
+      }
 
       res.status(201).json({
         item: rows[0],
         url: fileUrl,
         shareUrl,
         mediaType,
+        processingStatus,
+        compressing: mediaType === 'video',
         // Convenience for story form: images go into imageUrl, videos into videoUrl
         storyField: mediaType === 'video' ? 'videoUrl' : 'imageUrl',
+        message: mediaType === 'video'
+          ? 'Video received. Compressing for faster playback — this may take a minute.'
+          : 'Upload complete.',
       });
     } catch (err) {
       if (req.file?.path) fs.unlink(req.file.path, () => {});
@@ -163,6 +180,53 @@ router.post(
     }
   },
 );
+
+// Poll compression status (authenticated owner / org member / admin)
+router.get('/status/:publicId', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `select id, public_id, media_type, processing_status, url, size_bytes,
+              original_size_bytes, compressed_size_bytes, compression_error,
+              mime_type, original_filename, owner_user_id, organization_id, compressed_at
+       from media_assets where public_id = $1`,
+      [req.params.publicId],
+    );
+    const asset = rows[0];
+    if (!asset) return res.status(404).json({ error: 'Media not found.' });
+
+    const isOwner = Number(asset.owner_user_id) === Number(req.user.id);
+    const isAdmin = req.user.roles.some((r) => ['super_admin', 'newsroom_admin'].includes(r.key));
+    const isOrgMember = asset.organization_id
+      && req.user.roles.some((r) => Number(r.organizationId) === Number(asset.organization_id));
+    if (!isOwner && !isAdmin && !isOrgMember) {
+      return res.status(403).json({ error: 'Forbidden.' });
+    }
+
+    const original = Number(asset.original_size_bytes || asset.size_bytes || 0);
+    const compressed = Number(asset.compressed_size_bytes || 0);
+    const ratio = original && compressed
+      ? Math.round((compressed / original) * 100)
+      : null;
+
+    res.json({
+      publicId: asset.public_id,
+      mediaType: asset.media_type,
+      processingStatus: asset.processing_status,
+      ready: asset.processing_status === 'ready' || asset.processing_status === 'skipped',
+      failed: asset.processing_status === 'failed',
+      url: asset.url,
+      shareUrl: publicUrlFor(asset.public_id, asset.media_type),
+      sizeBytes: asset.size_bytes,
+      originalSizeBytes: asset.original_size_bytes,
+      compressedSizeBytes: asset.compressed_size_bytes,
+      compressionRatioPercent: ratio,
+      compressionError: asset.compression_error,
+      compressedAt: asset.compressed_at,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/mine', requireAuth, async (req, res, next) => {
   try {

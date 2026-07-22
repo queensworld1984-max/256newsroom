@@ -72,7 +72,7 @@ export async function render(container, ctx, { id }) {
     <label class="full">Image caption <input name="imageCaption" maxlength="300" value="${escapeHtml(story?.image_caption || '')}"></label>
     <div class="full story-media-block" data-media-slot="video">
       <div class="story-media-label">Story video</div>
-      <p class="story-media-hint">Attach a video from your device. Creates a shareable watch URL (like YouTube). MP4/WebM/MOV, large files up to 2&nbsp;GB.</p>
+      <p class="story-media-hint">Attach a video from your device (up to 2&nbsp;GB). The server compresses it for faster playback, then creates a shareable watch URL.</p>
       <div class="device-attach-host" data-kind="video"></div>
       <label class="story-url-fallback">Or video URL <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…"></label>
     </div>

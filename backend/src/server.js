@@ -33,6 +33,13 @@ const app = express();
 const port = Number(process.env.PORT || 5066);
 
 ensureUploadDirs();
+// Log ffmpeg availability at boot (video compression feature).
+try {
+  const { ensureFfmpeg } = require('./mediaCompress');
+  ensureFfmpeg().catch(() => {});
+} catch {
+  // mediaCompress optional during partial deploys
+}
 
 app.set('trust proxy', true);
 app.use(helmet({ contentSecurityPolicy: false }));
