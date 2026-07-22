@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const Parser = require('rss-parser');
+const cheerio = require('cheerio');
+const puppeteer = require('puppeteer-core');
 const pool = require('../src/db');
 
 const FEED_USER_AGENT = '256NewsroomBot/1.0 (+https://256newsroom.com)';
@@ -43,7 +45,7 @@ const categoryKeywords = [
   ['sports', ['cranes', 'football', 'sport', 'league', 'kcca fc', 'netball', 'marathon', 'fufa']],
   ['health', ['health', 'hospital', 'malaria', 'doctor', 'clinic', 'medicine']],
   ['education', ['school', 'education', 'university', 'student', 'makerere']],
-  ['technology', ['technology', 'digital', 'cyber', 'artificial intelligence', 'software']],
+  ['consumer-technology', ['technology', 'digital', 'cyber', 'artificial intelligence', 'software']],
 ];
 
 const ecosystemKeywords = [
@@ -143,7 +145,7 @@ function classify(title, summary, url = '', itemCategories = [], source = {}) {
   if (/\/(politics|elections?)\//.test(urlText) || /\b(politics|elections?)\b/.test(categoryText)) return 'politics';
   if (/\/(health|medical)\//.test(urlText) || /\bhealth\b/.test(categoryText)) return 'health';
   if (/\/education\//.test(urlText) || /\beducation\b/.test(categoryText)) return 'education';
-  if (/\/(technology|tech)\//.test(urlText) || /\b(technology|tech)\b/.test(categoryText)) return 'technology';
+  if (/\/(technology|tech)\//.test(urlText) || /\b(technology|tech)\b/.test(categoryText)) return 'consumer-technology';
   if (/\/(world|international|africa|east-africa)\//.test(urlText) || /\b(world|international|africa|east africa)\b/.test(categoryText)) return 'world';
 
   for (const [slug, keywords] of categoryKeywords) {
@@ -169,13 +171,165 @@ function scoreArticle(item) {
 }
 
 function imageFromItem(item) {
-  if (item.enclosure && item.enclosure.url) return item.enclosure.url;
-  if (item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url) return item.mediaContent.$.url;
-  if (item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url) return item.mediaThumbnail.$.url;
-  if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) return item['media:content'].$.url;
+  const baseUrl = item.link || item.guid;
+  if (item.enclosure && likelyStoryImage(item.enclosure.url)) return normalizeImageUrl(item.enclosure.url, baseUrl);
+  if (item.mediaContent && item.mediaContent.$ && likelyStoryImage(item.mediaContent.$.url)) return normalizeImageUrl(item.mediaContent.$.url, baseUrl);
+  if (item.mediaThumbnail && item.mediaThumbnail.$ && likelyStoryImage(item.mediaThumbnail.$.url)) return normalizeImageUrl(item.mediaThumbnail.$.url, baseUrl);
+  if (item['media:content'] && item['media:content'].$ && likelyStoryImage(item['media:content'].$.url)) return normalizeImageUrl(item['media:content'].$.url, baseUrl);
   const html = item.contentEncoded || item['content:encoded'] || item.content || '';
   const match = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-  return match ? match[1] : null;
+  return match && likelyStoryImage(match[1]) ? normalizeImageUrl(match[1], baseUrl) : null;
+}
+
+function likelyStoryImage(value) {
+  const url = String(value || '').toLowerCase();
+  return Boolean(url)
+    && !/(ajax-loader|spinner|tracking|pixel|spacer|favicon|\/logo[._/-]|avatar|gravatar)/.test(url)
+    && !url.includes('j6_cofbogxhri9im864nl_ligxvsqp2aupskei7z0cnnfdvgumwuy20nuuhkreqyrpy4beeibuc')
+    && !/\.svg(?:\?|$)/.test(url);
+}
+
+function normalizeImageUrl(value, baseUrl) {
+  if (!value) return null;
+  const cleaned = String(value).replace(/&amp;/g, '&').trim();
+  try {
+    const resolved = new URL(cleaned, baseUrl).toString();
+    return /^https?:\/\//i.test(resolved) ? resolved : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPublicArticleUrl(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    if (host === 'localhost' || host === '::1' || host.endsWith('.local')) return false;
+    if (/^(127\.|10\.|169\.254\.|192\.168\.)/.test(host)) return false;
+    const match = host.match(/^172\.(\d+)\./);
+    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function imageFromArticlePage(articleUrl) {
+  if (!isPublicArticleUrl(articleUrl)) return { imageUrl: null, finalUrl: null };
+  try {
+    const res = await fetch(articleUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; 256NewsroomBot/1.0; +https://256newsroom.com)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok || !String(res.headers.get('content-type') || '').includes('text/html')) return { imageUrl: null, finalUrl: null };
+    if (Number(res.headers.get('content-length') || 0) > 5_000_000) return { imageUrl: null, finalUrl: res.url || null };
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const candidate = $('meta[property="og:image:secure_url"]').attr('content')
+      || $('meta[property="og:image"]').attr('content')
+      || $('meta[name="twitter:image"]').attr('content')
+      || $('link[rel="image_src"]').attr('href')
+      || $('article img').first().attr('src');
+    if (!candidate || !likelyStoryImage(candidate)) return { imageUrl: null, finalUrl: res.url || null };
+    const resolved = new URL(candidate, res.url || articleUrl).toString();
+    return {
+      imageUrl: isPublicArticleUrl(resolved) ? normalizeImageUrl(resolved) : null,
+      finalUrl: isPublicArticleUrl(res.url) ? res.url : null,
+    };
+  } catch {
+    return { imageUrl: null, finalUrl: null };
+  }
+}
+
+async function enrichMissingImages(items, maxLookups = 30, concurrency = 5) {
+  const queue = items.filter((item) => !item.imageUrl && item.url).slice(0, maxLookups);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < queue.length) {
+      const item = queue[cursor++];
+      const metadata = await imageFromArticlePage(item.url);
+      item.imageUrl = metadata.imageUrl;
+      if (metadata.finalUrl && !new URL(metadata.finalUrl).hostname.endsWith('google.com')) item.originalUrl = metadata.finalUrl;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));
+  return items;
+}
+
+async function backfillMissingArticleImages(limit = 100) {
+  const { rows } = await pool.query(`
+    select id, url from articles
+    where image_url is null and hidden = false and status = 'published' and url is not null
+    order by published_at desc nulls last
+    limit $1
+  `, [limit]);
+  const candidates = rows.map((row) => ({ ...row, imageUrl: null }));
+  await enrichMissingImages(candidates, limit, 5);
+  let updated = 0;
+  for (const item of candidates) {
+    if (!item.imageUrl && !item.originalUrl) continue;
+    await pool.query(`update articles set image_url = coalesce($2, image_url), original_url = coalesce($3, original_url), updated_at = now()
+      where id = $1`, [item.id, item.imageUrl, item.originalUrl || null]);
+    updated += 1;
+  }
+  return { checked: rows.length, updated };
+}
+
+async function backfillGoogleOriginalUrls(limit = 20, concurrency = 5) {
+  const { rows } = await pool.query(`
+    select id, original_url from articles
+    where original_url like 'https://news.google.com/%' and hidden = false and status = 'published'
+    order by published_at desc nulls last limit $1
+  `, [limit]);
+  let cursor = 0;
+  let updated = 0;
+  const unresolved = [];
+  async function worker() {
+    while (cursor < rows.length) {
+      const row = rows[cursor++];
+      try {
+        const res = await fetch(row.original_url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; 256NewsroomBot/1.0; +https://256newsroom.com)' },
+          signal: AbortSignal.timeout(10000),
+        });
+        const finalUrl = res.url;
+        if (!isPublicArticleUrl(finalUrl) || new URL(finalUrl).hostname.endsWith('google.com')) {
+          unresolved.push(row);
+          continue;
+        }
+        await pool.query('update articles set original_url = $2, updated_at = now() where id = $1', [row.id, finalUrl]);
+        updated += 1;
+      } catch { unresolved.push(row); }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, worker));
+
+  if (unresolved.length) {
+    const browser = await puppeteer.launch({
+      executablePath: process.env.CHROME_EXECUTABLE_PATH || '/usr/bin/google-chrome',
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    try {
+      const page = await browser.newPage();
+      for (const row of unresolved.slice(0, 20)) {
+        try {
+          await page.goto(row.original_url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+          const finalUrl = page.url();
+          if (!isPublicArticleUrl(finalUrl) || new URL(finalUrl).hostname.endsWith('google.com')) continue;
+          await pool.query('update articles set original_url = $2, updated_at = now() where id = $1', [row.id, finalUrl]);
+          updated += 1;
+        } catch { /* Keep the Google redirect if browser resolution fails. */ }
+      }
+    } finally {
+      await browser.close();
+    }
+  }
+  return { checked: rows.length, updated };
 }
 
 async function idFor(table, slug) {
@@ -209,9 +363,15 @@ async function crawlSource(source) {
     );
     logId = log.rows[0].id;
     const feed = await fetchAndParseFeed(source.feed_url);
+    const feedItems = feed.items || [];
+    const imageCandidates = feedItems.map((item) => ({
+      url: item.link || item.guid,
+      imageUrl: imageFromItem(item),
+    }));
+    await enrichMissingImages(imageCandidates, 20, 5);
     let inserted = 0;
 
-    for (const item of feed.items || []) {
+    for (const [itemIndex, item] of feedItems.entries()) {
       const title = cleanText(item.title);
       const url = item.link || item.guid;
       if (!title || !url) continue;
@@ -227,27 +387,30 @@ async function crawlSource(source) {
 
       const result = await pool.query(`
         insert into articles
-          (source_id, cluster_id, category_id, district_id, title, summary, url, image_url, author, published_at, score)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          (source_id, cluster_id, category_id, district_id, title, summary, url, original_url, image_url, author, published_at, score)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         on conflict (url) do update set
           title = excluded.title,
           summary = excluded.summary,
+          original_url = coalesce(excluded.original_url, articles.original_url),
           image_url = coalesce(excluded.image_url, articles.image_url),
           category_id = excluded.category_id,
           district_id = excluded.district_id,
           score = greatest(articles.score, excluded.score),
           updated_at = now()
+        where lower(regexp_replace(articles.title, '[^a-z0-9]+', '', 'g')) =
+              lower(regexp_replace(excluded.title, '[^a-z0-9]+', '', 'g'))
         returning (xmax = 0) as inserted
-      `, [source.id, clusterId, categoryId, districtId, title, summary, url, imageFromItem(item), item.creator || item.author || null, publishedAt, score]);
+      `, [source.id, clusterId, categoryId, districtId, title, summary, url, url, imageCandidates[itemIndex].imageUrl, item.creator || item.author || null, publishedAt, score]);
 
       if (result.rows[0] && result.rows[0].inserted) inserted += 1;
     }
 
     await pool.query(
       'update crawl_logs set status = $1, items_found = $2, items_inserted = $3, finished_at = now() where id = $4',
-      ['success', (feed.items || []).length, inserted, logId],
+      ['success', feedItems.length, inserted, logId],
     );
-    return { source: source.name, status: 'success', found: (feed.items || []).length, inserted };
+    return { source: source.name, status: 'success', found: feedItems.length, inserted };
   } catch (err) {
     if (logId) {
       await pool.query('update crawl_logs set status = $1, error = $2, finished_at = now() where id = $3', ['error', err.message, logId]);
@@ -261,11 +424,22 @@ const NEWSAPI_CATEGORIES = [
   ['general', 'world'],
   ['health', 'health'],
   ['sports', 'sports'],
-  ['technology', 'technology'],
+  ['technology', 'consumer-technology'],
 ];
 
 async function upsertAggregatedSource(name, homepageUrl, defaultCategoryId, sourceType) {
   const slug = slugify(name).slice(0, 60) || crypto.createHash('sha1').update(name).digest('hex').slice(0, 12);
+  const existing = await pool.query(
+    'select id from sources where slug = $1 or lower(name) = lower($2) order by (slug = $1) desc limit 1',
+    [slug, name.slice(0, 120)],
+  );
+  if (existing.rows[0]) {
+    await pool.query(
+      'update sources set homepage_url = coalesce(homepage_url, $2) where id = $1',
+      [existing.rows[0].id, homepageUrl],
+    );
+    return existing.rows[0].id;
+  }
   const { rows } = await pool.query(`
     insert into sources (name, slug, homepage_url, feed_url, source_type, default_category_id, active, approved)
     values ($1, $2, $3, null, $4, $5, true, true)
@@ -287,6 +461,7 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
   let inserted = 0;
 
   try {
+    await enrichMissingImages(items);
     for (const item of items) {
       const title = cleanText(item.title);
       const url = item.url;
@@ -306,18 +481,21 @@ async function ingestAggregatedArticles(label, items, defaultCategorySlug, sourc
 
       const result = await pool.query(`
         insert into articles
-          (source_id, cluster_id, category_id, district_id, title, summary, url, image_url, author, published_at, score)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          (source_id, cluster_id, category_id, district_id, title, summary, url, original_url, image_url, author, published_at, score)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         on conflict (url) do update set
           title = excluded.title,
           summary = excluded.summary,
+          original_url = coalesce(excluded.original_url, articles.original_url),
           image_url = coalesce(excluded.image_url, articles.image_url),
           category_id = excluded.category_id,
           district_id = excluded.district_id,
           score = greatest(articles.score, excluded.score),
           updated_at = now()
+        where lower(regexp_replace(articles.title, '[^a-z0-9]+', '', 'g')) =
+              lower(regexp_replace(excluded.title, '[^a-z0-9]+', '', 'g'))
         returning (xmax = 0) as inserted
-      `, [sourceId, clusterId, categoryId, districtId, title, summary, url, item.imageUrl || null, item.author || null, publishedAt, score]);
+      `, [sourceId, clusterId, categoryId, districtId, title, summary, url, item.originalUrl || url, item.imageUrl || null, item.author || null, publishedAt, score]);
 
       if (result.rows[0] && result.rows[0].inserted) inserted += 1;
     }
@@ -387,7 +565,7 @@ async function crawlNewsApiSources() {
 
 const GOOGLE_NEWS_TOPICS = [
   ['business', 'business'],
-  ['technology', 'technology'],
+  ['technology', 'consumer-technology'],
   ['sports', 'sports'],
   ['health', 'health'],
   ['world', 'world'],
@@ -463,4 +641,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics };
+module.exports = { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics, backfillMissingArticleImages, backfillGoogleOriginalUrls };

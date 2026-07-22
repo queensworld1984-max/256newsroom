@@ -1,7 +1,11 @@
 const API = '/api';
+const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
-let trendingRotationTimer = null;
+let heroStories = [];
+let heroStoryIndex = 0;
 let carouselRotationTimer = null;
+let headlineRefreshTimer = null;
+const storyIndex = new Map();
 
 const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value) {
@@ -39,6 +43,61 @@ function sourceBadges(item) {
   return badges.join(' ');
 }
 
+function rememberStories(items = []) {
+  items.forEach((item) => {
+    if (item?.id != null) storyIndex.set(String(item.id), item);
+  });
+}
+
+function storyAttributes(item) {
+  return `class="story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item?.id || '')}" data-category="${escapeHtml(item?.category?.slug || '')}" data-district="${escapeHtml(item?.district?.slug || '')}"`;
+}
+
+function setupStoryNavigation() {
+  document.addEventListener('click', (event) => {
+    const target = event.target.closest('.story-clickable, [data-open-story]');
+    if (!target?.dataset.storyId) return;
+    const item = storyIndex.get(String(target.dataset.storyId));
+    if (!item?.internalUrl) return;
+    event.preventDefault();
+    window.location.href = item.internalUrl;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    const target = event.target.closest('.story-clickable');
+    if (!target?.dataset.storyId) return;
+    const item = storyIndex.get(String(target.dataset.storyId));
+    if (!item?.internalUrl) return;
+    event.preventDefault();
+    window.location.href = item.internalUrl;
+  });
+}
+
+function setupSearch() {
+  const form = document.getElementById('site-search-form');
+  const input = document.getElementById('site-search-input');
+  const results = document.getElementById('site-search-results');
+  if (!form || !input || !results) return;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const q = input.value.trim();
+    if (q.length < 2) return;
+    results.hidden = false;
+    results.innerHTML = '<p>Searching…</p>';
+    try {
+      const data = await getJson(`/search?q=${encodeURIComponent(q)}`);
+      const people = (data.journalists || []).map((j) => `<a class="search-person" href="${safeHref(j.profile_url)}"><b>${escapeHtml(j.name)}</b><span>${escapeHtml(j.beat || 'Journalist')}</span></a>`).join('');
+      const stories = (data.stories || []).map((s) => `<a class="search-story" href="${safeHref(s.internalUrl)}"><b>${escapeHtml(s.title)}</b><span>${escapeHtml(s.source?.name || '')} · ${escapeHtml(s.category?.name || 'News')}</span></a>`).join('');
+      results.innerHTML = `${people ? `<h3>Journalists</h3>${people}` : ''}${stories ? `<h3>News</h3>${stories}` : ''}${!people && !stories ? '<p>No matching news or journalists found.</p>' : ''}`;
+    } catch (_) { results.innerHTML = '<p>Search is temporarily unavailable.</p>'; }
+  });
+  const initialQuery = new URLSearchParams(window.location.search).get('search');
+  if (initialQuery) {
+    input.value = initialQuery;
+    window.requestAnimationFrame(() => form.requestSubmit());
+  }
+}
+
 function imageClass(item) {
   return item.district?.slug || item.category?.slug || 'trade';
 }
@@ -47,7 +106,110 @@ function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
   if (!/^https?:\/\//i.test(raw)) return '';
   const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
-  return ` style="background-image:linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${cssSafe}'); background-size:cover; background-position:center;"`;
+  return ` data-bg-image="${cssSafe}"`;
+}
+
+function loadBackgroundImage(element) {
+  const url = element?.dataset.bgImage;
+  if (!url) return;
+  delete element.dataset.bgImage;
+  const paint = (imageUrl) => {
+    const safeUrl = String(imageUrl).replace(/\\/g, '%5C').replace(/'/g, '%27');
+    element.style.backgroundImage = `linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${safeUrl}')`;
+    element.style.backgroundSize = 'cover';
+    element.style.backgroundPosition = 'center';
+  };
+  const image = new Image();
+  image.onload = () => paint(url);
+  image.onerror = () => {
+    element.style.removeProperty('background-image');
+    element.classList.add('image-unavailable');
+  };
+  image.src = url;
+}
+
+let backgroundImageObserver = null;
+
+function loadVisibleImages() {
+  const images = document.querySelectorAll('[data-bg-image]');
+  if (!('IntersectionObserver' in window)) {
+    images.forEach(loadBackgroundImage);
+    return;
+  }
+  backgroundImageObserver ||= new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      loadBackgroundImage(entry.target);
+      backgroundImageObserver.unobserve(entry.target);
+    });
+  }, { rootMargin: '300px 0px' });
+  images.forEach((image) => backgroundImageObserver.observe(image));
+}
+
+function readReaderProfile() {
+  try {
+    return JSON.parse(localStorage.getItem(READER_PROFILE_KEY)) || { categories: {}, districts: {}, terms: [] };
+  } catch (_) {
+    return { categories: {}, districts: {}, terms: [] };
+  }
+}
+
+function saveReaderInterest(item) {
+  const profile = readReaderProfile();
+  profile.categories ||= {};
+  profile.districts ||= {};
+  if (item?.category?.slug) profile.categories[item.category.slug] = (profile.categories[item.category.slug] || 0) + 1;
+  if (item?.district?.slug) profile.districts[item.district.slug] = (profile.districts[item.district.slug] || 0) + 2;
+  localStorage.setItem(READER_PROFILE_KEY, JSON.stringify(profile));
+}
+
+function personalizeItems(items = [], profile = readReaderProfile()) {
+  return items.map((item, index) => {
+    const categoryScore = Number(profile.categories?.[item.category?.slug] || 0) * 3;
+    const districtScore = Number(profile.districts?.[item.district?.slug] || 0) * 5;
+    const locationScore = profile.locationDistrict && item.district?.slug === profile.locationDistrict ? 100 : 0;
+    const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+    const termScore = (profile.terms || []).reduce((score, term) => score + (text.includes(String(term).toLowerCase()) ? 4 : 0), 0);
+    return { item, index, score: categoryScore + districtScore + locationScore + termScore };
+  }).sort((a, b) => b.score - a.score || a.index - b.index).map(({ item }) => item);
+}
+
+function setupInterestTracking() {
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('[data-story-id]');
+    if (!link) return;
+    saveReaderInterest({
+      category: link.dataset.category ? { slug: link.dataset.category } : null,
+      district: link.dataset.district ? { slug: link.dataset.district } : null,
+    });
+  });
+}
+
+const districtCentres = [
+  ['kampala', 0.3476, 32.5825], ['wakiso', 0.4044, 32.4594], ['mukono', 0.3533, 32.7553],
+  ['jinja', 0.4479, 33.2026], ['mbale', 1.0806, 34.1750], ['gulu', 2.7724, 32.2881],
+  ['mbarara', -0.6072, 30.6545], ['fort-portal', 0.6710, 30.2750], ['masaka', -0.3338, 31.7341],
+  ['arua', 3.0303, 30.9107], ['lira', 2.2499, 32.8998], ['soroti', 1.7146, 33.6111],
+  ['kabale', -1.2417, 29.9856], ['hoima', 1.4331, 31.3524], ['moroto', 2.5345, 34.6666],
+];
+
+function nearestDistrict(latitude, longitude) {
+  return districtCentres.reduce((nearest, district) => {
+    const distance = ((latitude - district[1]) ** 2) + ((longitude - district[2]) ** 2);
+    return !nearest || distance < nearest.distance ? { slug: district[0], distance } : nearest;
+  }, null)?.slug || null;
+}
+
+function resolveReaderProfile() {
+  const profile = readReaderProfile();
+  if (profile.locationDistrict || !navigator.geolocation) return Promise.resolve(profile);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(({ coords }) => {
+      profile.locationDistrict = nearestDistrict(coords.latitude, coords.longitude);
+      localStorage.setItem(READER_PROFILE_KEY, JSON.stringify(profile));
+      resolve(profile);
+    }, () => resolve(profile), { enableHighAccuracy: false, timeout: 3000, maximumAge: 86400000 });
+  });
 }
 
 function rotatedWindow(items = [], start = 0, size = 4) {
@@ -69,6 +231,34 @@ async function getJson(path) {
   return response.json();
 }
 
+async function safeJson(path) {
+  try { return await getJson(path); } catch (error) {
+    console.warn(`Live data unavailable for ${path}:`, error.message);
+    return { items: [] };
+  }
+}
+
+function initializeLiveMounts() {
+  const skeleton = (className, count) => Array.from({ length: count }, () => `<article class="${className} loading-card" aria-label="Loading current live coverage"><div class="loading-media"></div><div class="loading-line wide"></div><div class="loading-line"></div></article>`).join('');
+  document.querySelectorAll('#panel-home .trending-row.in-column').forEach((mount) => { mount.innerHTML = skeleton('cluster-card', 6); });
+  document.querySelectorAll('#panel-home .card-grid').forEach((mount) => { mount.innerHTML = skeleton('grid-card', 6); });
+  document.querySelectorAll('#panel-home .story-list').forEach((mount) => { mount.innerHTML = skeleton('story-card', 2); });
+  document.querySelectorAll('#panel-home .social-scroll').forEach((mount) => { mount.innerHTML = skeleton('social-card', 6); });
+  document.querySelectorAll('#panel-home .district-scroll').forEach((mount) => { mount.innerHTML = skeleton('district-card', 6); });
+  document.querySelectorAll('#panel-home .journalist-scroll').forEach((mount) => { mount.innerHTML = skeleton('journalist-card', 4); });
+  document.querySelectorAll('#panel-home .district-feature-list').forEach((mount) => { mount.innerHTML = skeleton('district-feature-loading', 4); });
+  const citizen = document.querySelector('.citizens-scroll');
+  if (citizen) citizen.innerHTML = '<label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label><article class="empty-card"><h3>Loading current community coverage…</h3></article>';
+  const ecosystem = document.querySelector('.eco-teaser-box');
+  if (ecosystem) ecosystem.innerHTML = '<div class="sidebar-title">256 AI Systems</div><p class="eco-empty">Loading verified platform information…</p>';
+  const hero = document.querySelector('.hero');
+  if (hero) {
+    hero.querySelector('.hero-headline').textContent = 'Loading the current top story…';
+    hero.querySelector('.hero-excerpt').textContent = 'Fetching the latest verified coverage from monitored sources.';
+    hero.querySelector('.hero-img')?.removeAttribute('style');
+  }
+}
+
 function setMastheadDate() {
   const dateEl = document.getElementById('masthead-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -76,7 +266,7 @@ function setMastheadDate() {
 
 function setMastheadStatus(sourceCount) {
   const statusEl = document.getElementById('masthead-status');
-  if (statusEl) statusEl.textContent = `${sourceCount} sources monitored · live`;
+  if (statusEl) statusEl.innerHTML = `<span class="live-pulse"></span><strong>Uganda's News, As It Happens</strong><small>${sourceCount} trusted sources monitored live</small>`;
 }
 
 function setTicker(items) {
@@ -87,31 +277,46 @@ function setTicker(items) {
     return;
   }
   mount.innerHTML = items.slice(0, 6).map((item, index) => `
-    <span>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</span>
+    <a href="${safeHref(item.internalUrl)}" ${storyAttributes(item)}>${index === 0 ? '<b>BREAKING -</b> ' : ''}${escapeHtml(item.title)}</a>
   `).join('');
 }
 
 function setTopSources(items) {
   const mount = document.querySelector('.top-sources');
   if (!mount || !items?.length) return;
-  mount.innerHTML = '<span class="ts-label">Top Sources Today</span>' + items.map((source, index) => `
+  const logoByName = {
+    'al jazeera': '/assets/logos/sources/al-jazeera.ico',
+    'nile post': '/assets/logos/sources/nile-post.png',
+    'bbc sport football': '/assets/logos/sources/bbc.png',
+    'bbc world news': '/assets/logos/sources/bbc.png',
+    'bbc': '/assets/logos/sources/bbc.png',
+    'yahoo sports': '/assets/logos/sources/yahoo.svg',
+    'the independent uganda': '/assets/logos/sources/independent-uganda.png',
+    'sky sports': '/assets/logos/sources/sky-sports.png',
+    'goal.com': '/assets/logos/sources/goal.png',
+  };
+  const sourceItems = items.map((source, index) => {
+    const logo = logoByName[String(source.name || '').toLowerCase()];
+    return `
     <div class="ts-item">
       <span class="ts-rank">${index + 1}</span>
-      <span class="ts-chip">${escapeHtml(sourceInitials(source.name))}</span>
+      ${logo ? `<span class="ts-logo"><img src="${logo}" alt="${escapeHtml(source.name)} logo"></span>` : `<span class="ts-chip">${escapeHtml(sourceInitials(source.name))}</span>`}
       <span class="ts-name">${escapeHtml(source.name)}</span>
       <span class="ts-stat">${Number(source.article_count || 0)} stories</span>
     </div>
-  `).join('');
+  `; }).join('');
+  const duration = Math.max(36, items.length * 5);
+  mount.innerHTML = `<span class="ts-label">Top Sources Today</span><div class="ts-viewport"><div class="ts-track" style="--source-duration:${duration}s"><div class="ts-group">${sourceItems}</div><div class="ts-group" aria-hidden="true">${sourceItems}</div></div></div>`;
 }
 
 function articleCard(item) {
   const initials = sourceInitials(item.source?.name);
   return `
-    <article class="grid-card">
+    <article class="grid-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="thumb ${imageClass(item)}"${imageStyle(item)}></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(initials)}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span> · ${formatTime(item.publishedAt)}</p>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `;
 }
@@ -125,30 +330,69 @@ function setHero(item) {
   const image = hero.querySelector('.hero-img');
   const cap = hero.querySelector('.hero-img span');
   const meta = hero.querySelector('.story-meta');
-  if (title) title.textContent = item.title;
-  if (excerpt) excerpt.textContent = item.summary || 'Latest developing story from monitored Ugandan news sources.';
-  if (image && item.imageUrl) image.setAttribute('style', imageStyle(item).replace(/^ style="/, '').replace(/"$/, ''));
-  if (image && !item.imageUrl) image.removeAttribute('style');
+  const eyebrow = hero.querySelector('.eyebrow');
+  hero.classList.add('story-clickable');
+  hero.setAttribute('role', 'link');
+  hero.setAttribute('tabindex', '0');
+  hero.dataset.storyId = item.id;
+  hero.dataset.category = item.category?.slug || '';
+  hero.dataset.district = item.district?.slug || '';
+  if (eyebrow) eyebrow.innerHTML = `<span class="dot"></span>Hot &amp; Trending · ${escapeHtml(item.district?.name || item.category?.name || 'News')}`;
+  if (title) title.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a>`;
+  if (excerpt) excerpt.innerHTML = `<a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.summary || 'Latest developing story from monitored Ugandan news sources.')}</a>`;
+  if (image && item.imageUrl) {
+    image.dataset.bgImage = String(item.imageUrl).replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+    loadBackgroundImage(image);
+  }
+  if (image && !item.imageUrl) {
+    image.removeAttribute('style');
+    delete image.dataset.bgImage;
+  }
   if (cap) cap.textContent = `${item.source?.name || '256 Newsroom'} · ${formatTime(item.publishedAt)}`;
   if (meta) {
     meta.innerHTML = `
       ${sourceBadges(item)}
       <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span>
       <span class="cluster-note">${item.source?.official ? 'Direct official source' : 'Live from approved source feed'}</span>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     `;
   }
+  const position = hero.querySelector('.hero-position');
+  if (position && heroStories.length) position.textContent = `${heroStoryIndex + 1} / ${heroStories.length}`;
+}
+
+function scheduleHeroRotation() {
+  if (heroRotationTimer) clearTimeout(heroRotationTimer);
+  if (heroStories.length < 2) return;
+  heroRotationTimer = setTimeout(() => showHeroStory(heroStoryIndex + 1), 12000);
+}
+
+function showHeroStory(index) {
+  if (!heroStories.length) return;
+  heroStoryIndex = (index + heroStories.length) % heroStories.length;
+  setHero(heroStories[heroStoryIndex]);
+  scheduleHeroRotation();
 }
 
 function startHeroRotation(items = []) {
-  const stories = items.filter(Boolean);
-  if (heroRotationTimer) clearInterval(heroRotationTimer);
-  if (stories.length < 2) return;
-  let index = 0;
-  heroRotationTimer = setInterval(() => {
-    index = (index + 1) % stories.length;
-    setHero(stories[index]);
-  }, 5000);
+  heroStories = items.filter(Boolean);
+  heroStoryIndex = 0;
+  if (heroRotationTimer) clearTimeout(heroRotationTimer);
+  const hero = document.querySelector('.hero');
+  if (!hero) return;
+  const move = (direction, event) => { event?.preventDefault(); event?.stopPropagation(); showHeroStory(heroStoryIndex + direction); };
+  hero.querySelector('.hero-prev')?.addEventListener('click', (event) => move(-1, event));
+  hero.querySelector('.hero-next')?.addEventListener('click', (event) => move(1, event));
+  let touchStartX = null;
+  hero.addEventListener('touchstart', (event) => { touchStartX = event.changedTouches[0]?.clientX ?? null; }, { passive: true });
+  hero.addEventListener('touchend', (event) => {
+    if (touchStartX == null) return;
+    const distance = (event.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+    touchStartX = null;
+    if (Math.abs(distance) >= 50) move(distance > 0 ? -1 : 1, event);
+  });
+  setHero(heroStories[0]);
+  scheduleHeroRotation();
 }
 
 function setCardGrid(heading, items) {
@@ -156,50 +400,88 @@ function setCardGrid(heading, items) {
   const section = sections.find((candidate) => candidate.querySelector('.section-header h2')?.textContent.trim() === heading);
   const mount = section?.querySelector('.card-grid');
   if (!mount) return;
+  mount.classList.add('auto-news-rail');
+  mount.setAttribute('aria-label', `${heading} — automatically advances every 10 seconds`);
   mount.innerHTML = items?.length
-    ? items.slice(0, 6).map(articleCard).join('')
+    ? items.map(articleCard).join('')
     : '<article class="grid-card empty-card"><h3>No current stories in this category yet</h3><p>Waiting for approved source feeds.</p></article>';
+  loadVisibleImages();
 }
 
 function setTrending(items) {
   const mount = document.querySelector('.trending-row.in-column');
   if (!mount || !items?.length) return;
-  mount.innerHTML = items.slice(0, 4).map((item) => `
-    <article class="cluster-card">
+  mount.innerHTML = items.slice(0, 6).map((item) => `
+    <article class="cluster-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="trend-thumb ${imageClass(item)}"${imageStyle(item)}></div>
-      <span class="cat-tag">${escapeHtml(item.category?.name || 'News')}</span>
+      <span class="cat-tag">${escapeHtml(item.trendingLabel || item.category?.name || 'News')}</span>
       <h3>${escapeHtml(item.title)}</h3>
       <div class="cmeta">${sourceBadges(item)}<span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></div>
       <div class="trend-tag">updated ${formatTime(item.publishedAt)}</div>
-      <a href="${safeHref(item.url)}" class="read-link" target="_blank" rel="noopener">Click to read</a>
+      <a href="${safeHref(item.internalUrl)}" class="read-link" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a>
     </article>
   `).join('');
+  loadVisibleImages();
 }
 
-function startTrendingRotation(items = []) {
-  const stories = items.filter(Boolean);
-  if (trendingRotationTimer) clearInterval(trendingRotationTimer);
-  if (stories.length <= 4) return;
-  let index = 0;
-  trendingRotationTimer = setInterval(() => {
-    index = (index + 4) % stories.length;
-    setTrending(rotatedWindow(stories, index, 4));
-  }, 60000);
+function trendingByTopic({ national = [], international = [], district = [], health = [], education = [], justice = [] }) {
+  const used = new Set();
+  return [
+    ['National', national],
+    ['International', international],
+    ['District', district],
+    ['Health', health],
+    ['Education', education],
+    ['Crime & Justice', justice],
+  ].flatMap(([trendingLabel, items]) => {
+    const item = items.find((candidate) => candidate?.id && !used.has(String(candidate.id)));
+    if (!item) return [];
+    used.add(String(item.id));
+    return [{ ...item, trendingLabel }];
+  });
 }
 
 function startCarouselRotation() {
   if (carouselRotationTimer) clearInterval(carouselRotationTimer);
-  const selectors = ['.card-grid', '.eco-grid', '.social-scroll', '.citizens-scroll', '.district-scroll', '.journalist-scroll'];
+  const selectors = ['.auto-news-rail'];
   carouselRotationTimer = setInterval(() => {
     document.querySelectorAll(selectors.join(',')).forEach((mount) => {
       if (mount.scrollWidth <= mount.clientWidth + 4) return;
+      if (mount.matches(':hover') || mount.contains(document.activeElement)) return;
       const first = mount.firstElementChild;
       const gap = Number.parseFloat(getComputedStyle(mount).columnGap || getComputedStyle(mount).gap || '0') || 0;
       const step = first ? first.getBoundingClientRect().width + gap : mount.clientWidth;
       const nearEnd = mount.scrollLeft + mount.clientWidth + step >= mount.scrollWidth;
       mount.scrollTo({ left: nearEnd ? 0 : mount.scrollLeft + step, behavior: 'smooth' });
     });
-  }, 60000);
+  }, 10000);
+}
+
+function startHeadlineRefresh() {
+  if (headlineRefreshTimer) clearInterval(headlineRefreshTimer);
+  headlineRefreshTimer = setInterval(async () => {
+    const [national, world, sports, district, health, education, justice] = await Promise.all([
+      safeJson('/news/category/national?limit=50'),
+      safeJson('/news/category/world?limit=50'),
+      safeJson('/news/category/sports?limit=50'),
+      safeJson('/news/districts/latest?limit=12'),
+      safeJson('/news/category/health?limit=12'),
+      safeJson('/news/category/education?limit=12'),
+      safeJson('/news/category/crime-justice?limit=12'),
+    ]);
+    const sections = [
+      ['National Headlines', national.items || []],
+      ['International News', world.items || []],
+      ['Sports News', sports.items || []],
+    ];
+    sections.forEach(([heading, items]) => {
+      rememberStories(items);
+      setCardGrid(heading, items);
+    });
+    const trending = trendingByTopic({ national:national.items, international:world.items, district:district.items, health:health.items, education:education.items, justice:justice.items });
+    rememberStories(trending);
+    setTrending(trending);
+  }, 120000);
 }
 
 function platformLogo(item) {
@@ -226,13 +508,32 @@ function domainFromLink(url) {
 
 function setEcosystem(items) {
   const mount = document.querySelector('.eco-teaser-box');
-  if (!mount || !items?.length) return;
-  mount.innerHTML = '<div class="sidebar-title">256 AI Systems</div>' + items.slice(0, 7).map((item) => `
-    <a class="eco-teaser-item" href="${safeHref(item.link) !== '#' ? safeHref(item.link) : '/#ecosystem'}" target="_blank" rel="noopener">
-      <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
-      <div><b>${escapeHtml(item.platform)}</b><p>${escapeHtml(item.description || item.summary)}</p><span class="eco-domain">${escapeHtml(domainFromLink(item.link))}</span></div>
+  if (!mount) return;
+  const directory = [
+    { platform:'256 AI', description:'AI infrastructure and automation', link:'https://ai.256.co.ug' },
+    { platform:'256 Mall', description:'Commerce and verified marketplace services', link:'https://256mall.com' },
+    { platform:'256 Express', description:'Transport, delivery and logistics', link:'https://256express.com' },
+    { platform:'256 Heart', description:'Dating and matchmaking platform', link:'https://256heart.com' },
+    { platform:'256 Corporate', description:'Business, talent and technology services', link:'https://enterprise.256.co.ug' },
+    { platform:'256Shield', description:'Cybersecurity and digital protection', link:'https://shield.256.co.ug' },
+    { platform:'256LinkShield', description:'Link and website reputation checking', link:'https://linkshield.256.co.ug' },
+  ];
+  const platforms = directory.map((entry) => ({ ...entry, ...(items || []).find((item) => item.platform === entry.platform) }));
+  mount.innerHTML = '<div class="sidebar-title">256 AI Systems Ecosystem</div>' + platforms.slice(0, 7).map((item) => `
+    <a class="eco-teaser-item" href="${safeHref(item.articleUrl || item.link) !== '#' ? safeHref(item.articleUrl || item.link) : '/#ecosystem'}"${item.articleUrl ? '' : ' target="_blank" rel="noopener"'}>
+      <div class="side-thumb">${platformLogo(item) ? `<img src="${safeHref(platformLogo(item))}" alt="${escapeHtml(item.platform)} logo" loading="lazy" decoding="async">` : `<span>${escapeHtml(item.mark || item.platform[0])}</span>`}</div>
+      <div><b>${escapeHtml(item.platform)}</b>${item.title ? `<strong>${escapeHtml(item.title)}</strong>` : ''}<p>${escapeHtml(item.title ? (item.summary || 'Read the latest official platform update.') : (item.description || item.summary))}</p><span class="eco-domain">${item.publishedAt ? `Published ${formatTime(item.publishedAt)} · Read summary` : escapeHtml(domainFromLink(item.link))}</span></div>
     </a>
-  `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">VIEW ALL 256 AI SYSTEMS NEWS -></a>';
+  `).join('') + '<a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">EXPLORE THE COMPLETE ECOSYSTEM →</a>';
+}
+
+function setEcosystemDirectory(items = []) {
+  document.querySelectorAll('.eco-platform-grid [data-platform]').forEach((card) => {
+    const item = items.find((entry) => entry.platform === card.dataset.platform);
+    const latest = card.querySelector('.eco-latest');
+    if (!latest || !item?.title) return;
+    latest.innerHTML = `<b>Latest update</b><span>${escapeHtml(item.title)}</span><small>${item.publishedAt ? formatTime(item.publishedAt) : 'recently'}</small>`;
+  });
 }
 
 function setEcosystemGrid(items, officialItems = []) {
@@ -242,20 +543,21 @@ function setEcosystemGrid(items, officialItems = []) {
   if (!mount) return;
   if (items?.length) {
     mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="eco-card">
-      <a class="eco-card-media" href="${safeHref(item.url)}" target="_blank" rel="noopener">
+    <article class="eco-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
+      <a class="eco-card-media" href="${safeHref(item.internalUrl)}">
         <div class="eco-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       </a>
       <div>
         <small>256 AI Systems <b>${item.source?.official ? 'OFFICIAL SOURCE' : 'PUBLISHED COVERAGE'}</b></small>
-        <h3><a href="${safeHref(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a></h3>
-        <p><a href="${safeHref(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.summary || 'Published coverage mentioning 256 AI Systems.')}</a></p>
-        <footer><span>${formatTime(item.publishedAt)}</span><a href="${safeHref(item.url)}" target="_blank" rel="noopener">Read Full Update -></a></footer>
+        <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
+        <p><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.summary || 'Published coverage mentioning 256 AI Systems.')}</a></p>
+        <footer><span>${formatTime(item.publishedAt)}</span><a href="${safeHref(item.internalUrl)}">Read Summary -></a></footer>
       </div>
     </article>
   `).join('');
     return;
   }
+  if (!officialItems?.length) { section.hidden = true; return; }
   mount.innerHTML = (officialItems || []).slice(0, 6).map((item) => {
     const siteLink = item.link ? safeHref(item.link) : '/#ecosystem';
     return `
@@ -281,69 +583,90 @@ function setEcosystemGrid(items, officialItems = []) {
 
 function setSocialLatest(items) {
   const mount = document.querySelector('.social-scroll');
-  if (!mount || !items?.length) return;
+  if (!mount) return;
+  if (!items?.length) { mount.innerHTML = '<article class="empty-card"><h3>No current updates available.</h3></article>'; return; }
   mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="social-card">
+    <article class="social-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="social-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.source?.name || 'Live News')}</span></div>
       <h3>${escapeHtml(item.title)}</h3>
       <p>${sourceBadges(item)} ${escapeHtml(item.category?.name || 'News')} · ${formatTime(item.publishedAt)}</p>
-      <b><a href="${safeHref(item.url)}" target="_blank" rel="noopener">Click to read</a></b>
+      <b><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">Read summary</a></b>
     </article>
   `).join('');
 }
 
 function setCitizenLatest(items) {
   const mount = document.querySelector('.citizens-scroll');
-  if (!mount || !items?.length) return;
+  if (!mount) return;
+  if (!items?.length) { mount.innerHTML = '<label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label><article class="empty-card"><h3>No current community coverage available.</h3></article>'; return; }
   mount.innerHTML = `
     <label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share what's happening near you</b></label>
     ${items.slice(0, 5).map((item) => `
-      <article class="citizen-card">
+      <article class="citizen-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
         <div class="citizen-thumb ${imageClass(item)}"${imageStyle(item)}><span>LIVE NEWS</span></div>
-        <h3>${escapeHtml(item.title)}</h3>
+        <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
         <p>${escapeHtml(item.source?.name || '256 Newsroom')} · ${escapeHtml(item.district?.name || item.category?.name || 'Uganda')} · ${formatTime(item.publishedAt)}</p>
       </article>
     `).join('')}
   `;
 }
 
-function setJournalists(items, articles = []) {
+function setJournalists(items) {
   const mount = document.querySelector('.journalist-scroll');
   if (!mount) return;
-  const articleProfiles = articles.slice(0, 6).map((article, index) => ({
-    name: article.author || article.source?.name || '256 Newsroom',
-    beat: `${article.category?.name || 'News'} · ${formatTime(article.publishedAt)}`,
-    profile_url: article.url,
-    imageUrl: article.imageUrl,
-    reads: Math.round(Number(article.score || 0)),
-    views: 0,
-    sourceName: article.source?.name,
-    index,
-  }));
-  const profiles = articleProfiles.length ? articleProfiles : (items || []);
-  if (!profiles.length) return;
+  const profiles = items || [];
+  if (!profiles.length) {
+    mount.innerHTML = '<a class="journalist-card featured" href="/dashboard/login.html"><span class="journalist-photo"><span>+</span></span><h3>Create your journalist profile</h3><p>Independent journalists and newsroom teams</p><b>Join 256 Newsroom →</b></a><a class="journalist-card" href="/journalists/"><span class="journalist-photo"><span>⌕</span></span><h3>Journalist directory</h3><p>Search by name, beat or location</p><b>Find journalists →</b></a>';
+    return;
+  }
   mount.innerHTML = profiles.slice(0, 6).map((item, index) => `
     <a href="${safeHref(item.profile_url || '#')}" class="journalist-card ${index === 0 ? 'featured' : ''}">
-      <span class="journalist-photo jp-${index + 1}"${item.imageUrl ? imageStyle({ imageUrl: item.imageUrl }) : ''}><span>${escapeHtml(sourceInitials(item.name))}</span></span>
+      <span class="journalist-photo jp-${index + 1}"${item.image_url ? imageStyle({ imageUrl: item.image_url }) : ''}><span>${escapeHtml(sourceInitials(item.name))}</span></span>
       <h3>${escapeHtml(item.name)}</h3>
       <p>${escapeHtml(item.beat || 'Journalist')}</p>
-      <b>${item.sourceName ? 'Latest live byline/source' : `${Number(item.reads || 0).toLocaleString()} reads · ${Number(item.views || 0).toLocaleString()} views`}</b>
+      <b>${Number(item.published_story_count || 0).toLocaleString()} published stories</b>
     </a>
   `).join('');
 }
 
 function setDistricts(items) {
   const mount = document.querySelector('.district-scroll');
-  if (!mount) return;
+  const sidebar = document.querySelector('.district-feature-list');
   if (!items?.length) {
-    mount.innerHTML = '<article class="district-card empty-card"><h3>No district-tagged stories yet</h3><p>Waiting for district metadata from approved source feeds.</p></article>';
+    if (mount) mount.innerHTML = '<article class="district-card empty-card"><h3>No current district-tagged stories</h3><p>The live feed has not supplied reliable district metadata yet.</p></article>';
+    if (sidebar) sidebar.innerHTML = '<article class="empty-card"><h3>No current district-tagged stories</h3><p>Checking live source feeds.</p></article>';
     return;
   }
-  mount.innerHTML = items.slice(0, 6).map((item) => `
-    <article class="district-card">
+  if (mount) mount.innerHTML = items.slice(0, 6).map((item) => `
+    <article class="district-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="district-card-thumb ${imageClass(item)}"${imageStyle(item)}><span>${escapeHtml(item.district?.name || 'UGANDA')}</span></div>
-      <h3>${escapeHtml(item.title)}</h3>
+      <h3><a href="${safeHref(item.internalUrl)}">${escapeHtml(item.title)}</a></h3>
       <p>${sourceBadges(item)} <span class="source-chip"><span class="dot-mark np">${escapeHtml(sourceInitials(item.source?.name))}</span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></p>
+    </article>
+  `).join('');
+  if (sidebar) sidebar.innerHTML = items.slice(0, 4).map((item) => `
+    <article class="story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
+      <div class="district-feature-thumb ${imageClass(item)}"${imageStyle(item)}></div>
+      <span>${escapeHtml(item.district?.name || 'UGANDA')}</span>
+      <h3><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a></h3>
+      <p>${escapeHtml(item.source?.name || '256 Newsroom')} · ${formatTime(item.publishedAt)}</p>
+    </article>
+  `).join('');
+}
+
+function setDeveloping(items = []) {
+  const mount = document.querySelector('.story-list');
+  if (!mount) return;
+  if (!items.length) {
+    mount.innerHTML = '<article class="story-card empty-card"><div><h3>No developing stories currently available</h3><p>The live feed will update this section when new reports arrive.</p></div></article>';
+    return;
+  }
+  mount.innerHTML = items.slice(0, 4).map((item) => `
+    <article class="story-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
+      <div class="story-thumb ${imageClass(item)}"${imageStyle(item)}></div><div>
+        <h3><a href="${safeHref(item.internalUrl)}" data-open-story data-story-id="${escapeHtml(item.id)}">${escapeHtml(item.title)}</a></h3>
+        <p><span class="verify-badge developing">LATEST</span> ${escapeHtml(item.source?.name || '256 Newsroom')} · ${formatTime(item.publishedAt)}</p>
+      </div>
     </article>
   `).join('');
 }
@@ -368,12 +691,14 @@ async function setCategoryTabs(districtItems = []) {
   await Promise.all(Object.entries(categoryMap).map(async ([slug, path]) => {
     try {
       const data = await getJson(path);
+      rememberStories(data.items || []);
       setCategoryTab(slug, data.items || []);
     } catch (err) {
       setCategoryTab(slug, []);
     }
   }));
   setCategoryTab('district', districtItems || []);
+  loadVisibleImages();
 }
 
 function setupCitizenReportForm() {
@@ -424,44 +749,72 @@ function setupCitizenReportForm() {
 }
 
 async function bootLiveNews() {
+  initializeLiveMounts();
+  setupSearch();
   setupCitizenReportForm();
+  setupInterestTracking();
+  setupStoryNavigation();
   setMastheadDate();
   try {
-    const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists] = await Promise.all([
-      getJson('/news/hero?limit=12'),
-      getJson('/news/top?limit=12'),
-      getJson('/news/latest?limit=12'),
-      getJson('/news/category/national?limit=6'),
-      getJson('/news/category/world?limit=6'),
-      getJson('/news/category/sports?limit=6'),
-      getJson('/news/districts/latest?limit=12'),
-      getJson('/news/ecosystem?limit=6'),
-      getJson('/news/sources/top?limit=50'),
-      getJson('/ecosystem'),
-      getJson('/journalists/top?limit=6'),
+    const [hero, top, latest, national, world, sports, health, education, justice, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
+      safeJson('/news/hero?limit=12'),
+      safeJson('/news/top?limit=12'),
+      safeJson('/news/latest?limit=12'),
+      safeJson('/news/category/national?limit=50'),
+      safeJson('/news/category/world?limit=50'),
+      safeJson('/news/category/sports?limit=50'),
+      safeJson('/news/category/health?limit=12'),
+      safeJson('/news/category/education?limit=12'),
+      safeJson('/news/category/crime-justice?limit=12'),
+      safeJson('/news/districts/latest?limit=12'),
+      safeJson('/news/ecosystem?limit=6'),
+      safeJson('/news/sources/top?limit=50'),
+      safeJson('/ecosystem'),
+      safeJson('/journalists/top?limit=6'),
+      resolveReaderProfile(),
     ]);
-    const heroStories = hero.items || [];
-    setTicker(top.items || []);
+    const heroStories = personalizeItems(hero.items || [], readerProfile);
+    const topStories = personalizeItems(top.items || [], readerProfile);
+    const latestStories = personalizeItems(latest.items || [], readerProfile);
+    const districtStories = personalizeItems(districtNews.items || [], readerProfile);
+    rememberStories([
+      ...heroStories,
+      ...topStories,
+      ...latestStories,
+      ...(national.items || []),
+      ...(world.items || []),
+      ...(sports.items || []),
+      ...(health.items || []),
+      ...(education.items || []),
+      ...(justice.items || []),
+      ...districtStories,
+      ...(ecosystemNews.items || []),
+    ]);
+
+    setTicker(topStories);
     setMastheadStatus((sources.items || []).length);
-    setTrending(rotatedWindow(top.items || [], 0, 4));
-    startTrendingRotation(top.items || []);
+    setTrending(trendingByTopic({ national:national.items, international:world.items, district:districtStories, health:health.items, education:education.items, justice:justice.items }));
     setHero(heroStories[0]);
     startHeroRotation(heroStories);
     setCardGrid('National Headlines', national.items || []);
     setCardGrid('International News', world.items || []);
     setCardGrid('Sports News', sports.items || []);
-    setDistricts(districtNews.items || []);
+    setDistricts(districtStories);
     setEcosystemGrid(ecosystemNews.items || [], ecosystem.items || []);
-    setSocialLatest(latest.items);
-    setCitizenLatest(latest.items);
+    setSocialLatest(latestStories);
+    setCitizenLatest(latestStories);
+    setDeveloping(latestStories);
     setTopSources((sources.items || []).slice(0, 9));
     setEcosystem(ecosystem.items || []);
-    setJournalists(journalists.items, latest.items || []);
-    await setCategoryTabs(districtNews.items || []);
+    setEcosystemDirectory(ecosystem.items || []);
+    setJournalists(journalists.items);
+    loadVisibleImages();
+    await setCategoryTabs(districtStories);
     startCarouselRotation();
+    startHeadlineRefresh();
   } catch (err) {
     const statusEl = document.getElementById('masthead-status');
-    if (statusEl) statusEl.textContent = 'Live sources temporarily unavailable';
+    if (statusEl) statusEl.innerHTML = '<strong>Uganda\'s Newsroom</strong><small>Refreshing the latest coverage…</small>';
     console.warn('Live news unavailable:', err.message);
   }
 }

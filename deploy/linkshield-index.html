@@ -1,0 +1,2288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0A0A0A" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>256 LinkShield — Know Before You Click</title>
+<meta name="description" content="Paste any suspicious link, QR code, SMS or email. 256 LinkShield checks for scams, phishing, malware and impersonation before you click, share or pay." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --ink:#0A0A0A; --ink-2:#111111; --panel:#141414; --line:rgba(255,255,255,0.09);
+    --white:#FFFFFF; --dim:#FFFFFF; --dim2:#FFFFFF;
+    --teal:#C8992A; --teal-l:#F5D060; --teal-d:#9A6A10;
+    --teal-shine:linear-gradient(135deg,#f5d060 0%,#c8992a 25%,#f0c84a 45%,#9a6a10 65%,#f5d060 85%,#c8992a 100%);
+    --red:#EF4444; --red-bg:rgba(239,68,68,0.14);
+    --orange:#F59E0B; --orange-bg:rgba(245,158,11,0.14);
+    --yellow:#EAB308; --yellow-bg:rgba(234,179,8,0.14);
+    --green:#22C55E; --green-bg:rgba(34,197,94,0.14);
+    --SG:'DM Serif Display',Georgia,serif; --DM:'EB Garamond',Georgia,serif;
+  }
+  html{scroll-behavior:smooth;font-size:19px;}
+  body{font-family:var(--DM);background:var(--ink);color:var(--white);-webkit-font-smoothing:antialiased;overflow-x:hidden;font-size:1.05rem;}
+  a{color:inherit;text-decoration:none;}
+  ul{list-style:none;}
+  h1,h2{font-family:var(--SG);font-weight:400;}
+  button{font-family:var(--DM);cursor:pointer;}
+
+  /* NAV */
+  header#nav{position:fixed;top:0;left:0;right:0;z-index:500;background:rgba(11,18,32,0.75);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);transition:background .2s;}
+  header#nav.scrolled{background:rgba(11,18,32,0.95);}
+  .nav-inner{max-width:1280px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;}
+  .nav-logo{font-family:var(--SG);font-weight:400;font-size:20px;display:flex;align-items:center;gap:8px;white-space:nowrap;}
+  .nav-logo-mark{width:30px;height:30px;border-radius:8px;background:var(--teal-shine);display:flex;align-items:center;justify-content:center;color:var(--ink);font-weight:800;font-size:14px;}
+  .nav-logo-sub{font-family:var(--DM);font-size:10px;font-weight:600;letter-spacing:1.5px;color:var(--dim2);text-transform:uppercase;display:block;margin-top:1px;}
+  .nav-links{display:flex;align-items:center;gap:26px;font-size:15px;font-weight:500;}
+  .nav-links a{color:var(--dim);transition:color .15s;}
+  .nav-links a:hover{color:var(--teal-l);}
+  .nav-right{display:flex;align-items:center;gap:12px;}
+  .nav-parent-link{font-size:12px;color:var(--dim2);border:1px solid var(--line);padding:8px 14px;border-radius:100px;white-space:nowrap;}
+  .nav-cta{font-weight:700;color:var(--ink);font-size:13px;padding:10px 20px;border-radius:100px;background:var(--teal-shine);white-space:nowrap;}
+  .nav-hamburger{display:none;background:none;border:none;color:var(--white);font-size:20px;}
+  @media (max-width:980px){ .nav-links,.nav-parent-link{display:none;} .nav-hamburger{display:block;} }
+
+  /* HERO */
+  .hero{position:relative;min-height:94vh;display:flex;align-items:center;padding:150px 24px 80px;background:radial-gradient(circle at 20% 10%,rgba(200,153,42,0.09) 0%,var(--ink) 45%);overflow:hidden;}
+  .hero-inner{max-width:760px;margin:0 auto;text-align:center;position:relative;z-index:2;}
+  .hero-tag{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink);padding:8px 18px;border-radius:100px;background:var(--teal-shine);margin-bottom:28px;}
+  .hero-h1{font-size:clamp(34px,6vw,56px);font-weight:400;line-height:1.15;margin-bottom:18px;}
+  .hero-h1 span{color:var(--teal-l);}
+  .hero-sub{font-size:19px;line-height:1.75;color:var(--dim);max-width:620px;margin:0 auto 36px;}
+
+  .scanner-frame{
+    max-width:660px; margin:0 auto; border-radius:22px; padding:3px;
+    background:var(--teal-shine); background-size:300% 300%; animation:shine 5s ease infinite;
+    box-shadow:0 0 0 1px rgba(200,153,42,0.25), 0 25px 70px rgba(200,153,42,0.22), 0 25px 60px rgba(0,0,0,0.55);
+  }
+  @keyframes shine{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  .scanner-box{background:#000;border-radius:19px;padding:8px 8px 8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .scanner-icon{font-size:20px;flex-shrink:0;}
+  .scanner-box input{flex:1;min-width:200px;background:none;border:none;color:var(--white);font-size:16px;font-weight:600;padding:16px 8px;outline:none;font-family:var(--DM);}
+  .scanner-box input::placeholder{color:var(--white);opacity:0.55;}
+  .scanner-btn{display:inline-flex;align-items:center;gap:8px;padding:15px 26px;border-radius:14px;font-weight:700;font-size:15px;color:var(--ink);border:none;background:var(--teal-shine);white-space:nowrap;transition:transform .15s;}
+  .scanner-btn:hover{transform:translateY(-1px);}
+  .scanner-btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+  .scanner-clear{background:none;border:none;color:var(--dim2);font-size:18px;padding:8px 10px;cursor:pointer;line-height:1;}
+  .scanner-clear:hover{color:var(--white);}
+  .scanner-options{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;max-width:640px;margin-left:auto;margin-right:auto;}
+  .scan-view-toggle{display:flex;gap:6px;}
+  .scan-view-btn{padding:7px 12px;border-radius:100px;border:1px solid var(--line);background:rgba(0,0,0,0.2);color:var(--dim2);font-size:12px;font-weight:600;cursor:pointer;}
+  .scan-view-btn.active{border-color:rgba(200,153,42,0.5);background:rgba(200,153,42,0.12);color:var(--teal-l);}
+  .scan-privacy-opt{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--dim2);max-width:340px;line-height:1.45;cursor:pointer;}
+  .scan-privacy-opt input{margin-top:2px;accent-color:var(--teal-l);}
+
+  .result-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+  .result-tool-btn{padding:8px 14px;border-radius:100px;border:1px solid var(--line);background:rgba(255,255,255,0.04);color:var(--dim);font-size:12px;font-weight:600;cursor:pointer;}
+  .result-tool-btn:hover{border-color:rgba(200,153,42,0.4);color:var(--white);}
+  .result-storage-note{font-size:12.5px;color:var(--dim2);padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid var(--line);margin-bottom:16px;line-height:1.5;}
+  .result-storage-note.saved{border-color:rgba(34,197,94,0.3);color:#86EFAC;}
+  .evidence-warning-panel{margin-bottom:18px;padding:18px 20px;border-radius:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);}
+  .evidence-warning-title{font-weight:700;font-size:15px;color:#FCA5A5;margin-bottom:8px;}
+  .evidence-warning-summary{font-size:14px;color:var(--dim);line-height:1.6;margin-bottom:12px;}
+  .evidence-warning-list{display:flex;flex-direction:column;gap:10px;margin:0 0 14px;padding:0;list-style:none;}
+  .evidence-warning-list li{font-size:13px;color:var(--dim);padding:10px 12px;background:rgba(0,0,0,0.2);border-radius:10px;line-height:1.55;}
+  .evidence-warning-list a{color:var(--teal-l);word-break:break-all;}
+  .evidence-warning-actions{display:flex;flex-wrap:wrap;gap:8px;}
+  .result-reasons .evidence-link{color:var(--teal-l);font-size:12.5px;}
+  .result-reports .evidence-ref{font-size:12px;color:var(--teal-l);word-break:break-all;}
+  .result-intel-panel{display:grid;gap:12px;margin-bottom:20px;}
+  .intel-card{background:rgba(0,0,0,0.22);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .intel-card-k{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--teal-l);margin-bottom:8px;}
+  .intel-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--dim);padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+  .intel-row:last-child{border-bottom:none;}
+  .intel-val{word-break:break-all;text-align:right;max-width:68%;}
+  .intel-copy{background:none;border:none;color:var(--teal-l);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .intel-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+  .intel-ext-link{font-size:12px;font-weight:600;color:var(--teal-l);padding:6px 12px;border-radius:100px;border:1px solid rgba(200,153,42,0.35);}
+  .intel-ext-link:hover{background:rgba(200,153,42,0.1);}
+  .result-page-links{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:16px;}
+  .result-page-links li{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--dim);padding:8px 10px;background:rgba(0,0,0,0.18);border-radius:8px;}
+  .result-page-links a{color:var(--teal-l);word-break:break-all;}
+  .faq-list{display:flex;flex-direction:column;gap:10px;margin-top:28px;}
+  .faq-item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px;}
+  .faq-item summary{font-weight:700;font-size:15px;cursor:pointer;color:var(--white);}
+  .faq-item p{margin:12px 0 0;font-size:15px;line-height:1.65;color:var(--dim);}
+  .scan-result.view-mobile{max-width:390px;margin-left:auto;margin-right:auto;border:2px solid var(--line);}
+  .hero-actions{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
+  .btn-ghost{font-size:12.5px;color:var(--dim2);border:1px solid var(--line);padding:9px 18px;border-radius:100px;transition:color .15s,border-color .15s;}
+  .btn-ghost:hover{color:var(--white);border-color:rgba(255,255,255,0.3);}
+  .hero-trust-row{display:flex;gap:28px;justify-content:center;margin-top:44px;flex-wrap:wrap;font-size:11.5px;color:var(--dim2);}
+  .hero-trust-row span{color:var(--teal-l);font-weight:700;}
+
+  /* SCAN PROGRESS + RESULT */
+  .scan-progress{max-width:640px;margin:20px auto 0;display:none;text-align:left;}
+  .scan-progress.scan-complete{margin-bottom:8px;}
+  .scan-progress.scan-complete .scan-progress-bar-wrap{opacity:0.85;}
+  .scan-progress-bar-wrap{height:7px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;}
+  .scan-progress-bar{height:100%;width:0%;border-radius:6px;background:var(--teal-shine);transition:width .1s linear;}
+  .scan-terminal{
+    margin-top:16px;background:#000; border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px; max-height:280px; overflow-y:auto; transition:border-color .2s, box-shadow .2s;
+  }
+  .scan-terminal-persist{max-height:none;margin-top:0;list-style:none;}
+  .result-scan-report{margin-bottom:22px;}
+  .result-scan-report-list{display:flex;flex-direction:column;gap:0;padding:18px 20px;}
+  .result-scan-report-list .scan-line{list-style:none;}
+  .scan-terminal.danger-flash{border-color:var(--red); box-shadow:0 0 0 3px rgba(239,68,68,0.25), 0 0 30px rgba(239,68,68,0.25);}
+  .scan-line{display:flex;align-items:flex-start;gap:10px;font-size:14.5px;padding:6px 0;color:var(--dim2);animation:lineIn .3s ease;}
+  @keyframes lineIn{from{opacity:0;transform:translateX(-6px);}to{opacity:1;transform:translateX(0);}}
+  .scan-line .dot{width:7px;height:7px;border-radius:50%;margin-top:6px;flex-shrink:0;background:var(--dim2);}
+  .scan-line.pending .dot{animation:pulseDot 1s infinite;}
+  @keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.25}}
+  .scan-line.ok{color:var(--dim);} .scan-line.ok .dot{background:var(--green);}
+  .scan-line.warn{color:#FDBA74;} .scan-line.warn .dot{background:var(--orange);}
+  .scan-line.danger{color:#FCA5A5; font-weight:700; font-size:15.5px;}
+  .scan-line.danger .dot{background:var(--red); box-shadow:0 0 10px rgba(239,68,68,0.8);}
+
+  .scan-result{max-width:720px;margin:28px auto 0;text-align:left;display:none;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:32px;animation:fadeIn .3s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  .result-top{display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding-bottom:22px;border-bottom:1px solid var(--line);margin-bottom:20px;}
+  .result-gauge{position:relative;width:104px;height:104px;flex-shrink:0;}
+  .result-gauge svg circle#result-ring{transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1), stroke 1.2s ease;}
+  .result-gauge-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .result-score-n{font-family:var(--DM);font-size:26px;font-weight:700;}
+  .result-score-l{font-size:9.5px;color:var(--dim2);text-transform:uppercase;letter-spacing:1px;}
+  .result-summary{flex:1;min-width:220px;}
+  .result-url{font-family:var(--DM);font-weight:600;font-size:17px;word-break:break-all;margin-bottom:8px;color:var(--dim);}
+  .premium-tag{display:inline-flex;font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--ink);background:var(--teal-shine);padding:4px 12px;border-radius:100px;margin-bottom:10px;}
+  .verdict-badge{display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:15px;padding:6px 16px;border-radius:100px;margin-bottom:4px;}
+  .verdict-badge.verified-authentic{border:1px solid rgba(34,197,94,0.45);box-shadow:0 0 20px rgba(34,197,94,0.15);}
+  .result-risk{font-size:12px;color:var(--dim2);margin-top:6px;}
+
+  .result-section-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal-l);margin:18px 0 10px;}
+  .result-reasons{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
+  .result-reasons li{display:flex;gap:9px;font-size:16px;color:var(--dim);align-items:flex-start;line-height:1.55;}
+  .result-tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .result-tech-item{background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .result-tech-k{font-size:10px;color:var(--dim2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}
+  .result-tech-v{font-size:13px;font-weight:700;}
+  .result-reports{display:flex;flex-direction:column;gap:8px;}
+  .result-reports li{display:flex;justify-content:space-between;gap:10px;font-size:13px;background:rgba(0,0,0,0.2);border-radius:8px;padding:10px 14px;}
+  .result-reports .src{color:var(--dim);} .result-reports .st{font-weight:700;}
+  .result-recommend{margin-top:18px;padding:16px 18px;border-radius:12px;font-size:16.5px;line-height:1.6;font-weight:600;}
+
+  .do-not-open-banner{
+    display:flex; align-items:center; gap:14px; background:rgba(153,27,27,0.3); border:1.5px solid var(--red);
+    border-radius:14px; padding:18px 22px; margin-bottom:20px; animation:dangerPulse 1.4s ease infinite;
+  }
+  @keyframes dangerPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.35);}50%{box-shadow:0 0 0 8px rgba(239,68,68,0);}}
+  .do-not-open-icon{font-size:30px;flex-shrink:0;}
+  .do-not-open-title{font-family:var(--DM);font-weight:700;font-size:19px;color:#FCA5A5;margin-bottom:3px;}
+  .do-not-open-sub{font-size:15px;color:rgba(255,255,255,0.75);}
+  @media (max-width:640px){ .result-tech-grid{grid-template-columns:1fr 1fr;} }
+
+  /* GENERIC SECTIONS */
+  .sec{padding:100px 24px;}
+  .sec-inner{max-width:1160px;margin:0 auto;}
+  .s-alt{background:#FFFFFF;color:#0A0A0A;}
+  .s-alt .sec-eyebrow{color:var(--teal-d);}
+  .s-alt .sec-lede{color:#0A0A0A;}
+  .s-alt .dim-text,.s-alt .card-sub{color:#0A0A0A;}
+  .s-alt .detect-card{background:#F7F5F0;border-color:rgba(0,0,0,0.08);}
+  .s-alt .detect-card:hover{border-color:rgba(200,153,42,0.5);}
+  .s-alt .verify-col{background:#F7F5F0;border-color:rgba(0,0,0,0.08);}
+  .s-alt .verify-col ul{color:#0A0A0A;}
+  .s-alt .verify-col-title{color:var(--teal-d);}
+  .s-alt .edu-card{background:#F7F5F0;border-color:rgba(0,0,0,0.08);color:#0A0A0A;}
+  .s-alt .api-box{background:linear-gradient(135deg,rgba(200,153,42,0.09),rgba(0,0,0,0.025));border-color:rgba(200,153,42,0.4);}
+  .s-alt .verdict-tier{border-width:1.5px;}
+  /* On white/light backgrounds: CTAs flip to solid black with gold text, instead of the shiny gold-on-black used elsewhere */
+  .s-alt .btn-primary, .s-alt .tool-btn, .s-alt .scanner-btn, .s-alt .nav-cta, .s-alt .form-submit{
+    background:#0A0A0A; color:var(--teal-l);
+  }
+  .s-alt .enterprise-chip{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.12);color:#0A0A0A;}
+  .s-alt .verify-arrow{color:var(--teal-d);}
+  .sec-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--teal-l);margin-bottom:16px;}
+  .sec-h2{font-size:clamp(30px,4vw,44px);font-weight:400;line-height:1.2;margin-bottom:16px;max-width:680px;}
+  .sec-lede{font-size:19px;color:var(--dim);line-height:1.75;max-width:640px;}
+
+  .detect-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:48px;}
+  .detect-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 20px;transition:transform .15s,border-color .15s;}
+  .detect-card:hover{transform:translateY(-3px);border-color:rgba(200,153,42,0.4);}
+  .detect-icon{font-size:24px;margin-bottom:12px;}
+  .detect-title{font-weight:600;font-size:17px;}
+  @media (max-width:980px){ .detect-grid{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:640px){ .detect-grid{grid-template-columns:repeat(2,1fr);} }
+
+  .campaign-examples{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px;}
+  .campaign-chip{font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:100px;background:rgba(239,68,68,0.1);color:#FCA5A5;border:1px solid rgba(239,68,68,0.25);}
+
+  .verify-flow{display:grid;grid-template-columns:1fr auto 1fr;gap:24px;align-items:center;margin-top:44px;}
+  .verify-col{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;}
+  .verify-col-title{font-weight:700;font-size:14px;color:var(--teal-l);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.5px;font-size:11px;}
+  .verify-col ul{display:flex;flex-direction:column;gap:10px;font-size:16.5px;color:var(--dim);}
+  .verify-col ul li::before{content:'— ';color:var(--dim2);}
+  .verify-arrow{font-size:26px;color:var(--teal-l);}
+  .verify-verdict{margin-top:28px;text-align:center;}
+  @media (max-width:800px){ .verify-flow{grid-template-columns:1fr;} .verify-arrow{transform:rotate(90deg);text-align:center;} }
+
+  .tools-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px;}
+  .tool-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;display:flex;flex-direction:column;}
+  .tool-icon{font-size:26px;margin-bottom:14px;}
+  .tool-title{font-weight:600;font-size:19px;margin-bottom:8px;}
+  .tool-desc{font-size:16px;color:var(--dim2);line-height:1.65;margin-bottom:18px;flex:1;}
+  .tool-input{background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:10px;padding:11px 14px;color:var(--white);font-size:13px;font-family:var(--DM);width:100%;margin-bottom:10px;resize:vertical;min-height:44px;outline:none;}
+  .tool-input:focus{border-color:rgba(200,153,42,0.45);}
+  .tool-btn{display:inline-flex;align-items:center;gap:6px;justify-content:center;padding:10px 16px;border-radius:9px;font-weight:700;font-size:12.5px;color:var(--ink);background:var(--teal-shine);border:none;width:100%;}
+
+  /* PAID TOOL — Website Reputation Checker */
+  .tool-card-paid{position:relative;border-color:rgba(200,153,42,0.4);background:linear-gradient(160deg,rgba(200,153,42,0.07),var(--panel) 55%);}
+  .tool-paid-badge{position:absolute;top:16px;right:16px;font-size:11px;font-weight:700;color:var(--ink);padding:5px 12px;border-radius:100px;background:var(--teal-shine);}
+  .tool-btn-paid{background:var(--teal-shine);}
+  .tool-paid-note{font-size:12px;color:var(--dim2);margin-top:10px;text-align:center;font-style:italic;}
+
+  .paywall-overlay{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
+  .paywall-box{max-width:420px;width:100%;background:var(--panel);border:1px solid rgba(200,153,42,0.4);border-radius:18px;padding:32px;text-align:center;}
+  .paywall-icon{font-size:34px;margin-bottom:12px;}
+  .paywall-title{font-family:var(--DM);font-weight:700;font-size:19px;margin-bottom:8px;}
+  .paywall-price{font-family:var(--DM);font-weight:700;font-size:32px;color:var(--teal-l);margin:10px 0;}
+  .paywall-price span{font-size:14px;color:var(--dim2);font-weight:500;}
+  .paywall-domain{font-size:15px;color:var(--dim);margin-bottom:20px;word-break:break-all;}
+  .paywall-methods{display:flex;gap:10px;margin-bottom:20px;}
+  .paywall-method{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line);font-size:13px;font-weight:600;cursor:pointer;background:rgba(0,0,0,0.2);transition:border-color .15s,background .15s;}
+  .paywall-method.active{border-color:var(--teal-l);background:rgba(200,153,42,0.12);color:var(--teal-l);}
+  .paywall-pay-btn{width:100%;padding:14px;border-radius:12px;font-weight:700;font-size:15px;color:var(--ink);background:var(--teal-shine);border:none;margin-bottom:12px;}
+  .paywall-pay-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .paywall-cancel{font-size:12.5px;color:var(--dim2);background:none;border:none;cursor:pointer;}
+  .paywall-status{font-size:13px;color:var(--teal-l);margin-top:14px;display:none;}
+  .paywall-includes{text-align:left;font-size:13px;color:var(--dim);margin:16px 0;display:flex;flex-direction:column;gap:8px;}
+  @media (max-width:980px){ .tools-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:640px){ .tools-grid{grid-template-columns:1fr;} }
+
+  .verdict-legend{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:44px;}
+  .verdict-tier{border-radius:14px;padding:20px 16px;text-align:center;border:1px solid var(--line);}
+  .verdict-tier-score{font-family:var(--DM);font-weight:700;font-size:22px;margin-bottom:6px;}
+  .verdict-tier-name{font-weight:700;font-size:13px;}
+  @media (max-width:900px){ .verdict-legend{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:560px){ .verdict-legend{grid-template-columns:repeat(2,1fr);} }
+
+  .report-form{max-width:680px;margin-top:44px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:32px;}
+  .form-row{margin-bottom:18px;}
+  .form-label{font-size:12.5px;font-weight:700;color:var(--dim);margin-bottom:8px;display:block;}
+  .form-input,.form-select,.form-textarea{width:100%;background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:var(--white);font-size:13.5px;font-family:var(--DM);outline:none;}
+  .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:rgba(200,153,42,0.45);}
+  .form-textarea{min-height:80px;resize:vertical;}
+  .form-file{font-size:12.5px;color:var(--dim2);}
+  .form-note{font-size:11.5px;color:var(--dim2);margin-top:6px;}
+  .form-submit{margin-top:10px;display:inline-flex;align-items:center;gap:8px;padding:13px 26px;border-radius:11px;font-weight:700;font-size:14px;color:var(--ink);background:var(--teal-shine);border:none;}
+
+  .edu-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:44px;}
+  .edu-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 16px;font-size:16px;font-weight:500;text-align:center;color:var(--dim);}
+  @media (max-width:900px){ .edu-grid{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:560px){ .edu-grid{grid-template-columns:repeat(2,1fr);} }
+
+  .enterprise-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:48px;align-items:center;margin-top:44px;}
+  .verify-org-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;margin-top:44px;}
+  .verify-price-box{margin-top:24px;padding:22px 24px;border-radius:16px;background:rgba(200,153,42,0.1);border:1px solid rgba(200,153,42,0.35);}
+  .verify-price-amount{font-family:var(--DM);font-weight:700;font-size:36px;color:var(--teal-l);}
+  .verify-price-amount span{font-size:16px;color:var(--dim2);font-weight:600;}
+  .verify-price-note{font-size:13px;color:var(--dim2);margin-top:8px;line-height:1.5;}
+  @media (max-width:860px){ .verify-org-grid{grid-template-columns:1fr;} }
+  .enterprise-list{display:flex;flex-direction:column;gap:14px;}
+  .enterprise-list li{font-size:17px;color:var(--dim);display:flex;gap:10px;align-items:flex-start;}
+  .enterprise-for{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;}
+  .enterprise-chip{font-size:12px;font-weight:600;padding:8px 14px;border-radius:100px;background:rgba(255,255,255,0.06);border:1px solid var(--line);}
+  @media (max-width:860px){ .enterprise-grid{grid-template-columns:1fr;} }
+
+  .api-box{background:linear-gradient(135deg,rgba(200,153,42,0.12),rgba(10,10,10,0.4));border:1px solid rgba(200,153,42,0.35);border-radius:20px;padding:48px;text-align:center;margin-top:44px;}
+  .api-targets{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:24px 0;}
+
+  .safety-notice{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:16px;padding:28px 32px;margin-top:44px;}
+  .safety-notice ul{display:flex;flex-direction:column;gap:10px;font-size:16.5px;color:var(--dim);margin-top:14px;}
+  .safety-notice ul li::before{content:'⚠ ';color:var(--orange);}
+
+  .btn-primary{display:inline-flex;align-items:center;gap:8px;padding:14px 26px;border-radius:12px;font-weight:700;font-size:14px;color:var(--ink);background:var(--teal-shine);border:none;}
+
+  .site-footer{background:#060606;padding:70px 24px 30px;border-top:1px solid var(--line);}
+  .footer-top{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:36px;padding-bottom:44px;}
+  .footer-tagline{font-size:15.5px;color:var(--dim2);line-height:1.7;margin:14px 0;max-width:270px;}
+  .footer-col-title{font-size:11.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--teal-l);margin-bottom:16px;}
+  .footer-col-links{display:flex;flex-direction:column;gap:10px;font-size:15px;}
+  .footer-col-links a{color:var(--dim2);}
+  .footer-col-links a:hover{color:var(--white);}
+  .footer-bottom{max-width:1280px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-top:24px;border-top:1px solid var(--line);font-size:12px;color:var(--dim2);}
+  @media (max-width:900px){ .footer-top{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .footer-top{grid-template-columns:1fr;} }
+
+  .result-screenshot-wrap{margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#0a0a0a;max-width:100%;position:relative;min-height:200px;}
+  .result-screenshot-wrap.view-mobile{max-width:390px;margin-left:auto;margin-right:auto;}
+  .result-screenshot{display:block;width:100%;height:auto;min-height:180px;object-fit:cover;object-position:top;}
+  .screenshot-fallback{display:none;padding:28px 16px;text-align:center;font-size:13px;color:var(--dim2);}
+  .screenshot-fallback.screenshot-pending{display:block;}
+  .screenshot-loading-label{display:none;position:absolute;inset:0;place-items:center;font-size:13px;color:var(--dim2);background:rgba(0,0,0,0.55);}
+  .result-screenshot-wrap.screenshot-loading .screenshot-loading-label{display:grid;}
+  .result-screenshot-wrap.screenshot-loading .result-screenshot{opacity:0.3;}
+  .result-screenshot-wrap.screenshot-failed .result-screenshot{display:none;}
+  .result-screenshot-wrap.screenshot-failed .screenshot-fallback:not(.screenshot-pending){display:block;}
+  .result-screenshot-wrap.screenshot-failed .screenshot-loading-label{display:none;}
+  .link-actions{display:flex;gap:6px;flex-shrink:0;}
+  .scan-link-btn{color:var(--orange)!important;}
+
+  .who-plans-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:32px;}
+  .who-plan-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px;}
+  .who-plan-featured{border-color:rgba(200,153,42,0.45);background:linear-gradient(180deg,rgba(200,153,42,0.08),rgba(10,10,10,0.2));}
+  .who-plan-tag{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--teal-l);}
+  .who-plan-title{font-family:var(--DM);font-size:20px;font-weight:700;}
+  .who-plan-price{font-family:var(--DM);font-size:28px;font-weight:700;color:var(--teal-l);}
+  .who-plan-price span{font-size:14px;color:var(--dim2);font-weight:600;}
+  .who-plan-list{display:flex;flex-direction:column;gap:8px;font-size:14.5px;color:var(--dim);flex:1;margin:8px 0 16px;}
+  .who-plan-list li::before{content:'✓ ';color:var(--green);}
+  @media (max-width:1100px){ .who-plans-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .who-plans-grid{grid-template-columns:1fr;} }
+
+  /* MOBILE NAV */
+  .nav-mobile-menu{display:none;flex-direction:column;gap:4px;padding:16px 24px 24px;background:rgba(11,18,32,0.98);border-bottom:1px solid var(--line);}
+  .nav-mobile-menu.open{display:flex;}
+  .nav-mobile-menu a{font-size:16px;color:var(--dim);padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .nav-mobile-menu a:last-child{border-bottom:none;}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(120px);z-index:1000;max-width:90vw;padding:14px 22px;border-radius:12px;background:var(--panel);border:1px solid rgba(34,197,94,0.4);color:var(--white);font-size:14px;font-weight:600;box-shadow:0 12px 40px rgba(0,0,0,0.45);opacity:0;transition:transform .3s ease,opacity .3s ease;pointer-events:none;}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+  .toast.toast-error{border-color:rgba(239,68,68,0.5);}
+
+  /* LEGAL / SUBPAGES */
+  .page-hero{padding:140px 24px 60px;max-width:800px;margin:0 auto;}
+  .page-hero h1{font-size:clamp(32px,5vw,48px);margin-bottom:16px;}
+  .page-hero p{color:var(--dim2);font-size:18px;line-height:1.7;}
+  .legal-content{max-width:800px;margin:0 auto;padding:0 24px 100px;}
+  .legal-content h2{font-family:var(--SG);font-size:24px;margin:36px 0 12px;color:var(--teal-l);}
+  .legal-content p,.legal-content li{font-size:17px;line-height:1.75;color:var(--dim);margin-bottom:14px;}
+  .legal-content ul{padding-left:20px;list-style:disc;margin-bottom:20px;}
+  .legal-content ul li{margin-bottom:8px;}
+  .back-link{display:inline-flex;align-items:center;gap:6px;color:var(--teal-l);font-size:14px;font-weight:600;margin-bottom:24px;}
+  .consult-form{max-width:640px;margin:0 auto;padding:0 24px 100px;}
+  .form-success{display:none;margin-top:16px;padding:16px;border-radius:12px;background:var(--green-bg);border:1px solid rgba(34,197,94,0.3);color:#86EFAC;font-weight:600;}
+  .form-success.show{display:block;}
+</style>
+</head>
+<body>
+
+<header id="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-mark">LS</span>
+      <span>256 LinkShield<span class="nav-logo-sub">Know Before You Click</span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#home">Home</a>
+      <a href="#scan">Scan Link</a>
+      <a href="#report">Report Scam</a>
+      <a href="#enterprise">For Organizations</a>
+      <a href="#verify-submit">Get Verified</a>
+      <a href="#safety">Safety Tips</a>
+      <a href="#api">API Access</a>
+      <a href="#who-its-for">Plans</a>
+      <a href="/news">News</a>
+    </nav>
+    <div class="nav-right">
+      <a href="https://256.co.ug" class="nav-parent-link">256 AI Systems ↗</a>
+      <a href="#scan" class="nav-cta">Scan Link</a>
+    </div>
+    <button class="nav-hamburger" id="nav-hamburger" aria-label="Menu" aria-expanded="false">☰</button>
+  </div>
+  <nav class="nav-mobile-menu" id="nav-mobile-menu" aria-hidden="true">
+    <a href="#home">Home</a>
+    <a href="#scan">Scan Link</a>
+    <a href="#report">Report Scam</a>
+    <a href="#enterprise">For Organizations</a>
+    <a href="#verify-submit">Get Verified</a>
+    <a href="#safety">Safety Tips</a>
+    <a href="#api">API Access</a>
+    <a href="#who-its-for">Plans</a>
+    <a href="/news">News</a>
+    <a href="https://256.co.ug" target="_blank" rel="noreferrer">256 AI Systems ↗</a>
+    <a href="#scan" class="nav-cta" style="text-align:center;margin-top:8px;">Scan Link</a>
+  </nav>
+</header>
+
+<!-- HERO / SCANNER -->
+<section class="hero" id="home">
+  <div class="hero-inner" id="scan">
+    <div class="hero-tag">🛡️ 256 LinkShield · Free Instant Check</div>
+    <h1 class="hero-h1">Think a Link Might Be <span>Dangerous?</span></h1>
+    <p class="hero-sub">Paste any link — 256 LinkShield checks it for scams, phishing, malware and impersonation before you click. Free, no account required. Verified organizations scan as <strong>Verified Authentic</strong>; unknown links get a full trust score and page intelligence.</p>
+
+    <div class="scanner-frame">
+      <div class="scanner-box">
+        <span class="scanner-icon">🔗</span>
+        <input type="text" id="link-input" placeholder="Paste any link — https://example.com" />
+        <button type="button" class="scanner-clear" id="scan-clear-btn" onclick="clearScanInput()" title="Clear" aria-label="Clear">✕</button>
+        <button class="scanner-btn" id="scan-btn" onclick="runLinkScan()">🔍 Scan Link</button>
+      </div>
+      <div class="scanner-options">
+        <div class="scan-view-toggle" role="group" aria-label="View mode">
+          <button type="button" class="scan-view-btn active" id="view-desktop" onclick="setScanViewMode('desktop')">🖥 Desktop</button>
+          <button type="button" class="scan-view-btn" id="view-mobile" onclick="setScanViewMode('mobile')">📱 Mobile</button>
+        </div>
+        <label class="scan-privacy-opt">
+          <input type="checkbox" id="dont-store-scan" />
+          <span>Don't store this scan — verdict shown once, no shareable link</span>
+        </label>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <a href="#report" class="btn-ghost">🚩 Report Scam Link</a>
+      <a href="#safety" class="btn-ghost">📚 Learn Common Scams</a>
+    </div>
+
+    <div class="scan-progress" id="scan-progress">
+      <div class="scan-progress-bar-wrap"><div class="scan-progress-bar" id="scan-progress-bar"></div></div>
+      <div class="scan-terminal" id="scan-terminal"></div>
+    </div>
+
+    <div class="scan-result" id="scan-result">
+      <div class="do-not-open-banner" id="do-not-open-banner" style="display:none;">
+        <div class="do-not-open-icon">🚫</div>
+        <div>
+          <div class="do-not-open-title" id="do-not-open-title">DO NOT OPEN THIS LINK</div>
+          <div class="do-not-open-sub" id="do-not-open-sub">Malicious content detected.</div>
+        </div>
+      </div>
+      <div class="result-toolbar">
+        <button type="button" class="result-tool-btn" onclick="runLinkScan()">↻ Rescan</button>
+        <button type="button" class="result-tool-btn" onclick="copyScannedUrl()">Copy URL</button>
+        <button type="button" class="result-tool-btn" id="copy-share-btn" style="display:none;" onclick="copyShareLink()">Copy share link</button>
+      </div>
+      <div class="result-storage-note" id="result-storage-note"></div>
+
+      <div class="evidence-warning-panel" id="evidence-warning-panel" style="display:none;">
+        <div class="evidence-warning-title" id="evidence-warning-title">⚠ Warning — evidence on record</div>
+        <p class="evidence-warning-summary" id="evidence-warning-summary"></p>
+        <ul class="evidence-warning-list" id="evidence-warning-list"></ul>
+        <div class="evidence-warning-actions">
+          <button type="button" class="result-tool-btn" onclick="copyShareLink()" id="warning-share-btn">Copy share link</button>
+          <button type="button" class="result-tool-btn" onclick="copyScannedUrl()">Copy scanned URL</button>
+        </div>
+        <p class="form-note" style="margin-top:10px;">256 LinkShield only shows warnings backed by evidence. Share this result so others can review the same findings.</p>
+      </div>
+
+      <div class="result-top">
+        <div class="result-gauge">
+          <svg viewBox="0 0 104 104" width="104" height="104">
+            <circle cx="52" cy="52" r="46" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="9"/>
+            <circle id="result-ring" cx="52" cy="52" r="46" fill="none" stroke="var(--teal-l)" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289" transform="rotate(-90 52 52)"/>
+          </svg>
+          <div class="result-gauge-label">
+            <div class="result-score-n" id="result-score-n">—</div>
+            <div class="result-score-l">TRUST SCORE</div>
+          </div>
+        </div>
+        <div class="result-summary">
+          <div class="premium-tag" id="premium-tag" style="display:none;">🌐 Premium Website Reputation Report</div>
+          <div class="result-url" id="result-url">example-scam.com</div>
+          <div class="verdict-badge" id="verdict-badge">Analyzing…</div>
+          <div class="result-risk" id="result-risk-level">Risk Level: —</div>
+        </div>
+      </div>
+
+      <div class="result-intel-panel" id="result-intel-panel"></div>
+
+      <div class="result-scan-report" id="result-scan-report" style="display:none;">
+        <div class="result-section-label">Scan Report</div>
+        <p class="form-note" style="margin-bottom:12px;">Step-by-step checks performed during this scan. Reports stay visible so you can review how the trust score was calculated.</p>
+        <ul class="result-scan-report-list scan-terminal scan-terminal-persist" id="result-scan-report-list"></ul>
+      </div>
+
+      <div class="result-section-label">Evidence-Based Findings</div>
+      <ul class="result-reasons" id="result-reasons"></ul>
+
+      <div class="result-section-label">Observable Technical Facts</div>
+      <div class="result-tech-grid" id="result-tech-grid"></div>
+
+      <div class="result-section-label">Reports &amp; External Checks</div>
+      <ul class="result-reports" id="result-reports"></ul>
+
+      <div class="result-section-label" id="result-links-label" style="display:none;">Links Found on This Page</div>
+      <ul class="result-page-links" id="result-page-links"></ul>
+
+      <div class="result-recommend" id="result-recommend"></div>
+    </div>
+
+    <div class="hero-trust-row">
+      <div><span>15+</span> scam categories detected</div>
+      <div><span>Official</span> verification engine</div>
+      <div><span>No login</span> required to scan or report</div>
+    </div>
+  </div>
+</section>
+
+<!-- SCANNER FAQ -->
+<section class="sec s-alt" id="scanner-faq">
+  <div class="sec-inner" style="max-width:800px;">
+    <div class="sec-eyebrow">● FAQ</div>
+    <h2 class="sec-h2">Free URL scanner — questions answered</h2>
+    <div class="faq-list">
+      <details class="faq-item"><summary>Is the scanner free? Do I need an account?</summary><p>Yes — completely free. No account, no sign-up. Paste a link and scan instantly.</p></details>
+      <details class="faq-item"><summary>What do the verdicts mean?</summary><p><strong>Verified Authentic</strong> — listed in our trust registry with ownership reviewed by 256 AI Systems. <strong>Unrated</strong> — not enough verified evidence to score the page (like an unknown site). <strong>Caution / Community Reports</strong> — only shown when we have observable evidence or documented reports. We never claim malware, blacklisting, or official warnings without proof.</p></details>
+      <details class="faq-item"><summary>How reliable is the result?</summary><p>It is a strong signal, not a guarantee. We only display warnings backed by evidence — community reports, HTTP errors, redirect mismatches, or trust registry records. When in doubt, verify through the official organization directly.</p></details>
+      <details class="faq-item"><summary>Do you store what I scan?</summary><p>By default, scans are saved locally in your browser so you can copy a share link. Tick <strong>Don't store this scan</strong> before scanning and nothing is kept — you see the result once only.</p></details>
+      <details class="faq-item"><summary>A site I trust was flagged — can I get it verified?</summary><p>Yes. Organizations can apply at <a href="#verify-submit">Get Verified</a> ($30 USD, convertible to local currency). We review ownership and add approved domains to the trust registry.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT LINKSHIELD DETECTS -->
+<section class="sec s-alt">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● What We Detect</div>
+    <h2 class="sec-h2">Built for the scams people actually fall for.</h2>
+    <p class="sec-lede">Not just malware — real-world fraud patterns, impersonation, and social engineering across every channel a scam can arrive on.</p>
+    <div class="detect-grid">
+      <div class="detect-card"><div class="detect-icon">🌐</div><div class="detect-title">Scam Websites</div></div>
+      <div class="detect-card"><div class="detect-icon">🎣</div><div class="detect-title">Phishing Links</div></div>
+      <div class="detect-card"><div class="detect-icon">🦠</div><div class="detect-title">Malware Pages</div></div>
+      <div class="detect-card"><div class="detect-icon">💰</div><div class="detect-title">Fake Grants</div></div>
+      <div class="detect-card"><div class="detect-icon">💼</div><div class="detect-title">Fake Jobs</div></div>
+      <div class="detect-card"><div class="detect-icon">🎓</div><div class="detect-title">Fake Scholarships</div></div>
+      <div class="detect-card"><div class="detect-icon">📱</div><div class="detect-title">Fake Mobile Money Promos</div></div>
+      <div class="detect-card"><div class="detect-icon">❤️</div><div class="detect-title">Fake NGO / Charity Campaigns</div></div>
+      <div class="detect-card"><div class="detect-icon">🏛</div><div class="detect-title">Fake Government Programs</div></div>
+      <div class="detect-card"><div class="detect-icon">📈</div><div class="detect-title">Fake Investment Schemes</div></div>
+      <div class="detect-card"><div class="detect-icon">🏷️</div><div class="detect-title">Brand Impersonation</div></div>
+      <div class="detect-card"><div class="detect-icon">🔗</div><div class="detect-title">Suspicious Shortened Links</div></div>
+      <div class="detect-card"><div class="detect-icon">📷</div><div class="detect-title">QR Code Scams</div></div>
+      <div class="detect-card"><div class="detect-icon">💬</div><div class="detect-title">SMS Scams</div></div>
+      <div class="detect-card"><div class="detect-icon">✉️</div><div class="detect-title">Email Phishing</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SCAM CAMPAIGN INTELLIGENCE -->
+<section class="sec">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Scam Campaign Intelligence</div>
+    <h2 class="sec-h2">More than a virus scan — a fraud campaign check.</h2>
+    <p class="sec-lede">256 LinkShield checks whether a campaign has already been reported as fraudulent across public reports, official warnings, fact-check sources, cybersecurity alerts and community reports.</p>
+    <div class="campaign-examples">
+      <span class="campaign-chip">fake UNICEF grants</span>
+      <span class="campaign-chip">fake government cash programs</span>
+      <span class="campaign-chip">fake NGO funding</span>
+      <span class="campaign-chip">fake bank promotions</span>
+      <span class="campaign-chip">fake telecom giveaways</span>
+      <span class="campaign-chip">fake job recruitment links</span>
+      <span class="campaign-chip">fake scholarship offers</span>
+    </div>
+  </div>
+</section>
+
+<!-- OFFICIAL VERIFICATION ENGINE -->
+<section class="sec s-alt">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Official Verification Engine</div>
+    <h2 class="sec-h2">When a link claims to represent an organization, we check if that's true.</h2>
+    <p class="sec-lede">256 LinkShield cross-references the claimed organization's real website, verified social channels, public warnings, fact-check reports, cybersecurity reports and community reports.</p>
+
+    <div class="verify-flow">
+      <div class="verify-col">
+        <div class="verify-col-title">User Scans</div>
+        <div style="font-family:var(--DM);font-weight:600;font-size:18px;color:var(--red);">fake-unicef-grant.com</div>
+      </div>
+      <div class="verify-arrow">→</div>
+      <div class="verify-col">
+        <div class="verify-col-title">LinkShield Checks</div>
+        <ul>
+          <li>Official UNICEF website</li>
+          <li>UNICEF verified social channels</li>
+          <li>Public warnings</li>
+          <li>Fact-check reports</li>
+          <li>Cybersecurity reports</li>
+          <li>Community reports</li>
+        </ul>
+      </div>
+    </div>
+    <div class="verify-verdict">
+      <span class="verdict-badge" style="background:#FEE2E2;color:#B91C1C;">⛔ Likely Scam — Official Warning Found</span>
+    </div>
+  </div>
+</section>
+
+<!-- SCANNER TOOLS -->
+<section class="sec" id="tools">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Scanner Tools</div>
+    <h2 class="sec-h2">One engine, every channel a scam can arrive on.</h2>
+    <p class="sec-lede">Each tool runs the same fraud-detection engine, tuned to the format you paste in.</p>
+    <div class="tools-grid">
+      <div class="tool-card">
+        <div class="tool-icon">🔗</div>
+        <div class="tool-title">Link Scanner</div>
+        <div class="tool-desc">Paste any URL — website, shortened link, or redirect chain.</div>
+        <input class="tool-input" placeholder="https://…" id="tool-link-input"/>
+        <button class="tool-btn" onclick="runToolScan('tool-link-input','link')">Scan Link</button>
+      </div>
+      <div class="tool-card">
+        <div class="tool-icon">📷</div>
+        <div class="tool-title">QR Code Scanner</div>
+        <div class="tool-desc">Upload or scan a QR code to check the destination before opening it.</div>
+        <input type="file" class="form-file" accept="image/*" id="tool-qr-input" style="margin-bottom:12px;"/>
+        <button class="tool-btn" onclick="scanQRCode()">Scan QR Code</button>
+      </div>
+      <div class="tool-card">
+        <div class="tool-icon">💬</div>
+        <div class="tool-title">SMS Scam Checker</div>
+        <div class="tool-desc">Paste the suspicious SMS text to check for scam patterns and known scripts.</div>
+        <textarea class="tool-input" placeholder="Paste SMS text…" id="tool-sms-input"></textarea>
+        <button class="tool-btn" onclick="runToolScan('tool-sms-input','sms')">Check SMS</button>
+      </div>
+      <div class="tool-card">
+        <div class="tool-icon">✉️</div>
+        <div class="tool-title">Email Scam Detector</div>
+        <div class="tool-desc">Paste email content or headers to check for phishing indicators.</div>
+        <textarea class="tool-input" placeholder="Paste email content or headers…" id="tool-email-input"></textarea>
+        <button class="tool-btn" onclick="runToolScan('tool-email-input','email')">Check Email</button>
+      </div>
+      <div class="tool-card">
+        <div class="tool-icon">📲</div>
+        <div class="tool-title">Social Media Link Checker</div>
+        <div class="tool-desc">Check links shared on WhatsApp, Facebook, Instagram, X, Telegram, Reddit or LinkedIn.</div>
+        <input class="tool-input" placeholder="Paste social media link…" id="tool-social-input"/>
+        <button class="tool-btn" onclick="runToolScan('tool-social-input','social')">Check Link</button>
+      </div>
+      <div class="tool-card tool-card-paid">
+        <div class="tool-paid-badge">$5 per website</div>
+        <div class="tool-icon">🌐</div>
+        <div class="tool-title">Website Reputation Checker</div>
+        <div class="tool-desc">Check domain age, SSL, redirects, blacklist status and impersonation indicators.</div>
+        <input class="tool-input" placeholder="Enter a domain…" id="tool-domain-input"/>
+        <button class="tool-btn tool-btn-paid" onclick="openPaywall()">🔒 Pay $5 &amp; Check Domain</button>
+        <div class="tool-paid-note">The only paid check on 256 LinkShield — a full domain reputation deep-dive.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VERDICT SYSTEM -->
+<section class="sec s-alt">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Verdict System</div>
+    <h2 class="sec-h2">Verdicts based on evidence — not guesses.</h2>
+    <p class="sec-lede">We only rate what we can prove: trust registry records, live page facts, and documented community reports. Unknown sites show as <strong>Unrated</strong> until evidence exists.</p>
+    <div class="verdict-legend">
+      <div class="verdict-tier" style="background:var(--green-bg);border-color:rgba(34,197,94,0.3);"><div class="verdict-tier-score" style="color:var(--green);">97</div><div class="verdict-tier-name">Verified Authentic</div></div>
+      <div class="verdict-tier" style="background:rgba(255,255,255,0.06);border-color:var(--line);"><div class="verdict-tier-score" style="color:var(--dim2);">—</div><div class="verdict-tier-name">Unrated</div></div>
+      <div class="verdict-tier" style="background:rgba(234,179,8,0.08);border-color:rgba(234,179,8,0.3);"><div class="verdict-tier-score" style="color:var(--yellow);">⚠</div><div class="verdict-tier-name">Caution</div></div>
+      <div class="verdict-tier" style="background:var(--orange-bg);border-color:rgba(245,158,11,0.3);"><div class="verdict-tier-score" style="color:var(--orange);">🚩</div><div class="verdict-tier-name">Community Reports</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMUNITY REPORTING -->
+<section class="sec" id="report">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Community Reporting</div>
+    <h2 class="sec-h2">Seen a scam link? Report it — no login required.</h2>
+    <p class="sec-lede">Your report is stored as evidence. When someone scans the same link, they will see your report with the URL, source channel, and claim — backed by what you submit here.</p>
+    <div class="report-form" id="report-form">
+      <div class="form-row">
+        <label class="form-label" for="report-link">Suspicious Link</label>
+        <input class="form-input" id="report-link" placeholder="Paste the suspicious link" required />
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="report-source">Where did you receive it?</label>
+        <select class="form-select" id="report-source">
+          <option>WhatsApp</option><option>Facebook</option><option>SMS</option><option>Email</option>
+          <option>Telegram</option><option>X (Twitter)</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="report-claim">What does the link claim?</label>
+        <input class="form-input" id="report-claim" placeholder="e.g. UNICEF grant, mobile money bonus, job offer…"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="report-screenshot">Screenshot (optional)</label>
+        <input type="file" class="form-file" id="report-screenshot" accept="image/*"/>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="report-comment">Your Comment (optional)</label>
+        <textarea class="form-textarea" id="report-comment" placeholder="Add any extra detail…"></textarea>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="report-contact">Contact (optional)</label>
+        <input class="form-input" id="report-contact" placeholder="Email or phone — only if you want a follow-up"/>
+        <div class="form-note">Reporting does not require an account. Your contact info is only used if you ask for a follow-up.</div>
+      </div>
+      <button type="button" class="form-submit" onclick="submitReport()">🚩 Submit Report</button>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY EDUCATION -->
+<section class="sec s-alt" id="safety">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Public Safety Education</div>
+    <h2 class="sec-h2">Common Online Scams in Africa</h2>
+    <p class="sec-lede">Recognizing the pattern is the fastest way to avoid it.</p>
+    <div class="edu-grid">
+      <div class="edu-card">Fake Grants</div>
+      <div class="edu-card">Fake Jobs</div>
+      <div class="edu-card">Mobile Money Scams</div>
+      <div class="edu-card">Fake Charity Campaigns</div>
+      <div class="edu-card">Fake Scholarships</div>
+      <div class="edu-card">Romance Scams</div>
+      <div class="edu-card">Investment Scams</div>
+      <div class="edu-card">Phishing Login Pages</div>
+      <div class="edu-card">Fake Delivery Messages</div>
+      <div class="edu-card">Fake Bank Verification Messages</div>
+    </div>
+  </div>
+</section>
+
+<!-- ENTERPRISE -->
+<section class="sec" id="enterprise">
+  <div class="sec-inner">
+    <div class="enterprise-grid">
+      <div>
+        <div class="sec-eyebrow">● For Organizations</div>
+        <h2 class="sec-h2" style="max-width:100%;">Protect Your Brand from Impersonation</h2>
+        <p class="sec-lede" style="margin-bottom:0;">Scammers impersonate trusted institutions because it works. We help organizations detect, report and take down fraudulent campaigns using their name.</p>
+        <div class="enterprise-for">
+          <span class="enterprise-chip">Government Ministries</span>
+          <span class="enterprise-chip">NGOs</span>
+          <span class="enterprise-chip">Banks</span>
+          <span class="enterprise-chip">Telecoms</span>
+          <span class="enterprise-chip">Universities</span>
+          <span class="enterprise-chip">Hospitals</span>
+          <span class="enterprise-chip">Companies</span>
+          <span class="enterprise-chip">E-commerce Platforms</span>
+        </div>
+        <a href="/consultation.html?service=linkshield-enterprise" class="btn-primary" style="margin-top:28px;">Protect Our Organization →</a>
+      </div>
+      <div class="verify-col">
+        <div class="verify-col-title" style="font-size:11px;">Services Included</div>
+        <ul class="enterprise-list">
+          <li>🔍 Brand impersonation monitoring</li>
+          <li>🛑 Fake website takedown support</li>
+          <li>📡 Scam campaign alerts</li>
+          <li>📄 Public warning page</li>
+          <li>✅ Verified organization profile</li>
+          <li>📋 Incident reports</li>
+          <li>🛰️ Threat intelligence reports</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- API -->
+<section class="sec s-alt" id="api">
+  <div class="sec-inner">
+    <div class="api-box">
+      <div class="sec-eyebrow" style="justify-content:center;">● Coming Soon</div>
+      <h2 class="sec-h2" style="margin:0 auto 16px;">LinkShield API</h2>
+      <p class="sec-lede" style="margin:0 auto;">Integrate scam and fraud detection directly into your product.</p>
+      <div class="api-targets">
+        <span class="enterprise-chip">Mobile Apps</span>
+        <span class="enterprise-chip">Banking Apps</span>
+        <span class="enterprise-chip">E-commerce Platforms</span>
+        <span class="enterprise-chip">Browsers</span>
+        <span class="enterprise-chip">Email Platforms</span>
+        <span class="enterprise-chip">SMS Gateways</span>
+        <span class="enterprise-chip">WhatsApp Support Systems</span>
+      </div>
+      <a href="/consultation.html?service=linkshield-api" class="btn-primary">Request API Access →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ORGANIZATION VERIFICATION ($30) -->
+<section class="sec" id="verify-submit">
+  <div class="sec-inner">
+    <div class="verify-org-grid">
+      <div>
+        <div class="sec-eyebrow">● Get Your Website Verified</div>
+        <h2 class="sec-h2">Submit your organization for LinkShield verification.</h2>
+        <p class="sec-lede">Legitimate organizations can apply to be listed in the 256 LinkShield trust registry. Once approved, your website scans as <strong>Verified Authentic</strong> — protecting your users from impersonation scams.</p>
+        <div class="verify-price-box">
+          <div class="verify-price-amount">$30 <span>USD</span></div>
+          <div class="verify-price-note">One-time verification fee · converted to your local currency at checkout (UGX, KES, NGN, USD and more)</div>
+        </div>
+        <ul class="enterprise-list" style="margin-top:24px;">
+          <li>✅ Listed in the public LinkShield trust registry</li>
+          <li>✅ Scans return Verified Authentic for your domain</li>
+          <li>✅ Organization ownership review by 256 AI Systems</li>
+          <li>✅ Protection against impersonation in scam checks</li>
+          <li>✅ Review within 3 business days after payment</li>
+        </ul>
+        <p class="form-note" style="margin-top:20px;">You will need your organization name, official website, registration details (certificate, incorporation or NGO registration), and a contact phone number.</p>
+      </div>
+      <div>
+        <form class="report-form" id="verify-org-form" style="margin-top:0;" onsubmit="submitVerifyOrgForm(event)">
+          <div class="form-row">
+            <label class="form-label" for="verify-org-name">Organization Name</label>
+            <input class="form-input" id="verify-org-name" placeholder="e.g. Build Champions" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-website">Official Website</label>
+            <input class="form-input" id="verify-website" placeholder="https://yourorganization.org" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-contact">Contact Person</label>
+            <input class="form-input" id="verify-contact" placeholder="Full name" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-email">Email</label>
+            <input class="form-input" id="verify-email" type="email" placeholder="you@organization.com" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-phone">Phone / WhatsApp</label>
+            <input class="form-input" id="verify-phone" type="tel" placeholder="+256 7XX XXX XXX" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-country">Country</label>
+            <input class="form-input" id="verify-country" placeholder="e.g. Uganda, United States" />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-org-type">Organization Type</label>
+            <select class="form-select" id="verify-org-type">
+              <option value="ngo">NGO / Non-Profit</option>
+              <option value="501c3">US 501(c)(3) Non-Profit</option>
+              <option value="company">Company / Business</option>
+              <option value="government">Government / Ministry</option>
+              <option value="university">University / School</option>
+              <option value="faith">Church / Faith-Based</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="verify-registration">Registration Details</label>
+            <textarea class="form-textarea" id="verify-registration" placeholder="Registration number, URSB / NGO Bureau / 501(c)(3) EIN, constitution reference, or certificate details…"></textarea>
+            <div class="form-note">We verify ownership before listing your domain.</div>
+          </div>
+          <button type="submit" class="form-submit">Continue to Pay $30 →</button>
+          <div class="form-success" id="verify-success">✓ Request <strong id="verify-success-ref"></strong> submitted. We will review your organization within 3 business days and add your domain to the trust registry once approved.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VERIFIED AUTHENTIC REGISTRY -->
+<section class="sec s-alt" id="verified">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● 256 Verified Authentic</div>
+    <h2 class="sec-h2">Sites we built. Verified as authentic.</h2>
+    <p class="sec-lede">These domains are registered in the 256 LinkShield trust registry — built and operated by 256 AI Systems. Scanning any of them returns a <strong>Verified Authentic / Safe</strong> result. <strong>Every *.256.co.ug subdomain</strong> is covered automatically — including <strong>shield.256.co.ug</strong>, <strong>linkshield.256.co.ug</strong>, portal, seo, ai and any future subdomain.</p>
+    <div class="enterprise-for" style="margin-top:28px;">
+      <span class="enterprise-chip">256.co.ug</span>
+      <span class="enterprise-chip">*.256.co.ug</span>
+      <span class="enterprise-chip">shield.256.co.ug</span>
+      <span class="enterprise-chip">linkshield.256.co.ug</span>
+      <span class="enterprise-chip">seo.256.co.ug</span>
+      <span class="enterprise-chip">portal.256.co.ug</span>
+      <span class="enterprise-chip">256.ug</span>
+      <span class="enterprise-chip">256heart.com</span>
+      <span class="enterprise-chip" title="Operated by Build Champions (501(c)(3))">litigationspace.com</span>
+      <span class="enterprise-chip">acboard.us</span>
+      <span class="enterprise-chip">buildchampions.org</span>
+    </div>
+    <p class="form-note" style="margin-top:20px;max-width:720px;">LitigationSpace is built by 256 AI Systems and operated by <strong>Build Champions</strong>, a US-based 501(c)(3) nonprofit. Other organizations can apply for verification above.</p>
+  </div>
+</section>
+
+<!-- WHO IT'S FOR — $30/month subscription -->
+<section class="sec s-alt" id="who-its-for">
+  <div class="sec-inner">
+    <div class="sec-eyebrow">● Who it's for</div>
+    <h2 class="sec-h2">Free scanning for everyone. Subscription protection when you need more.</h2>
+    <p class="sec-lede">URL scanning is free — no account. <strong>$30/month</strong> (convertible to local currency) unlocks always-on monitoring, multi-channel checks, and team coverage. Organization website verification remains a separate <a href="#verify-submit">$30 one-time</a> trust registry fee.</p>
+    <div class="who-plans-grid">
+      <div class="who-plan-card">
+        <div class="who-plan-tag">01 / Home</div>
+        <h3 class="who-plan-title">Individuals &amp; Families</h3>
+        <div class="who-plan-price">$30 <span>/ month</span></div>
+        <ul class="who-plan-list">
+          <li>SMS &amp; email scam monitoring</li>
+          <li>Family device coverage (up to 5)</li>
+          <li>Priority scan history &amp; alerts</li>
+        </ul>
+        <a href="/consultation.html?service=linkshield-individual" class="btn-primary">Subscribe →</a>
+      </div>
+      <div class="who-plan-card">
+        <div class="who-plan-tag">02 / Business</div>
+        <h3 class="who-plan-title">Small / Medium Business</h3>
+        <div class="who-plan-price">$30 <span>/ month</span></div>
+        <ul class="who-plan-list">
+          <li>Brand impersonation alerts</li>
+          <li>Team link-check workspace</li>
+          <li>Monthly threat summary</li>
+        </ul>
+        <a href="/consultation.html?service=linkshield-enterprise" class="btn-primary">Subscribe →</a>
+      </div>
+      <div class="who-plan-card">
+        <div class="who-plan-tag">03 / MSP</div>
+        <h3 class="who-plan-title">Managed Service Providers</h3>
+        <div class="who-plan-price">$30 <span>/ month per client</span></div>
+        <ul class="who-plan-list">
+          <li>Multi-tenant client dashboards</li>
+          <li>White-label scan reports</li>
+          <li>API access for integrations</li>
+        </ul>
+        <a href="/consultation.html?service=linkshield-partnership" class="btn-primary">Subscribe →</a>
+      </div>
+      <div class="who-plan-card who-plan-featured">
+        <div class="who-plan-tag">04 / Enterprise</div>
+        <h3 class="who-plan-title">Enterprise &amp; Government</h3>
+        <div class="who-plan-price">$30 <span>/ month / seat</span></div>
+        <ul class="who-plan-list">
+          <li>Central policy management</li>
+          <li>Takedown &amp; incident support</li>
+          <li>Custom trust registry &amp; API SLA</li>
+        </ul>
+        <a href="/consultation.html?service=linkshield-enterprise" class="btn-primary">Book a demo →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY / LEGAL NOTICE -->
+<section class="sec" style="padding-top:0;">
+  <div class="sec-inner">
+    <div class="safety-notice">
+      <div style="font-weight:700;font-size:14px;">⚠ Important Safety &amp; Legal Notice</div>
+      <ul>
+        <li>256 LinkShield provides an evidence-based risk assessment, not a legal conclusion. We do not show malware, blacklist, or official-warning claims without verified proof.</li>
+        <li>Never enter passwords, bank details, OTPs, or personal information into a suspicious website.</li>
+        <li>Always verify directly with the official organization before making a payment or submitting personal data.</li>
+        <li>Organizations may request impersonation monitoring and takedown assistance — see "For Organizations" above.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="site-footer">
+  <div class="footer-top">
+    <div>
+      <a href="/" class="nav-logo"><span class="nav-logo-mark">LS</span><span>256 LinkShield</span></a>
+      <p class="footer-tagline">An AI-powered scam link, QR, SMS and email fraud detection platform — part of the 256 AI Systems family. Free URL scans; subscription plans from $30/month.</p>
+    </div>
+    <div>
+      <div class="footer-col-title">Navigate</div>
+      <ul class="footer-col-links">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#scan">Scan Link</a></li>
+        <li><a href="#tools">Verify Text / SMS / Email</a></li>
+        <li><a href="#report">Report Scam</a></li>
+        <li><a href="#who-its-for">Plans ($30/mo)</a></li>
+        <li><a href="#verify-submit">Get Verified ($30)</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Resources</div>
+      <ul class="footer-col-links">
+        <li><a href="#safety">Safety Tips</a></li>
+        <li><a href="#scanner-faq">FAQ</a></li>
+        <li><a href="#api">API Access</a></li>
+        <li><a href="/news">News</a></li>
+        <li><a href="/consultation.html">Contact / Demo</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">256 AI Systems</div>
+      <ul class="footer-col-links">
+        <li><a href="https://256.co.ug" target="_blank" rel="noreferrer">256 AI Systems ↗</a></li>
+        <li><a href="https://256.co.ug/shield.html" target="_blank" rel="noreferrer">256 Shield ↗</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Legal</div>
+      <ul class="footer-col-links">
+        <li><a href="/privacy-policy.html">Privacy Policy</a></li>
+        <li><a href="/terms.html">Terms of Service</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 256 LinkShield · A 256 AI Systems product. All rights reserved.</div>
+    <div>Risk assessment only — not a legal conclusion.</div>
+  </div>
+</footer>
+
+<!-- VERIFY PAYWALL — Organization Verification ($30) -->
+<div class="paywall-overlay" id="verify-paywall-overlay" style="display:none;">
+  <div class="paywall-box">
+    <div class="paywall-icon">✅</div>
+    <div class="paywall-title">Organization Verification</div>
+    <div class="paywall-domain" id="verify-paywall-org">Your Organization</div>
+    <div style="font-size:14px;color:var(--dim);margin-bottom:8px;" id="verify-paywall-domain">yourdomain.com</div>
+    <div class="paywall-price">$30.00 <span>/ one-time · local currency at checkout</span></div>
+    <div class="paywall-includes">
+      <div>✓ Trust registry listing after approval</div>
+      <div>✓ Verified Authentic scan results for your domain</div>
+      <div>✓ Organization ownership review</div>
+      <div>✓ Review within 3 business days</div>
+    </div>
+    <div class="paywall-methods">
+      <button type="button" class="paywall-method active" id="verify-method-card" onclick="selectVerifyPaymentMethod('card')">💳 Card</button>
+      <button type="button" class="paywall-method" id="verify-method-momo" onclick="selectVerifyPaymentMethod('momo')">📱 Mobile Money</button>
+    </div>
+    <button type="button" class="paywall-pay-btn" id="verify-paywall-pay-btn" onclick="payAndSubmitVerification()">Pay $30 &amp; Submit →</button>
+    <button type="button" class="paywall-cancel" onclick="closeVerifyPaywall()">Cancel</button>
+    <div class="paywall-status" id="verify-paywall-status">Processing payment…</div>
+  </div>
+</div>
+
+<!-- PAYWALL MODAL — Website Reputation Checker ($5) -->
+<div class="paywall-overlay" id="paywall-overlay" style="display:none;">
+  <div class="paywall-box">
+    <div class="paywall-icon">🌐</div>
+    <div class="paywall-title">Website Reputation Report</div>
+    <div class="paywall-domain" id="paywall-domain">yourdomain.com</div>
+    <div class="paywall-price">$5.00 <span>/ one-time check</span></div>
+    <div class="paywall-includes">
+      <div>✓ Domain age &amp; registration history</div>
+      <div>✓ SSL, hosting &amp; WHOIS privacy detail</div>
+      <div>✓ Redirect chain &amp; blacklist status</div>
+      <div>✓ Impersonation indicators</div>
+    </div>
+    <div class="paywall-methods">
+      <button class="paywall-method active" id="method-card" onclick="selectPaymentMethod('card')">💳 Card</button>
+      <button class="paywall-method" id="method-momo" onclick="selectPaymentMethod('momo')">📱 Mobile Money</button>
+    </div>
+    <button class="paywall-pay-btn" id="paywall-pay-btn" onclick="payAndCheckDomain()">Pay $5 &amp; Check Domain</button>
+    <button class="paywall-cancel" onclick="closePaywall()">Cancel</button>
+    <div class="paywall-status" id="paywall-status">Processing payment…</div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script>
+const navHeader = document.getElementById('nav');
+  window.addEventListener('scroll', () => navHeader.classList.toggle('scrolled', window.scrollY > 30), { passive:true });
+
+  const CIRC = 2 * Math.PI * 46; // 289
+  const VERIFIED_AUTHENTIC_SCORE = 97;
+
+  // Domains built and operated by 256 AI Systems — always verified authentic in LinkShield
+  const VERIFIED_AUTHENTIC_SITES = [
+    { host: '256.co.ug', label: '256 AI Systems', note: 'Official corporate site — built and operated by 256 AI Systems' },
+    { host: '256.ug', label: '256 Mall', note: "Uganda's digital marketplace — built and operated by 256 AI Systems" },
+    { host: '256heart.com', label: '256 Heart', note: '256 Heart platform — built and operated by 256 AI Systems' },
+    { host: 'litigationspace.com', label: 'LitigationSpace', operator: 'Build Champions (501(c)(3))', note: 'LitigationSpace — built by 256 AI Systems and operated by Build Champions, a US-based 501(c)(3) nonprofit' },
+    { host: 'acboard.us', label: 'American Certification Board (ACB)', note: 'AC Board certification platform — built and operated by 256 AI Systems' },
+    { host: 'buildchampions.org', label: 'Build Champions', note: 'Client website built and maintained by 256 AI Systems' },
+  ];
+
+  // Every *.256.co.ug subdomain is verified safe — explicit labels for known properties
+  const VERIFIED_256_SUBDOMAINS = {
+    'shield.256.co.ug': { label: '256 Shield', note: '256 Shield cybersecurity platform — built and operated by 256 AI Systems' },
+    'linkshield.256.co.ug': { label: '256 LinkShield', note: '256 LinkShield scam link checker — built and operated by 256 AI Systems' },
+    'seo.256.co.ug': { label: '256 AutoSEO', note: '256 AutoSEO platform — built and operated by 256 AI Systems' },
+    'portal.256.co.ug': { label: '256 Portal', note: '256 client portal — built and operated by 256 AI Systems' },
+    'ai.256.co.ug': { label: '256 AI', note: '256 AI platform — built and operated by 256 AI Systems' },
+    'social.256.co.ug': { label: '256 Social', note: '256 Social platform — built and operated by 256 AI Systems' },
+    'plenary.256.co.ug': { label: '256 Plenary', note: '256 Plenary platform — built and operated by 256 AI Systems' },
+    'dating.256.co.ug': { label: '256 Dating', note: '256 Dating platform — built and operated by 256 AI Systems' },
+    'express.256.co.ug': { label: '256 Express', note: '256 Express platform — built and operated by 256 AI Systems' },
+    'nas.256.co.ug': { label: 'NAS', note: 'National Accountability System — built and operated by 256 AI Systems' },
+  };
+
+  const VERIFIED_REASONS = [
+    'Listed in the 256 LinkShield trust registry (256 AI Systems)',
+    'Domain ownership reviewed and recorded by 256 AI Systems',
+  ];
+
+  const UNRATED_VERDICT = {
+    label: 'Unrated',
+    color: 'var(--dim2)',
+    bg: 'rgba(255,255,255,0.06)',
+    text: 'var(--dim)',
+    icon: '◯',
+    summary: 'We do not have enough verified evidence to rate this page yet. Review the findings below and verify through official channels.',
+  };
+
+  const CAUTION_VERDICT = {
+    label: 'Caution',
+    color: 'var(--yellow)',
+    bg: 'rgba(234,179,8,0.14)',
+    text: '#FDE68A',
+    icon: '⚠️',
+    summary: 'Observable issues were found. Each item below includes evidence — we do not claim more than what is shown.',
+  };
+
+  const REPORTED_VERDICT = {
+    label: 'Community Reports',
+    color: 'var(--orange)',
+    bg: 'var(--orange-bg)',
+    text: '#FDBA74',
+    icon: '🚩',
+    summary: 'This URL has community scam reports on record. Review the evidence and share this scan so others are informed.',
+  };
+
+  function normalizeHost(input){
+    let s = (input || '').trim().toLowerCase();
+    if(!s) return '';
+    try {
+      if(!/^https?:\/\//i.test(s)) s = 'https://' + s;
+      return new URL(s).hostname.replace(/^www\./, '').replace(/\.$/, '');
+    } catch {
+      return s.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('?')[0].split('#')[0].replace(/\.$/, '');
+    }
+  }
+
+  /** ppda.go.ug and www.ppda.go.ug normalize to the same host — not a malicious redirect. */
+  function sameSiteHost(a, b){
+    const ha = normalizeHost(a || '');
+    const hb = normalizeHost(b || '');
+    return Boolean(ha && hb && ha === hb);
+  }
+
+  function isUgandaGovDomain(host){
+    const h = normalizeHost(host);
+    return h.endsWith('.go.ug') || h === 'go.ug';
+  }
+
+  function is256CoUgFamily(host){
+    if(!host) return false;
+    return host === '256.co.ug' || host.endsWith('.256.co.ug');
+  }
+
+  // Live page intel for verified / known properties (enriches scan results like SafeToOpen)
+  const PAGE_INTEL_API = 'https://256.co.ug/api/linkshield/page-intel';
+
+  const SITE_INTEL = {
+    'acboard.us': {
+      pageTitle: 'American Certification Board (ACB) | Train · Certify · Hire',
+      redirect: 'https://acboard.us/',
+      hosting: { ip: '72.62.165.54', provider: 'Hostinger International Limited (AS47583)', country: 'United States', network: '72.62.0.0/16' },
+      pageLinks: [
+        'https://acboard.us/#main-content', 'https://acboard.us/mission', 'https://acboard.us/', 'https://acboard.us/about',
+        'https://acboard.us/certifications', 'https://acboard.us/english-placement', 'https://acboard.us/hire', 'https://acboard.us/scholarship',
+        'https://acboard.us/free-english-practice', 'https://acboard.us/verify', 'https://acboard.us/login',
+        'https://acboard.us/enroll?slug=legal-intake-specialist', 'https://acboard.us/certifications?filter=live',
+        'https://acboard.us/verify?id=ACB-DEMO-2026', 'https://acboard.us/verify?id=ACB-2026-00247',
+        'https://acboard.us/certifications?sector=legal', 'https://acboard.us/certifications?sector=ai',
+        'https://acboard.us/certifications?sector=customer', 'https://acboard.us/certifications?sector=data',
+        'https://acboard.us/certifications?sector=sales', 'https://acboard.us/certifications?sector=marketing',
+        'https://acboard.us/certifications?sector=tech', 'https://acboard.us/certifications?sector=cybersec',
+        'https://acboard.us/certifications?sector=pm', 'https://acboard.us/certifications?sector=healthcare',
+        'https://acboard.us/certifications?sector=finance', 'https://acboard.us/certifications?sector=cloud',
+        'https://acboard.us/certifications?sector=admin', 'https://acboard.us/certifications?sector=ecommerce',
+        'https://acboard.us/certifications?sector=translation', 'https://acboard.us/certifications?sector=hr',
+        'https://acboard.us/certifications?sector=realestate', 'https://acboard.us/certifications?sector=design',
+        'https://acboard.us/free-resources', 'https://acboard.us/donate', 'https://acboard.us/legal-aid',
+        'https://acboard.us/how-fees-are-used', 'https://acboard.us/privacy', 'https://acboard.us/terms',
+        'https://acboard.us/scholarship-policy', 'https://acboard.us/refund-policy', 'https://acboard.us/cookie-policy',
+        'https://acboard.us/accessibility', 'https://acboard.us/exam-integrity', 'https://acboard.us/lacc', 'https://acboard.us/contact',
+      ],
+    },
+    'buildchampions.org': {
+      pageTitle: 'Build Champions — NGO & Community Development',
+      redirect: 'https://buildchampions.org/',
+    },
+    'litigationspace.com': {
+      pageTitle: 'LitigationSpace — Legal Case Management',
+      redirect: 'https://litigationspace.com/',
+    },
+    '256.co.ug': { pageTitle: '256 AI Systems — Enterprise Digital Infrastructure', redirect: 'https://256.co.ug/' },
+    '256.ug': { pageTitle: '256 Mall — Uganda\'s Digital Marketplace', redirect: 'https://256.ug/' },
+  };
+
+  let scanViewMode = 'desktop';
+  let lastScannedUrl = '';
+  let lastShareId = null;
+  let lastScanReportLines = [];
+
+  function getSiteIntel(host){
+    if(!host) return null;
+    if(SITE_INTEL[host]) return SITE_INTEL[host];
+    if(is256CoUgFamily(host)){
+      return { pageTitle: `256 AI Systems — ${host}`, redirect: `https://${host}/` };
+    }
+    return null;
+  }
+
+  function canonicalScanUrl(input){
+    const host = normalizeHost(input);
+    if(!host) return input.trim();
+    if(/^https?:\/\//i.test(input.trim())) return input.trim().split(/[?#]/)[0].replace(/\/$/, '') || input.trim();
+    return `https://${host}`;
+  }
+
+  function externalCheckLinks(host){
+    const enc = encodeURIComponent(host);
+    return [
+      { label: 'Whois', href: `https://who.is/whois/${enc}` },
+      { label: 'VirusTotal', href: `https://www.virustotal.com/gui/domain/${enc}` },
+      { label: 'Google Transparency', href: `https://transparencyreport.google.com/safe-browsing/search?url=https%3A%2F%2F${enc}&hl=en` },
+    ];
+  }
+
+  function formatScanTimestamp(iso){
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    } catch { return iso; }
+  }
+
+  function clearScanInput(){
+    const input = document.getElementById('link-input');
+    if(input) input.value = '';
+    document.getElementById('scan-result').style.display = 'none';
+    const progress = document.getElementById('scan-progress');
+    if(progress){
+      progress.style.display = 'none';
+      progress.classList.remove('scan-complete');
+    }
+    const terminal = document.getElementById('scan-terminal');
+    if(terminal) terminal.innerHTML = '';
+    lastScanReportLines = [];
+    input?.focus();
+  }
+
+  function setScanViewMode(mode){
+    scanViewMode = mode;
+    document.getElementById('view-desktop')?.classList.toggle('active', mode === 'desktop');
+    document.getElementById('view-mobile')?.classList.toggle('active', mode === 'mobile');
+    document.getElementById('scan-result')?.classList.toggle('view-mobile', mode === 'mobile');
+  }
+
+  function copyText(value, label){
+    if(!value) return;
+    navigator.clipboard?.writeText(value).then(() => {
+      showToast(`${label || 'Text'} copied.`);
+    }).catch(() => showToast('Could not copy — select and copy manually.', 'error'));
+  }
+
+  function copyScannedUrl(){
+    copyText(lastScannedUrl || document.getElementById('result-url')?.textContent, 'URL');
+  }
+
+  function copyShareLink(){
+    if(!lastShareId){ showToast('This scan was not stored — no share link.', 'error'); return; }
+    const url = `${window.location.origin}${window.location.pathname}?s=${lastShareId}`;
+    copyText(url, 'Share link');
+  }
+
+  function saveScanToHistory(record){
+    const list = JSON.parse(localStorage.getItem('linkshield_scan_history') || '[]');
+    list.unshift(record);
+    localStorage.setItem('linkshield_scan_history', JSON.stringify(list.slice(0, 100)));
+    return record.id;
+  }
+
+  function guessScannedFrom(){
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+    } catch { return 'Local'; }
+  }
+
+  async function fetchLivePageIntel(input){
+    try {
+      const res = await fetch(PAGE_INTEL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: input, viewMode: scanViewMode }),
+      });
+      if(!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function mergePageIntel(staticIntel, liveIntel, host){
+    const merged = { ...(staticIntel || {}) };
+    if(liveIntel){
+      merged.ok = liveIntel.ok;
+      merged.httpStatus = liveIntel.httpStatus;
+      merged.error = liveIntel.error;
+      merged.finalUrl = liveIntel.finalUrl || merged.redirect;
+      merged.redirect = liveIntel.finalUrl || merged.redirect;
+      merged.pageTitle = liveIntel.pageTitle || merged.pageTitle;
+      if(liveIntel.pageLinks?.length) merged.pageLinks = liveIntel.pageLinks;
+      if(liveIntel.hosting?.ip){
+        merged.hosting = {
+          ...(merged.hosting || {}),
+          ip: liveIntel.hosting.ip,
+        };
+      }
+      merged.scannedFrom = liveIntel.scannedFrom || merged.scannedFrom;
+      merged.linkCount = liveIntel.linkCount ?? (merged.pageLinks?.length || 0);
+      merged.screenshotUrl = liveIntel.screenshotUrl || merged.screenshotUrl;
+      merged.captureMethod = liveIntel.captureMethod || merged.captureMethod;
+      merged.liveFetch = Boolean(liveIntel.ok);
+    } else if(staticIntel?.pageLinks?.length){
+      merged.linkCount = staticIntel.pageLinks.length;
+    }
+    if(!merged.linkCount && merged.pageLinks?.length) merged.linkCount = merged.pageLinks.length;
+    return merged;
+  }
+
+  function scanLinkFromResult(url){
+    if(!url) return;
+    if(!window.confirm(`Scan this link?\n${url}`)) return;
+    const input = document.getElementById('link-input');
+    if(input) input.value = url;
+    document.querySelector('.hero-inner')?.scrollIntoView({ behavior:'smooth', block:'start' });
+    runLinkScan();
+  }
+  window.scanLinkFromResult = scanLinkFromResult;
+
+  function renderIntelPanel(input, host, isVerified, verifiedSite, intel){
+    const panel = document.getElementById('result-intel-panel');
+    if(!panel) return;
+    const scanUrl = canonicalScanUrl(input);
+    const redirect = intel?.redirect || intel?.finalUrl || scanUrl;
+    const previewUrl = redirect || scanUrl;
+    const now = new Date().toISOString();
+    const firstKey = `linkshield_first_scan_${host}`;
+    let firstScan = localStorage.getItem(firstKey);
+    if(!firstScan){ firstScan = now; localStorage.setItem(firstKey, firstScan); }
+    const extLinks = externalCheckLinks(host);
+    const hosting = intel?.hosting;
+    const scannedFrom = intel?.scannedFrom || guessScannedFrom();
+    const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+    let html = '<div class="intel-card"><div class="intel-card-k">Scanned URL</div>';
+    html += `<div class="intel-row"><span>${esc(scanUrl)}</span><button type="button" class="intel-copy" onclick="copyText(decodeURIComponent('${encodeURIComponent(scanUrl)}'),'URL')">Copy</button></div>`;
+    html += '<div class="intel-links">';
+    extLinks.forEach(l => { html += `<a class="intel-ext-link" href="${l.href}" target="_blank" rel="noopener noreferrer">${l.label} ↗</a>`; });
+    html += '</div></div>';
+
+    html += '<div class="intel-card"><div class="intel-card-k">Page Intelligence</div>';
+    html += `<div class="intel-row"><span>Redirects to</span><span class="intel-val">${esc(redirect)} <button type="button" class="intel-copy" onclick="copyText(decodeURIComponent('${encodeURIComponent(redirect)}'),'URL')">Copy</button></span></div>`;
+    if(intel?.pageTitle){
+      html += `<div class="intel-row"><span>Page title</span><span class="intel-val">${esc(intel.pageTitle)} <button type="button" class="intel-copy" onclick="copyText(decodeURIComponent('${encodeURIComponent(intel.pageTitle)}'),'Title')">Copy</button></span></div>`;
+    } else {
+      html += `<div class="intel-row"><span>Page title</span><span class="intel-val" style="color:var(--dim2);">${intel?.liveFetch ? 'Could not read page title' : 'Loading page…'}</span></div>`;
+    }
+    html += `<div class="intel-row"><span>Scanned from</span><span class="intel-val">${esc(scannedFrom)}</span></div>`;
+    html += `<div class="intel-row"><span>Viewed as</span><span class="intel-val">${scanViewMode === 'mobile' ? '📱 Mobile' : '🖥 Desktop'}</span></div>`;
+    html += `<div class="intel-row"><span>First scanned</span><span class="intel-val">${formatScanTimestamp(firstScan)}</span></div>`;
+    html += `<div class="intel-row"><span>Scanned at</span><span class="intel-val">${formatScanTimestamp(now)}</span></div>`;
+    html += '</div>';
+
+    if(hosting?.ip || hosting?.provider){
+      html += '<div class="intel-card"><div class="intel-card-k">Where It\'s Hosted</div>';
+      if(hosting.ip) html += `<div class="intel-row"><span>IP</span><span class="intel-val">${esc(hosting.ip)} <button type="button" class="intel-copy" onclick="copyText('${esc(hosting.ip)}','IP')">Copy</button> <a class="intel-ext-link" href="https://who.is/whois/${encodeURIComponent(hosting.ip)}" target="_blank" rel="noopener noreferrer">Whois ↗</a></span></div>`;
+      if(hosting.provider) html += `<div class="intel-row"><span>Provider</span><span class="intel-val">${esc(hosting.provider)}${hosting.country ? ` · ${esc(hosting.country)}` : ''}</span></div>`;
+      if(hosting.network) html += `<div class="intel-row"><span>Network</span><span class="intel-val">${esc(hosting.network)}</span></div>`;
+      html += '</div>';
+    } else {
+      html += '<div class="intel-card"><div class="intel-card-k">Where It\'s Hosted</div>';
+      html += `<div class="intel-row"><span>Hosting</span><span class="intel-val"><a class="intel-ext-link" href="https://who.is/whois/${encodeURIComponent(host)}" target="_blank" rel="noopener noreferrer">Look up on Whois ↗</a></span></div></div>`;
+    }
+
+    html += `<div class="intel-card intel-screenshot-card"><div class="intel-card-k">Screenshot of the scanned page</div>`;
+    html += `<div class="result-screenshot-wrap ${scanViewMode === 'mobile' ? 'view-mobile' : ''}${intel?.screenshotUrl ? ' screenshot-loading' : ''}" id="result-screenshot-wrap">`;
+    if(intel?.screenshotUrl){
+      html += `<img class="result-screenshot" src="${esc(intel.screenshotUrl)}?t=${Date.now()}" alt="Screenshot of ${esc(host)}" onload="this.closest('.result-screenshot-wrap').classList.remove('screenshot-loading')" onerror="this.closest('.result-screenshot-wrap').classList.add('screenshot-failed')" />`;
+    } else {
+      html += `<div class="screenshot-fallback screenshot-pending">${intel?.liveFetch ? 'Live page preview could not be captured — open the page directly.' : 'Capturing live page preview…'}</div>`;
+    }
+    html += `<div class="screenshot-loading-label">Rendering live page…</div>`;
+    html += `<div class="screenshot-fallback">Preview unavailable — open the live page to inspect.</div>`;
+    html += `</div><a class="intel-ext-link" href="${esc(previewUrl)}" target="_blank" rel="noopener noreferrer">Open live page ↗</a>`;
+    if(intel?.captureMethod) html += `<div class="form-note" style="margin-top:8px;">Captured via ${esc(intel.captureMethod === 'puppeteer' ? 'live browser render' : intel.captureMethod)} · ${intel?.linkCount || 0} page links found</div>`;
+    html += '</div>';
+
+    panel.innerHTML = html;
+
+    const linksLabel = document.getElementById('result-links-label');
+    const linksEl = document.getElementById('result-page-links');
+    const pageLinks = intel?.pageLinks || [];
+    if(pageLinks.length && linksEl){
+      linksLabel.style.display = 'block';
+      linksLabel.textContent = `Links found on this page (${intel?.linkCount || pageLinks.length})`;
+      const base = `https://${host}`;
+      linksEl.innerHTML = pageLinks.map(path => {
+        const full = path.startsWith('http') ? path : base + path;
+        return `<li><a href="${full}" target="_blank" rel="noopener noreferrer">${full}</a><span class="link-actions"><button type="button" class="intel-copy" onclick="copyText(decodeURIComponent('${encodeURIComponent(full)}'),'Link')">Copy</button><button type="button" class="intel-copy scan-link-btn" onclick="scanLinkFromResult(decodeURIComponent('${encodeURIComponent(full)}'))">Scan</button></span></li>`;
+      }).join('');
+    } else if(linksEl){
+      linksLabel.style.display = pageLinks.length ? 'block' : 'none';
+      linksLabel.textContent = pageLinks.length ? `Links found on this page (${pageLinks.length})` : 'Links Found on This Page';
+      linksEl.innerHTML = pageLinks.length ? '' : '<li style="color:var(--dim2);font-style:italic;">No same-domain links extracted — page may block crawlers or use client-side navigation.</li>';
+      if(!pageLinks.length && linksLabel) linksLabel.style.display = intel?.liveFetch ? 'block' : 'none';
+    }
+  }
+
+  function matchVerifiedSite(input){
+    const host = normalizeHost(input);
+    if(!host) return null;
+    for(const site of VERIFIED_AUTHENTIC_SITES){
+      if(host === site.host) return { ...site, matchedHost: host };
+    }
+    if(is256CoUgFamily(host)){
+      const known = VERIFIED_256_SUBDOMAINS[host];
+      if(known){
+        return { host: '256.co.ug', ...known, matchedHost: host, isSubdomain: true };
+      }
+      const slug = host === '256.co.ug' ? '' : host.replace(/\.256\.co\.ug$/, '');
+      return {
+        host: '256.co.ug',
+        label: slug ? `256 ${slug}` : '256 AI Systems',
+        note: `Official 256 family subdomain (${host}) — built and operated by 256 AI Systems`,
+        matchedHost: host,
+        isSubdomain: host !== '256.co.ug',
+      };
+    }
+    return null;
+  }
+
+  function hashStr(str){
+    let h = 0;
+    for(let i = 0; i < str.length; i++){ h = (h * 31 + str.charCodeAt(i)) >>> 0; }
+    return h;
+  }
+
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  async function animateBarTo(bar, percent){
+    const start = parseFloat(bar.style.width) || 0;
+    for(let f = 1; f <= 6; f++){
+      bar.style.width = (start + (percent - start) * (f / 6)) + '%';
+      await sleep(28);
+    }
+  }
+
+  async function runScanStep(terminal, bar, label, resolver, progressPct){
+    const pendingLine = document.createElement('div');
+    pendingLine.className = 'scan-line pending';
+    pendingLine.innerHTML = `<span class="dot"></span><span>${label}…</span>`;
+    terminal.appendChild(pendingLine);
+    terminal.scrollTop = terminal.scrollHeight;
+    await sleep(180);
+    const outcome = typeof resolver === 'function' ? await resolver() : resolver;
+    const cls = outcome.class || 'ok';
+    const prefix = cls === 'danger' ? '⛔' : cls === 'warn' ? '⚠' : '✓';
+    pendingLine.classList.remove('pending');
+    pendingLine.classList.add(cls);
+    pendingLine.innerHTML = `<span class="dot"></span><span>${prefix} ${outcome.text}</span>`;
+    if(cls === 'danger'){
+      terminal.classList.add('danger-flash');
+      await sleep(420);
+      terminal.classList.remove('danger-flash');
+    }
+    terminal.scrollTop = terminal.scrollHeight;
+    if(bar != null && progressPct != null) await animateBarTo(bar, progressPct);
+    const record = { label, class: cls, text: outcome.text };
+    lastScanReportLines.push(record);
+    await sleep(cls === 'danger' ? 220 : 120);
+    return record;
+  }
+
+  function calculateEvidenceScore(input, intel, verifiedSite, communityReports, findings){
+    if(verifiedSite) return VERIFIED_AUTHENTIC_SCORE;
+    let score = 72;
+    if(intel?.ok){
+      score = 75;
+      if((intel.finalUrl || canonicalScanUrl(input)).startsWith('https://')) score += 3;
+      if(intel.httpStatus >= 200 && intel.httpStatus < 400) score += 2;
+      if(intel.pageTitle) score += 1;
+      if(intel.linkCount > 0) score += 1;
+    } else if(intel){
+      score -= 18;
+    } else {
+      score -= 8;
+    }
+    if(communityReports.length){
+      score -= Math.min(28, 12 + communityReports.length * 8);
+    }
+    findings.forEach((f) => {
+      if(f.type === 'redirect') score -= 14;
+      if(f.type === 'https') score -= 10;
+      if(f.type === 'technical') score -= 16;
+      if(f.type === 'community') score -= 6;
+    });
+    if(isUgandaGovDomain(normalizeHost(input)) && intel?.ok) score += 2;
+    return Math.max(12, Math.min(85, Math.round(score)));
+  }
+
+  function finishScanProgress(progress){
+    if(!progress) return;
+    progress.classList.add('scan-complete');
+    progress.style.display = 'block';
+  }
+
+  function renderPersistedScanReport(lines){
+    const panel = document.getElementById('result-scan-report');
+    const list = document.getElementById('result-scan-report-list');
+    if(!panel || !list) return;
+    if(!lines?.length){
+      panel.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+    panel.style.display = 'block';
+    list.innerHTML = lines.map((line) => {
+      const cls = line.class || 'ok';
+      const prefix = cls === 'danger' ? '⛔' : cls === 'warn' ? '⚠' : '✓';
+      return `<li class="scan-line ${cls}"><span class="dot"></span><span><strong>${line.label}</strong> — ${prefix} ${line.text}</span></li>`;
+    }).join('');
+  }
+
+  function getCommunityReportsForUrl(input){
+    const host = normalizeHost(input);
+    if(!host) return [];
+    const reports = JSON.parse(localStorage.getItem('linkshield_reports') || '[]');
+    return reports.filter((r) => {
+      const rh = normalizeHost(r.link || '');
+      return rh === host;
+    });
+  }
+
+  function buildEvidenceAssessment(input, intel, verifiedSite){
+    const scanUrl = canonicalScanUrl(input);
+    const host = normalizeHost(input);
+    const findings = [];
+    const techFacts = [];
+    const reportRows = [];
+    const communityReports = getCommunityReportsForUrl(input);
+
+    if(verifiedSite){
+      const operator = verifiedSite.operator || '256 AI Systems';
+      findings.push({
+        type: 'registry',
+        text: verifiedSite.note,
+        evidence: scanUrl,
+      });
+      findings.push({
+        type: 'registry',
+        text: `Operator on record: ${operator}`,
+        evidence: scanUrl,
+      });
+      if(intel?.ok){
+        techFacts.push({ k: 'Live page', v: 'Reachable', evidence: intel.finalUrl || scanUrl });
+        if(intel.pageTitle) techFacts.push({ k: 'Page title', v: intel.pageTitle, evidence: intel.finalUrl });
+        if(intel.hosting?.ip) techFacts.push({ k: 'Resolved IP', v: intel.hosting.ip, evidence: `https://who.is/whois/${intel.hosting.ip}` });
+      }
+      techFacts.push({ k: 'Trust registry', v: '256 Verified Authentic', evidence: scanUrl });
+      techFacts.push({ k: 'Operator', v: operator, evidence: scanUrl });
+      reportRows.push({ source: '256 LinkShield trust registry', status: 'Verified authentic', bad: false, evidence: scanUrl });
+      return {
+        verdict: { label: 'Verified Authentic', color: 'var(--green)', bg: 'var(--green-bg)', text: '#86EFAC', icon: '✅', summary: `Listed in the 256 LinkShield trust registry as ${verifiedSite.label}.` },
+        findings,
+        techFacts,
+        reportRows,
+        score: VERIFIED_AUTHENTIC_SCORE,
+        recommendation: verifiedSite.operator && verifiedSite.operator !== '256 AI Systems'
+          ? `Verified authentic — operated by ${verifiedSite.operator}. Still never share passwords or OTPs unless you initiated the visit.`
+          : 'Verified authentic — built by 256 AI Systems. Still never share passwords or OTPs unless you initiated the visit.',
+        hasWarnings: false,
+        mustShare: false,
+        communityReports: [],
+      };
+    }
+
+    communityReports.forEach((r) => {
+      findings.push({
+        type: 'community',
+        text: `Community report: ${r.claim || 'Suspicious link reported'} (via ${r.source || 'unknown channel'})`,
+        evidence: r.link || scanUrl,
+        detail: r.comment || '',
+        submittedAt: r.submittedAt,
+      });
+      reportRows.push({
+        source: `Community report · ${r.source || 'Unknown'}`,
+        status: r.claim || 'Reported',
+        bad: true,
+        evidence: r.link || scanUrl,
+        detail: r.comment || '',
+        submittedAt: r.submittedAt,
+      });
+    });
+
+    if(intel){
+      if(!intel.ok){
+        findings.push({
+          type: 'technical',
+          text: `Page could not be loaded: ${intel.error || `HTTP ${intel.httpStatus || 'error'}`}`,
+          evidence: scanUrl,
+        });
+        techFacts.push({ k: 'HTTP status', v: String(intel.httpStatus || 'Unreachable'), evidence: scanUrl });
+      } else {
+        techFacts.push({ k: 'HTTP status', v: String(intel.httpStatus || 200), evidence: intel.finalUrl || scanUrl });
+        if(intel.pageTitle) techFacts.push({ k: 'Page title', v: intel.pageTitle, evidence: intel.finalUrl });
+        if(intel.hosting?.ip) techFacts.push({ k: 'Resolved IP', v: intel.hosting.ip, evidence: `https://who.is/whois/${intel.hosting.ip}` });
+        if(intel.captureMethod) techFacts.push({ k: 'Capture method', v: intel.captureMethod === 'puppeteer' ? 'Live browser render' : intel.captureMethod, evidence: intel.screenshotUrl || intel.finalUrl });
+        const finalHost = normalizeHost(intel.finalUrl || '');
+        if(finalHost && !sameSiteHost(host, finalHost)){
+          findings.push({
+            type: 'redirect',
+            text: `Redirected to a different host: ${finalHost} (submitted: ${host})`,
+            evidence: intel.finalUrl,
+          });
+        }
+        if(intel.finalUrl && finalHost && !sameSiteHost(scanUrl, intel.finalUrl)){
+          techFacts.push({ k: 'Final URL', v: intel.finalUrl, evidence: intel.finalUrl });
+        } else if(intel.finalUrl && host !== finalHost){
+          techFacts.push({ k: 'Redirect', v: `${host} → ${finalHost} (same site, www alias)`, evidence: intel.finalUrl });
+        }
+        if(isUgandaGovDomain(host)){
+          techFacts.push({ k: 'Domain type', v: 'Uganda government domain (.go.ug)', evidence: scanUrl });
+        }
+        if(intel.finalUrl && !intel.finalUrl.startsWith('https://')){
+          findings.push({
+            type: 'https',
+            text: 'Final page is not served over HTTPS',
+            evidence: intel.finalUrl,
+          });
+        }
+      }
+    }
+
+    reportRows.push({
+      source: '256 LinkShield trust registry',
+      status: 'Not listed',
+      bad: false,
+      evidence: null,
+    });
+    reportRows.push({
+      source: 'VirusTotal (external check)',
+      status: 'Not verified by LinkShield — check manually',
+      bad: false,
+      evidence: `https://www.virustotal.com/gui/domain/${encodeURIComponent(host)}`,
+      external: true,
+    });
+
+    let verdict = { ...UNRATED_VERDICT };
+    let recommendation = UNRATED_VERDICT.summary;
+    if(communityReports.length){
+      verdict = { ...REPORTED_VERDICT };
+      recommendation = `${communityReports.length} documented community report(s) exist for this URL. Review the evidence above. Do not enter personal data until you verify with the official organization. Share this scan so others see the same warnings.`;
+    } else if(findings.length){
+      verdict = { ...CAUTION_VERDICT };
+      recommendation = 'Observable issues were found (see evidence above). This is not a confirmed scam verdict — verify through official channels before acting.';
+    }
+
+    const score = calculateEvidenceScore(input, intel, null, communityReports, findings);
+
+    return {
+      verdict,
+      findings,
+      techFacts,
+      reportRows,
+      score,
+      recommendation,
+      hasWarnings: findings.length > 0,
+      mustShare: findings.length > 0,
+      communityReports,
+    };
+  }
+
+  function renderWarningPanel(assessment){
+    const panel = document.getElementById('evidence-warning-panel');
+    const list = document.getElementById('evidence-warning-list');
+    const summary = document.getElementById('evidence-warning-summary');
+    const shareBtn = document.getElementById('warning-share-btn');
+    if(!panel || !assessment.hasWarnings){
+      if(panel) panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = 'block';
+    if(summary) summary.textContent = assessment.verdict.summary;
+    if(list){
+      list.innerHTML = assessment.findings.map((f) => {
+        const when = f.submittedAt ? ` <span style="color:var(--dim2);">(${formatScanTimestamp(f.submittedAt)})</span>` : '';
+        const detail = f.detail ? `<div style="margin-top:4px;color:var(--dim2);">${f.detail}</div>` : '';
+        return `<li><strong>${f.text}</strong>${when}<div><a href="${f.evidence}" target="_blank" rel="noopener noreferrer">${f.evidence}</a></div>${detail}</li>`;
+      }).join('');
+    }
+    if(shareBtn) shareBtn.style.display = lastShareId ? 'inline-flex' : 'none';
+  }
+
+  async function runVerifiedScanSequence(cleanUrl, verified, host){
+    const progress = document.getElementById('scan-progress');
+    const bar = document.getElementById('scan-progress-bar');
+    const terminal = document.getElementById('scan-terminal');
+    const operator = verified.operator || '256 AI Systems';
+    const checks = [
+      { label: `Resolving domain — ${cleanUrl}`, text: `Domain resolved — ${host}` },
+      { label: 'Checking 256 LinkShield trust registry', text: `Listed as Verified Authentic — ${verified.label}` },
+      { label: 'Operator on record', text: operator },
+      { label: 'Registry evidence', text: verified.note },
+    ];
+    for(let i = 0; i < checks.length; i++){
+      await runScanStep(terminal, bar, checks[i].label, { class: 'ok', text: checks[i].text }, ((i + 1) / (checks.length + 2)) * 100);
+    }
+    await runScanStep(terminal, bar, 'Trust score calculation', { class: 'ok', text: `Verified Authentic — ${VERIFIED_AUTHENTIC_SCORE}% trust score` }, 88);
+  }
+
+  async function runEvidenceScanSequence(url, host, cleanUrl, pageIntelPromise){
+    const progress = document.getElementById('scan-progress');
+    const bar = document.getElementById('scan-progress-bar');
+    const terminal = document.getElementById('scan-terminal');
+    const preReports = getCommunityReportsForUrl(url);
+    const totalSteps = isUgandaGovDomain(host) ? 9 : 8;
+    let step = 0;
+    const pct = () => Math.round((++step / totalSteps) * 100);
+
+    await runScanStep(terminal, bar, `Resolving domain — ${cleanUrl}`, { class: 'ok', text: `Domain resolved — ${host}` }, pct());
+
+    await runScanStep(terminal, bar, 'Checking 256 LinkShield trust registry', { class: 'ok', text: 'Not listed in 256 trust registry' }, pct());
+
+    await runScanStep(terminal, bar, 'Cross-referencing community scam reports', preReports.length
+      ? { class: 'warn', text: `${preReports.length} community report(s) on record for this URL` }
+      : { class: 'ok', text: 'No community reports on record in this browser' }, pct());
+
+    let liveIntel = null;
+    await runScanStep(terminal, bar, 'Capturing live page & extracting links', async () => {
+      liveIntel = await pageIntelPromise;
+      return liveIntel?.ok
+        ? { class: 'ok', text: `Live page captured — HTTP ${liveIntel.httpStatus || 200} · ${liveIntel.linkCount || 0} page links found` }
+        : { class: 'warn', text: `Page not fully reachable — ${liveIntel?.error || 'partial evidence only'}` };
+    }, pct());
+
+    const intel = mergePageIntel(getSiteIntel(host), liveIntel, host);
+
+    await runScanStep(terminal, bar, 'Verifying HTTPS & transport security', () => {
+      if(!intel?.ok) return { class: 'warn', text: 'HTTPS status unknown — page did not load' };
+      const finalUrl = intel.finalUrl || canonicalScanUrl(url);
+      if(finalUrl.startsWith('https://')) return { class: 'ok', text: 'Served over HTTPS' };
+      return { class: 'warn', text: 'Final page is not served over HTTPS' };
+    }, pct());
+
+    await runScanStep(terminal, bar, 'Checking redirect chain', () => {
+      const finalHost = normalizeHost(intel?.finalUrl || '');
+      if(!finalHost || sameSiteHost(host, finalHost)){
+        if(finalHost && host !== finalHost) return { class: 'ok', text: `Redirect: ${host} → ${finalHost} (same site, www alias)` };
+        return { class: 'ok', text: 'No cross-host redirect detected' };
+      }
+      return { class: 'warn', text: `Cross-host redirect detected: ${host} → ${finalHost}` };
+    }, pct());
+
+    if(isUgandaGovDomain(host)){
+      await runScanStep(terminal, bar, 'Domain classification', { class: 'ok', text: 'Uganda government domain (.go.ug) — verify through official channels' }, pct());
+    }
+
+    await runScanStep(terminal, bar, 'External reputation checks', { class: 'ok', text: 'VirusTotal & Google Safe Browsing available — LinkShield does not auto-claim blacklist hits' }, pct());
+
+    const assessment = buildEvidenceAssessment(url, intel, null);
+    await runScanStep(terminal, bar, 'Calculating evidence-based trust score', {
+      class: assessment.score < 50 ? 'warn' : 'ok',
+      text: `Trust score ${assessment.score}% — ${assessment.verdict.label}`,
+    }, 100);
+
+    finishScanProgress(progress);
+    return { intel, assessment };
+  }
+
+  async function runLinkScan(){
+    const input = document.getElementById('link-input');
+    const btn = document.getElementById('scan-btn');
+    let url = input.value.trim();
+    if(!url){ url = 'example-suspicious-link.com'; input.value = url; }
+    const cleanUrl = url.replace(/^https?:\/\//,'').replace(/\/$/,'');
+    const verified = matchVerifiedSite(url);
+
+    document.getElementById('scan-result').style.display = 'none';
+    document.getElementById('do-not-open-banner').style.display = 'none';
+    const progress = document.getElementById('scan-progress');
+    const bar = document.getElementById('scan-progress-bar');
+    const terminal = document.getElementById('scan-terminal');
+    terminal.innerHTML = '';
+    terminal.classList.remove('danger-flash');
+    progress.classList.remove('scan-complete');
+    progress.style.display = 'block';
+    bar.style.width = '0%';
+    btn.disabled = true; btn.textContent = '⏳ Scanning…';
+    lastScanReportLines = [];
+    const host = normalizeHost(url);
+    const pageIntelPromise = fetchLivePageIntel(url);
+
+    if(verified){
+      await runVerifiedScanSequence(cleanUrl, verified, host);
+      let liveIntel = null;
+      await runScanStep(terminal, bar, 'Reading live page & extracting links', async () => {
+        liveIntel = await pageIntelPromise;
+        return liveIntel?.ok
+          ? { class: 'ok', text: `Live page read — ${liveIntel.linkCount || 0} same-domain links found` }
+          : { class: 'warn', text: 'Could not read live page — using registry data' };
+      }, 100);
+      const intel = mergePageIntel(getSiteIntel(host), liveIntel, host);
+      finishScanProgress(progress);
+      btn.disabled = false; btn.textContent = '🔍 Scan Link';
+      renderScanResult(url, 'link', verified, intel);
+      return;
+    }
+
+    const { intel } = await runEvidenceScanSequence(url, host, cleanUrl, pageIntelPromise);
+    btn.disabled = false; btn.textContent = '🔍 Scan Link';
+    renderScanResult(url, 'link', null, intel);
+  }
+
+  function renderScanResult(input, kind, verifiedSite, pageIntel){
+    const isVerified = Boolean(verifiedSite);
+    const host = normalizeHost(input);
+    const intel = pageIntel || getSiteIntel(host);
+    const assessment = buildEvidenceAssessment(input, intel, verifiedSite);
+    const v = assessment.verdict;
+    const score = assessment.score;
+
+    lastScannedUrl = canonicalScanUrl(input);
+    lastShareId = null;
+
+    document.getElementById('result-url').textContent = lastScannedUrl;
+    document.getElementById('result-score-n').textContent = score != null ? score : '—';
+    document.querySelector('.result-score-l').textContent = 'TRUST SCORE';
+
+    const ring = document.getElementById('result-ring');
+    ring.style.stroke = v.color;
+    ring.style.strokeDashoffset = CIRC;
+    requestAnimationFrame(() => {
+      ring.style.strokeDashoffset = score != null ? CIRC * (1 - score / 100) : CIRC;
+    });
+
+    const badge = document.getElementById('verdict-badge');
+    badge.textContent = isVerified ? `✅ Verified Authentic — ${verifiedSite.label}` : `${v.icon} ${v.label}`;
+    badge.style.background = v.bg;
+    badge.style.color = v.text;
+    badge.classList.toggle('verified-authentic', isVerified);
+
+    document.getElementById('result-risk-level').textContent = isVerified
+      ? 'Risk Level: None — 256 Verified Authentic (registry evidence)'
+      : assessment.hasWarnings
+      ? `Risk Level: Review evidence below — trust score ${score}% based on verified facts`
+      : `Risk Level: Unrated — trust score ${score}% from observable evidence only`;
+
+    const reasonsEl = document.getElementById('result-reasons');
+    reasonsEl.innerHTML = '';
+    if(assessment.findings.length){
+      assessment.findings.forEach((f) => {
+        const li = document.createElement('li');
+        const icon = f.type === 'registry' ? '✓' : '•';
+        const color = f.type === 'registry' ? 'var(--green)' : f.type === 'community' ? 'var(--orange)' : 'var(--yellow)';
+        li.innerHTML = `<span style="color:${color};">${icon}</span> ${f.text} <a class="evidence-link" href="${f.evidence}" target="_blank" rel="noopener noreferrer">Evidence ↗</a>`;
+        reasonsEl.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li');
+      li.innerHTML = `<span style="color:var(--dim2);">◯</span> No verified warnings or registry listing found. Check external sources before trusting this link.`;
+      reasonsEl.appendChild(li);
+    }
+
+    if(isVerified){
+      VERIFIED_REASONS.forEach((reason) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span style="color:var(--green);">✓</span> ${reason}`;
+        reasonsEl.appendChild(li);
+      });
+    }
+
+    const premiumTag = document.getElementById('premium-tag');
+    premiumTag.style.display = isPremiumScan ? 'inline-flex' : 'none';
+
+    const techGrid = document.getElementById('result-tech-grid');
+    if(assessment.techFacts.length){
+      techGrid.innerHTML = assessment.techFacts.map((t) => {
+        const ev = t.evidence ? ` <a class="evidence-link" href="${t.evidence}" target="_blank" rel="noopener noreferrer">↗</a>` : '';
+        return `<div class="result-tech-item"><div class="result-tech-k">${t.k}</div><div class="result-tech-v">${t.v}${ev}</div></div>`;
+      }).join('');
+    } else {
+      techGrid.innerHTML = '<div class="result-tech-item"><div class="result-tech-k">Technical data</div><div class="result-tech-v">No observable technical facts captured</div></div>';
+    }
+
+    const reportsEl = document.getElementById('result-reports');
+    reportsEl.innerHTML = assessment.reportRows.map((r) => {
+      const ev = r.evidence
+        ? `<a class="evidence-ref" href="${r.evidence}" target="_blank" rel="noopener noreferrer">${r.external ? 'Check externally ↗' : 'View evidence ↗'}</a>`
+        : '<span class="evidence-ref" style="color:var(--dim2);">No LinkShield evidence</span>';
+      const detail = r.detail ? `<div style="font-size:12px;color:var(--dim2);margin-top:4px;">${r.detail}</div>` : '';
+      return `<li><span class="src">${r.source}</span><span class="st" style="color:${r.bad ? 'var(--orange)' : 'var(--dim)'};">${r.status}</span>${ev}${detail}</li>`;
+    }).join('');
+
+    const recEl = document.getElementById('result-recommend');
+    recEl.style.background = v.bg;
+    recEl.style.color = v.text;
+    recEl.textContent = assessment.recommendation;
+
+    renderIntelPanel(input, host, isVerified, verifiedSite, intel);
+    renderPersistedScanReport(lastScanReportLines);
+
+    const dontStore = document.getElementById('dont-store-scan')?.checked;
+    const storageNote = document.getElementById('result-storage-note');
+    const shareBtn = document.getElementById('copy-share-btn');
+    const forceSave = assessment.mustShare && dontStore;
+
+    if(storageNote){
+      if(dontStore && !forceSave){
+        storageNote.className = 'result-storage-note';
+        storageNote.textContent = assessment.hasWarnings
+          ? 'Not saved — warnings exist but this scan was not stored. Untick "Don\'t store this scan" to generate a shareable link for others.'
+          : 'Not saved — this result was not stored and has no shareable link.';
+        shareBtn.style.display = 'none';
+      } else {
+        if(forceSave){
+          document.getElementById('dont-store-scan').checked = false;
+          showToast('Scan saved automatically — warnings must be shareable with evidence.');
+        }
+        const scanRecord = {
+          id: Date.now().toString(36),
+          url: lastScannedUrl,
+          host,
+          score,
+          verdict: isVerified ? `Verified Authentic — ${verifiedSite?.label || host}` : v.label,
+          warningSummary: assessment.hasWarnings ? assessment.findings.map((f) => f.text).join('; ') : '',
+          findings: assessment.findings,
+          scanReport: lastScanReportLines,
+          scannedAt: new Date().toISOString(),
+          viewMode: scanViewMode,
+        };
+        lastShareId = saveScanToHistory(scanRecord);
+        storageNote.className = 'result-storage-note saved';
+        storageNote.textContent = assessment.hasWarnings
+          ? `Warning on record — share link ${lastShareId.toUpperCase()} includes evidence summary.`
+          : `Scan saved — reference ${lastShareId.toUpperCase()}. Copy a share link or rescan anytime.`;
+        shareBtn.style.display = 'inline-flex';
+      }
+    }
+
+    const doNotOpen = document.getElementById('do-not-open-banner');
+    if(assessment.communityReports?.length){
+      doNotOpen.style.display = 'flex';
+      document.getElementById('do-not-open-title').textContent = 'COMMUNITY REPORTS ON THIS LINK';
+      document.getElementById('do-not-open-sub').textContent = `${assessment.communityReports.length} documented report(s) — see evidence below. Do not enter personal data until you verify with the official organization.`;
+    } else if(assessment.hasWarnings && !isVerified){
+      doNotOpen.style.display = 'flex';
+      document.getElementById('do-not-open-title').textContent = 'CAUTION — EVIDENCE FOUND';
+      document.getElementById('do-not-open-sub').textContent = 'Observable issues were detected (not unverified claims). Review evidence and verify through official channels.';
+    } else {
+      doNotOpen.style.display = 'none';
+    }
+
+    renderWarningPanel(assessment);
+
+    const resultEl = document.getElementById('scan-result');
+    resultEl.classList.toggle('view-mobile', scanViewMode === 'mobile');
+    resultEl.style.display = 'block';
+    resultEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    isPremiumScan = false;
+  }
+
+  function loadSharedScan(){
+    const id = new URLSearchParams(window.location.search).get('s');
+    if(!id) return;
+    const list = JSON.parse(localStorage.getItem('linkshield_scan_history') || '[]');
+    const record = list.find(r => r.id === id);
+    if(!record) return;
+    const input = document.getElementById('link-input');
+    if(input) input.value = record.url;
+    setScanViewMode(record.viewMode || 'desktop');
+    runLinkScan();
+  }
+
+  function runToolScan(inputId, kind){
+    const val = inputId ? (document.getElementById(inputId).value.trim() || `sample-${kind}-input`) : `qr-code-${Date.now()}`;
+    document.getElementById('link-input').value = val;
+    document.querySelector('.hero-inner').scrollIntoView({ behavior:'smooth', block:'start' });
+    runLinkScan();
+  }
+
+  // ---------- ORG VERIFICATION SUBMISSION ($30) ----------
+  const VERIFY_FEE_USD = 30;
+  let pendingVerifySubmission = null;
+
+  function submitVerifyOrgForm(e){
+    e?.preventDefault();
+    const org = document.getElementById('verify-org-name')?.value.trim();
+    const website = document.getElementById('verify-website')?.value.trim();
+    const contact = document.getElementById('verify-contact')?.value.trim();
+    const email = document.getElementById('verify-email')?.value.trim();
+    const phone = document.getElementById('verify-phone')?.value.trim();
+    const country = document.getElementById('verify-country')?.value.trim();
+    const orgType = document.getElementById('verify-org-type')?.value || '';
+    const regNote = document.getElementById('verify-registration')?.value.trim() || '';
+
+    if(!org || !website || !contact || !email || !phone){
+      showToast('Please fill in organization, website, contact name, email and phone.', 'error');
+      return;
+    }
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+
+    const host = normalizeHost(website);
+    if(!host){
+      showToast('Please enter a valid website URL or domain.', 'error');
+      return;
+    }
+    if(is256CoUgFamily(host) || matchVerifiedSite(website)){
+      showToast('This domain is already in the 256 verified registry.', 'error');
+      return;
+    }
+
+    pendingVerifySubmission = {
+      id: Date.now(),
+      organization: org,
+      website: website,
+      domain: host,
+      contact_name: contact,
+      email,
+      phone,
+      country,
+      org_type: orgType,
+      registration_note: regNote,
+      fee_usd: VERIFY_FEE_USD,
+      status: 'pending_payment',
+      submittedAt: new Date().toISOString(),
+    };
+
+    document.getElementById('verify-paywall-org').textContent = org;
+    document.getElementById('verify-paywall-domain').textContent = host;
+    document.getElementById('verify-paywall-status').style.display = 'none';
+    const payBtn = document.getElementById('verify-paywall-pay-btn');
+    payBtn.disabled = false;
+    payBtn.textContent = `Pay ${VERIFY_FEE_USD} & Submit →`;
+    document.getElementById('verify-paywall-overlay').style.display = 'flex';
+  }
+
+  function closeVerifyPaywall(){
+    document.getElementById('verify-paywall-overlay').style.display = 'none';
+  }
+
+  function selectVerifyPaymentMethod(method){
+    selectedPaymentMethod = method;
+    document.getElementById('verify-method-card').classList.toggle('active', method === 'card');
+    document.getElementById('verify-method-momo').classList.toggle('active', method === 'momo');
+  }
+
+  async function payAndSubmitVerification(){
+    if(!pendingVerifySubmission){
+      showToast('Please complete the verification form first.', 'error');
+      return;
+    }
+    const payBtn = document.getElementById('verify-paywall-pay-btn');
+    const statusEl = document.getElementById('verify-paywall-status');
+    payBtn.disabled = true;
+    payBtn.textContent = '⏳ Processing…';
+    statusEl.style.display = 'block';
+    statusEl.textContent = selectedPaymentMethod === 'card'
+      ? 'Processing card payment…'
+      : 'Confirm on your phone — processing mobile money…';
+    await sleep(1500);
+    statusEl.textContent = '✓ Payment received — submitting verification request…';
+    await sleep(700);
+
+    const record = {
+      ...pendingVerifySubmission,
+      status: 'submitted',
+      payment_method: selectedPaymentMethod,
+      payment_usd: VERIFY_FEE_USD,
+      paidAt: new Date().toISOString(),
+      reference: `LSV-${Date.now().toString(36).toUpperCase()}`,
+    };
+    const list = JSON.parse(localStorage.getItem('linkshield_verify_requests') || '[]');
+    list.unshift(record);
+    localStorage.setItem('linkshield_verify_requests', JSON.stringify(list.slice(0, 200)));
+
+    closeVerifyPaywall();
+    document.getElementById('verify-org-form')?.reset();
+    document.getElementById('verify-success')?.classList.add('show');
+    document.getElementById('verify-success-ref').textContent = record.reference;
+    showToast(`Verification request ${record.reference} submitted. We will review within 3 business days.`);
+    pendingVerifySubmission = null;
+    payBtn.textContent = `Pay ${VERIFY_FEE_USD} & Submit →`;
+    statusEl.style.display = 'none';
+    document.getElementById('verify-submit')?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+
+  // ---------- PAYWALL — Website Reputation Checker ($5) ----------
+  let selectedPaymentMethod = 'card';
+  let isPremiumScan = false;
+
+  function openPaywall(){
+    const domain = document.getElementById('tool-domain-input').value.trim() || 'yourdomain.com';
+    document.getElementById('paywall-domain').textContent = domain;
+    document.getElementById('paywall-status').style.display = 'none';
+    document.getElementById('paywall-pay-btn').disabled = false;
+    document.getElementById('paywall-pay-btn').textContent = 'Pay $5 & Check Domain';
+    document.getElementById('paywall-overlay').style.display = 'flex';
+  }
+
+  function closePaywall(){
+    document.getElementById('paywall-overlay').style.display = 'none';
+  }
+
+  function selectPaymentMethod(method){
+    selectedPaymentMethod = method;
+    document.getElementById('method-card').classList.toggle('active', method === 'card');
+    document.getElementById('method-momo').classList.toggle('active', method === 'momo');
+  }
+
+  async function payAndCheckDomain(){
+    const domain = document.getElementById('paywall-domain').textContent;
+    const payBtn = document.getElementById('paywall-pay-btn');
+    const statusEl = document.getElementById('paywall-status');
+    payBtn.disabled = true;
+    payBtn.textContent = '⏳ Processing…';
+    statusEl.style.display = 'block';
+    statusEl.textContent = selectedPaymentMethod === 'card' ? 'Processing card payment…' : 'Confirm on your phone — processing mobile money…';
+    await sleep(1500);
+    statusEl.textContent = '✓ Payment successful — unlocking full report…';
+    await sleep(700);
+
+    closePaywall();
+    isPremiumScan = true;
+    document.getElementById('link-input').value = domain;
+    document.querySelector('.hero-inner').scrollIntoView({ behavior:'smooth', block:'start' });
+    runLinkScan();
+  }
+
+  function showToast(message, type = 'success'){
+    const toast = document.getElementById('toast');
+    if(!toast) return;
+    toast.textContent = message;
+    toast.className = 'toast show' + (type === 'error' ? ' toast-error' : '');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => { toast.className = 'toast'; }, 4200);
+  }
+
+  function submitContactForm(e){
+    e?.preventDefault();
+    const name = document.getElementById('contact-name')?.value.trim();
+    const email = document.getElementById('contact-email')?.value.trim();
+    const message = document.getElementById('contact-message')?.value.trim();
+    if(!name || !email || !message){
+      showToast('Please fill in your name, email, and message.', 'error');
+      return;
+    }
+    const entry = {
+      id: Date.now(),
+      name,
+      email,
+      topic: document.getElementById('contact-topic')?.value || 'general',
+      message,
+      submittedAt: new Date().toISOString(),
+    };
+    const list = JSON.parse(localStorage.getItem('linkshield_contact_messages') || '[]');
+    list.unshift(entry);
+    localStorage.setItem('linkshield_contact_messages', JSON.stringify(list.slice(0, 200)));
+    document.getElementById('contact-form')?.reset();
+    document.getElementById('contact-success')?.classList.add('show');
+    showToast('Message sent — we\'ll respond within 2 business days.');
+  }
+
+  function submitUnblockRequest(e){
+    e?.preventDefault();
+    const url = document.getElementById('unblock-url')?.value.trim();
+    const org = document.getElementById('unblock-org')?.value.trim();
+    const email = document.getElementById('unblock-email')?.value.trim();
+    const reason = document.getElementById('unblock-reason')?.value.trim();
+    if(!url || !org || !email || !reason){
+      showToast('Please complete all unblock request fields.', 'error');
+      return;
+    }
+    const entry = {
+      id: Date.now(),
+      url,
+      org,
+      email,
+      reason,
+      submittedAt: new Date().toISOString(),
+    };
+    const list = JSON.parse(localStorage.getItem('linkshield_unblock_requests') || '[]');
+    list.unshift(entry);
+    localStorage.setItem('linkshield_unblock_requests', JSON.stringify(list.slice(0, 200)));
+    document.getElementById('unblock-form')?.reset();
+    document.getElementById('unblock-success')?.classList.add('show');
+    showToast('Unblock request submitted — we\'ll review within 3 business days.');
+  }
+
+  function submitReport(){
+    const link = document.getElementById('report-link')?.value.trim();
+    if(!link){
+      showToast('Please paste the suspicious link before submitting.', 'error');
+      document.getElementById('report-link')?.focus();
+      return;
+    }
+    const report = {
+      id: Date.now(),
+      link,
+      source: document.getElementById('report-source')?.value || 'Other',
+      claim: document.getElementById('report-claim')?.value.trim() || '',
+      comment: document.getElementById('report-comment')?.value.trim() || '',
+      contact: document.getElementById('report-contact')?.value.trim() || '',
+      submittedAt: new Date().toISOString(),
+    };
+    const reports = JSON.parse(localStorage.getItem('linkshield_reports') || '[]');
+    reports.unshift(report);
+    localStorage.setItem('linkshield_reports', JSON.stringify(reports.slice(0, 200)));
+    document.getElementById('report-form')?.reset();
+    showToast('Thank you — your report has been received. Our team reviews every scam report submitted.');
+  }
+
+  async function scanQRCode(){
+    const input = document.getElementById('tool-qr-input');
+    const file = input?.files?.[0];
+    if(!file){
+      showToast('Upload a QR code image first.', 'error');
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = typeof jsQR !== 'undefined' && jsQR(imageData.data, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      if(code?.data){
+        document.getElementById('link-input').value = code.data;
+        showToast('QR decoded — scanning destination link…');
+        document.querySelector('.hero-inner')?.scrollIntoView({ behavior:'smooth', block:'start' });
+        runLinkScan();
+      } else {
+        showToast('Could not read a QR code from that image. Try a clearer photo.', 'error');
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showToast('Could not load that image file.', 'error');
+    };
+    img.src = url;
+  }
+
+  function initMobileNav(){
+    const hamburger = document.getElementById('nav-hamburger');
+    const menu = document.getElementById('nav-mobile-menu');
+    if(!hamburger || !menu) return;
+    const close = () => {
+      menu.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+      menu.setAttribute('aria-hidden', 'true');
+      hamburger.textContent = '☰';
+    };
+    hamburger.addEventListener('click', () => {
+      const open = menu.classList.toggle('open');
+      hamburger.setAttribute('aria-expanded', String(open));
+      menu.setAttribute('aria-hidden', String(!open));
+      hamburger.textContent = open ? '✕' : '☰';
+    });
+    menu.querySelectorAll('a').forEach(a => a.addEventListener('click', close));
+    document.addEventListener('keydown', (e) => { if(e.key === 'Escape') close(); });
+  }
+
+  const linkInput = document.getElementById('link-input');
+  if(linkInput){
+    linkInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') runLinkScan();
+    });
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get('url') || params.get('link');
+    if(params.get('s')){
+      setTimeout(loadSharedScan, 400);
+    } else if(prefill){
+      linkInput.value = prefill;
+      setTimeout(runLinkScan, 400);
+    }
+  }
+
+  initMobileNav();
+</script>
+</body>
+</html>

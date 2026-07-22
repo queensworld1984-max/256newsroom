@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=Inconsolata:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260717-news-rotation">
+  <link rel="stylesheet" href="styles.css?v=20260722-dm-serif">
 </head>
 <body>
   <div class="util-bar">
@@ -22,15 +22,20 @@
   <header class="masthead">
     <div class="brand">
       <div class="logo-badge">
-        <div class="mark"><span class="two">256</span> <span class="five">News</span><span class="six">room</span></div>
+        <a href="/" aria-label="256 Newsroom home"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a>
       </div>
-      <div class="tagline">Uganda's Digital News Infrastructure</div>
     </div>
     <div class="masthead-meta">
       <div class="date" id="masthead-date"></div>
-      <div id="masthead-status">Connecting to live sources...</div>
+      <div id="masthead-status" class="live-promise"><span class="live-pulse"></span><strong>Uganda's News, As It Happens</strong><small>Connecting you to trusted live coverage</small></div>
+      <div class="account-links"><a class="find-link" href="/journalists/"><span>Discover news professionals</span><strong>Find a Journalist →</strong></a><a class="join-link" href="/dashboard/login.html"><span>Write. Publish. Be discovered.</span><strong>Create Account / Log In →</strong></a></div>
     </div>
   </header>
+
+  <section class="site-search" aria-label="Search 256 Newsroom">
+    <form id="site-search-form"><label class="sr-only" for="site-search-input">Search news or journalists</label><input id="site-search-input" type="search" minlength="2" placeholder="Search news, topics, districts or journalists…" autocomplete="off"><button type="submit">Search</button></form>
+    <div id="site-search-results" class="search-results" hidden></div>
+  </section>
 
   <div class="top-sources" aria-label="Top sources today">
     <span class="ts-label">Top Sources Today</span>
@@ -47,35 +52,11 @@
   <input type="checkbox" id="more-toggle" class="toggle-input">
   <input type="checkbox" id="citizen-modal-toggle" class="toggle-input">
 
-  <nav class="nav-strip" aria-label="Primary navigation">
-    <label for="tab-home">Home</label>
-    <label for="tab-uganda">Uganda</label>
-    <label for="tab-politics">Politics</label>
-    <label for="tab-business">Business</label>
-    <label for="tab-district">District News</label>
-    <label for="tab-sports">Sports</label>
-    <label for="tab-world">World</label>
-    <label for="tab-ecosystem" class="eco-label">256 AI Systems</label>
-    <label for="more-toggle" class="more-label">More ▾</label>
+  <nav class="taxonomy-nav" aria-label="Primary navigation">
+    <div class="taxonomy-mobile-bar"><button id="taxonomy-menu-button" aria-expanded="false" aria-controls="taxonomy-mobile-menu">Menu</button><a href="/" class="taxonomy-mobile-logo"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom"></a><button class="taxonomy-search-button" aria-label="Open search">Search</button></div>
+    <div class="taxonomy-desktop"><a href="/" class="taxonomy-home">Home</a><a href="/latest">Latest</a><div id="taxonomy-desktop-items" class="taxonomy-desktop-items"></div><div class="taxonomy-overflow"><button id="taxonomy-more-button" aria-expanded="false">More <span aria-hidden="true">▾</span></button><div id="taxonomy-overflow-items" class="taxonomy-overflow-menu" hidden></div></div><a href="/districts">Districts <span aria-hidden="true">▾</span></a><button class="taxonomy-search-button" aria-label="Open search">Search</button></div>
+    <div id="taxonomy-mobile-backdrop" class="taxonomy-mobile-backdrop" hidden></div><div id="taxonomy-mobile-menu" class="taxonomy-mobile-menu" hidden aria-label="News sections"><div class="taxonomy-mobile-head"><strong>Sections</strong><button id="taxonomy-menu-close" aria-label="Close menu">×</button></div><a href="/">Home</a><a href="/latest">Latest</a><div id="taxonomy-mobile-items"></div><a href="/districts">Districts</a></div>
   </nav>
-
-  <div class="more-dropdown">
-    <div class="more-dropdown-inner">
-      <a href="/#home" data-tab-link="home">Breaking</a>
-      <a href="/#world" data-tab-link="world">East Africa</a>
-      <a href="/#world" data-tab-link="world">Africa</a>
-      <a href="/#uganda" data-tab-link="uganda">Technology</a>
-      <a href="/#uganda" data-tab-link="uganda">Health</a>
-      <a href="/#uganda" data-tab-link="uganda">Agriculture</a>
-      <a href="/#uganda" data-tab-link="uganda">Education</a>
-      <a href="/#uganda" data-tab-link="uganda">Courts</a>
-      <a href="/#uganda" data-tab-link="uganda">Entertainment</a>
-      <a href="/#politics" data-tab-link="politics">Opinion</a>
-      <a href="/#uganda" data-tab-link="uganda">Investigations</a>
-      <a href="/#uganda" data-tab-link="uganda">Fact Check</a>
-      <a href="/#home" data-tab-link="home">Video</a>
-    </div>
-  </div>
 
   <main class="panels">
     <section class="panel" id="panel-home">
@@ -83,80 +64,44 @@
         <div class="grid-main">
           <div>
             <article class="hero">
-              <div class="eyebrow"><span class="dot"></span>Top News · Breaking · Kampala</div>
-              <h1 class="hero-headline">Cabinet approves supplementary budget for national road infrastructure programme</h1>
-              <div class="hero-img"><span>Photo context - Kampala, 17 July 2026</span></div>
-              <p class="hero-excerpt">Government has approved additional funding to accelerate stalled road works across five regions, with officials citing pressure to complete projects ahead of the next planning cycle. Full details expected at Monday's briefing.</p>
+              <div class="eyebrow"><span class="dot"></span>Live Top Story</div>
+              <h1 class="hero-headline">Loading the current top story…</h1>
+              <div class="hero-img"><span>Loading verified story image…</span></div>
+              <p class="hero-excerpt">Fetching the latest verified coverage from monitored sources.</p>
               <div class="story-meta">
-                <div class="coverage-cluster">
-                  <span class="cdot dm">DM</span><span class="cdot nv">NV</span><span class="cdot nb">NB</span><span class="cmore">+5</span>
-                </div>
-                <span class="cluster-note">8 sources covering this story</span>
-                <span>· updated 42 min ago</span>
+                <span class="cluster-note">Connecting to live coverage…</span>
               </div>
+              <div class="hero-controls" aria-label="Top story controls"><button type="button" class="hero-prev" aria-label="Previous top story">← Previous</button><span class="hero-position">1 / 1</span><button type="button" class="hero-next" aria-label="Next top story">Next →</button></div>
             </article>
 
             <div class="section-header compact"><h2><span class="fire">●</span> Trending Now</h2><a href="/#home" data-tab-link="home">VIEW ALL -></a></div>
             <div class="trending-row in-column">
-              <article class="cluster-card"><div class="trend-thumb kampala"></div><span class="cat-tag">National</span><h3>Major cabinet reshuffle speculation grows ahead of budget reading</h3><div class="cmeta"><div class="coverage-cluster"><span class="cdot nv">NV</span><span class="cdot dm">DM</span><span class="cdot nb">NB</span><span class="cmore">+6</span></div><span>9 sources</span></div><div class="trend-tag">▲ updated 8 min ago</div><a href="/#uganda" data-tab-link="uganda" class="read-link">View national news</a></article>
-              <article class="cluster-card"><div class="trend-thumb summit"></div><span class="cat-tag">International</span><h3>East African Community summit set for next month in Nairobi</h3><div class="cmeta"><div class="coverage-cluster"><span class="cdot dm">DM</span><span class="cdot ob">OB</span></div><span>3 sources</span></div><div class="trend-tag">▲ updated 30 min ago</div><a href="/#world" data-tab-link="world" class="read-link">View world news</a></article>
-              <article class="cluster-card"><div class="trend-thumb au"></div><span class="cat-tag">Politics</span><h3>Parliament resumes session Monday on election roadmap</h3><div class="cmeta"><div class="coverage-cluster"><span class="cdot np">NP</span><span class="cdot nv">NV</span><span class="cmore">+2</span></div><span>4 sources</span></div><div class="trend-tag">▲ updated 2h ago</div><a href="/#politics" data-tab-link="politics" class="read-link">View politics</a></article>
-              <article class="cluster-card"><div class="trend-thumb trade"></div><span class="cat-tag">Business</span><h3>BoU holds Central Bank Rate at 9.5% amid inflation watch</h3><div class="cmeta"><div class="coverage-cluster"><span class="cdot pm">PM</span><span class="cdot ob">OB</span><span class="cmore">+2</span></div><span>4 sources</span></div><div class="trend-tag">▲ updated 25 min ago</div><a href="/#business" data-tab-link="business" class="read-link">View business</a></article>
+              <article class="empty-card"><h3>Loading current trending stories…</h3></article>
             </div>
           </div>
 
           <aside>
             <section class="sidebar-block eco-teaser-box">
               <div class="sidebar-title">256 AI Systems</div>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-heart.png" alt="256 Heart logo"></div><div><b>256 Heart · Platform Update</b><strong>Free access codes launched for Gold, VIP & Stealth membership plans</strong><p>All current membership tiers are available at no cost through promotional access codes as the platform expands across Uganda and the diaspora.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-corporate.png" alt="256 Corporate logo"></div><div><b>256 Corporate · Opportunity</b><strong>256 Corporate opens applications for software-development volunteers</strong><p>Approved technical volunteers get access to development assignments, onboarding, dashboard tools and commission-based project opportunities.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-mall.png" alt="256 Mall logo"></div><div><b>256 Mall · Milestone</b><strong>256 Mall onboards its 1,000th verified wholesale seller</strong><p>The milestone comes as the platform's wholesale tier expands into three new districts this quarter.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-express.png" alt="256 Express logo"></div><div><b>256 Express · Safety Notice</b><strong>256 Express introduces in-app driver verification badges</strong><p>Riders can now confirm driver identity and vehicle details before every trip, part of a wider district-by-district safety rollout.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-shield.svg" alt="256Shield logo"></div><div><b>256Shield · Product Update</b><strong>Domain scanner now covers four new threat categories</strong><p>The update expands 256Shield's automated scanning modules to catch a wider range of phishing and spoofing patterns before they reach users.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-ai.png" alt="256 AI logo"></div><div><b>256 AI · Platform Brief</b><strong>Newsroom automation pilots launch for editors and publishers</strong><p>New editorial tools help summarize story clusters, surface developing coverage and prepare source briefs for newsroom teams.</p></div></article>
-              <article class="eco-teaser-item"><div class="side-thumb"><img src="/assets/logos/256-linkshield.svg" alt="256LinkShield logo"></div><div><b>256LinkShield · Safety Update</b><strong>Link reputation checks expand across public news submissions</strong><p>The platform now screens submitted URLs for spoofing, malware and suspicious redirects before they reach moderation queues.</p></div></article>
-              <a href="/#ecosystem" data-tab-link="ecosystem" class="eco-teaser-more">VIEW ALL 256 AI SYSTEMS NEWS -></a>
+              <p class="eco-empty">Loading verified platform information…</p>
             </section>
             <section class="sidebar-block journalist-week-box">
-              <div class="sidebar-title">Journalist of the Week</div>
-              <a href="/journalists/sarah-atwine/" class="journalist-week-card">
-                <span class="jw-photo"><span>SA</span></span>
+              <div class="sidebar-title">Journalists on 256 Newsroom</div>
+              <a href="/journalists/" class="journalist-week-card">
+                <span class="jw-photo"><span>⌕</span></span>
                 <span class="jw-body">
-                  <span class="jw-kicker">Top verified journalist</span>
-                  <span class="jw-name">Sarah Atwine</span>
-                  <span class="jw-role">Politics & Government · Kampala</span>
-                  <span class="jw-summary">Led this week's most-read election roadmap coverage and parliamentary reporting.</span>
-                  <span class="jw-stats"><b>312K</b> reads this week · <b>4,820</b> shares · Trust Score 94</span>
+                  <span class="jw-kicker">Public directory</span>
+                  <span class="jw-name">Find a journalist</span>
+                  <span class="jw-role">Search by name, beat or location</span>
+                  <span class="jw-summary">Open public profiles and read the latest stories linked to each journalist.</span>
+                  <span class="jw-stats"><b>Journalists:</b> create and manage your profile from the dashboard.</span>
                 </span>
               </a>
             </section>
             <section class="sidebar-block district-strip-box">
               <div class="sidebar-title">Latest from the Districts</div>
               <div class="district-feature-list">
-                <article>
-                  <div class="district-feature-thumb kampala"></div>
-                  <span>KAMPALA</span>
-                  <h3>Cabinet road budget dominates city transport debate</h3>
-                  <p>Daily Monitor · 42 min ago</p>
-                </article>
-                <article>
-                  <div class="district-feature-thumb road"></div>
-                  <span>MBARARA</span>
-                  <h3>Road upgrade enters final phase as traders count losses</h3>
-                  <p>ChimpReports · 4h ago</p>
-                </article>
-                <article>
-                  <div class="district-feature-thumb market"></div>
-                  <span>GULU</span>
-                  <h3>Market vendors relocated ahead of renovation works</h3>
-                  <p>Uganda Radio Network · 6h ago</p>
-                </article>
-                <article>
-                  <div class="district-feature-thumb bridge"></div>
-                  <span>JINJA</span>
-                  <h3>Bridge repairs to begin next week, council confirms</h3>
-                  <p>Daily Express · 9h ago</p>
-                </article>
+                <article class="empty-card"><h3>Loading current district coverage…</h3></article>
               </div>
             </section>
           </aside>
@@ -167,44 +112,28 @@
         <section>
           <div class="section-header"><h2>National Headlines</h2><a href="/#uganda" data-tab-link="uganda">VIEW ALL -></a></div>
           <div class="card-grid">
-            <article class="grid-card"><div class="thumb road"></div><h3>URA extends tax filing deadline for small businesses</h3><p><span class="source-chip"><span class="dot-mark nv">NV</span>New Vision</span> · 5h ago</p></article>
-            <article class="grid-card"><div class="thumb health"></div><h3>Malaria cases decline in northern districts, report shows</h3><p><span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span> · 12h ago</p></article>
-            <article class="grid-card"><div class="thumb coffee"></div><h3>Coffee export earnings up 14% in second quarter, UCDA reports</h3><p><span class="source-chip"><span class="dot-mark ob">OB</span>The Observer</span> · 3h ago</p></article>
-            <article class="grid-card"><div class="thumb kampala"></div><h3>New KCCA road-safety campaign launches in Kampala suburbs</h3><p><span class="source-chip"><span class="dot-mark dm">DM</span>Daily Monitor</span> · 7h ago</p></article>
-            <article class="grid-card"><div class="thumb trade"></div><h3>Education ministry releases new school inspection guidelines</h3><p><span class="source-chip"><span class="dot-mark ur">UR</span>URN</span> · 9h ago</p></article>
-            <article class="grid-card"><div class="thumb market"></div><h3>Fuel dealers seek meeting over new import regulations</h3><p><span class="source-chip"><span class="dot-mark pm">PM</span>PML Daily</span> · 11h ago</p></article>
+            <article class="empty-card"><h3>Loading current national headlines…</h3></article>
           </div>
         </section>
 
         <section>
           <div class="section-header"><h2>International News</h2><a href="/#world" data-tab-link="world">VIEW ALL -></a></div>
           <div class="card-grid">
-            <article class="grid-card"><div class="thumb summit"></div><h3>East African Community summit set for next month in Nairobi</h3><p><span class="source-chip"><span class="dot-mark dm">DM</span>Daily Monitor</span> · 1d ago</p></article>
-            <article class="grid-card"><div class="thumb au"></div><h3>AU Commission statement on regional security cooperation</h3><p><span class="verify-badge official">OFFICIAL</span> <span class="source-chip"><span class="dot-mark ob">OB</span>The Observer</span> · 2d ago</p></article>
-            <article class="grid-card"><div class="thumb coffee"></div><h3>Global coffee prices rise on East African supply outlook</h3><p><span class="source-chip"><span class="dot-mark nv">NV</span>New Vision</span> · 1d ago</p></article>
-            <article class="grid-card"><div class="thumb trade"></div><h3>Kenya, Tanzania agree on new cross-border trade corridor</h3><p><span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span> · 2d ago</p></article>
-            <article class="grid-card"><div class="thumb bridge"></div><h3>South Sudan peace monitors call for renewed dialogue</h3><p><span class="source-chip"><span class="dot-mark dm">DM</span>Daily Monitor</span> · 2d ago</p></article>
-            <article class="grid-card"><div class="thumb health"></div><h3>WHO regional update highlights new malaria response funding</h3><p><span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span> · 3d ago</p></article>
+            <article class="empty-card"><h3>Loading current international news…</h3></article>
           </div>
         </section>
 
         <section>
           <div class="section-header"><h2>Sports News</h2><a href="/#sports" data-tab-link="sports">VIEW ALL -></a></div>
           <div class="card-grid">
-            <article class="grid-card"><div class="thumb road"></div><h3>Uganda Cranes squad named for qualifier double-header</h3><p><span class="source-chip"><span class="dot-mark nb">NB</span>NBS Sports</span> · 5h ago</p></article>
-            <article class="grid-card"><div class="thumb bridge"></div><h3>KCCA FC secures new sponsorship deal ahead of season</h3><p><span class="source-chip"><span class="dot-mark dm">DM</span>Daily Monitor</span> · 8h ago</p></article>
-            <article class="grid-card"><div class="thumb market"></div><h3>Uganda netball team departs for regional championship</h3><p><span class="source-chip"><span class="dot-mark nv">NV</span>New Vision</span> · 9h ago</p></article>
-            <article class="grid-card"><div class="thumb trade"></div><h3>Local marathon draws record number of runners</h3><p><span class="source-chip"><span class="dot-mark cr">CR</span>ChimpReports</span> · 10h ago</p></article>
-            <article class="grid-card"><div class="thumb kampala"></div><h3>School tournament enters knockout stage this weekend</h3><p><span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span> · 12h ago</p></article>
-            <article class="grid-card"><div class="thumb summit"></div><h3>Regional athletics team begins final camp</h3><p><span class="source-chip"><span class="dot-mark ur">UR</span>URN</span> · 1d ago</p></article>
+            <article class="empty-card"><h3>Loading current sports news…</h3></article>
           </div>
         </section>
 
         <section>
           <div class="section-header"><h2>Developing Stories</h2><a href="/#home" data-tab-link="home">VIEW ALL -></a></div>
           <div class="story-list">
-            <article class="story-card"><div class="story-thumb road"></div><div><h3>Mbarara road upgrade enters final phase, contractor says</h3><p><span class="verify-badge developing">DEVELOPING</span> <span class="source-chip"><span class="dot-mark cr">CR</span>ChimpReports</span> · 4h ago</p></div></article>
-            <article class="story-card"><div class="story-thumb fuel"></div><div><h3>Investigation opens into fuel price irregularities in eastern region</h3><p><span class="verify-badge developing">DEVELOPING</span> <span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span> <span class="cluster-note">+ 2 more</span> · 6h ago</p></div></article>
+            <article class="empty-card"><h3>Loading current developing stories…</h3></article>
           </div>
         </section>
 
@@ -221,50 +150,31 @@
         </section>
 
         <section>
-          <div class="section-header"><h2>Uganda on Social</h2><a href="/#home" data-tab-link="home">VIEW ALL -></a></div>
+          <div class="section-header"><h2>Latest News Updates</h2><a href="/#home" data-tab-link="home">VIEW ALL -></a></div>
           <div class="social-scroll">
-            <article class="social-card"><div class="social-thumb yt"><span>YouTube</span></div><h3>Kampala traffic authority explains new one-way system</h3><p>@ugandatoday</p><b>842K views · 12K comments</b></article>
-            <article class="social-card"><div class="social-thumb fb"><span>Facebook</span></div><h3>Live: Cabinet press briefing on infrastructure budget</h3><p>NBS Television</p><b>310K views · 4.2K shares</b></article>
-            <article class="social-card"><div class="social-thumb tt"><span>TikTok</span></div><h3>Boda riders react to fuel price changes</h3><p>@256streetvoice</p><b>1.2M views · 96K likes</b></article>
-            <article class="social-card"><div class="social-thumb ig"><span>Instagram</span></div><h3>Behind the scenes: Uganda Cranes training camp</h3><p>@fufauganda</p><b>218K views · 18K likes</b></article>
-            <article class="social-card"><div class="social-thumb x"><span>X</span></div><h3>Thread: what the supplementary budget actually funds</h3><p>@ugandapolicywatch</p><b>640K views · 3.8K reposts</b></article>
-            <article class="social-card"><div class="social-thumb yt"><span>YouTube</span></div><h3>Coffee farmers speak on record export earnings</h3><p>@NTVUganda</p><b>156K views · 2.1K comments</b></article>
+            <article class="empty-card"><h3>Loading current updates…</h3></article>
           </div>
         </section>
 
         <section>
-          <div class="section-header"><h2>256 Citizens Voice</h2><a href="#citizen-modal-toggle" data-open-citizen>VIEW ALL -></a></div>
+          <div class="section-header"><h2>Community News &amp; Tips</h2><a href="#citizen-modal-toggle" data-open-citizen>SUBMIT A TIP -></a></div>
           <div class="citizens-scroll">
-            <label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share what's happening near you</b></label>
-            <article class="citizen-card"><div class="citizen-thumb flood"><span>CITIZEN REPORT</span></div><h3>Flooding on Entebbe road after this morning's heavy rain</h3><p>Posted by a resident · Kampala · 20 min ago</p></article>
-            <article class="citizen-card"><div class="citizen-thumb water"><span>CITIZEN REPORT</span></div><h3>New borehole commissioned in our village</h3><p>Posted by a resident · Lira · 1h ago</p></article>
-            <article class="citizen-card"><div class="citizen-thumb outage"><span>CITIZEN REPORT</span></div><h3>Power outage affecting three trading centers since last night</h3><p>Posted by a resident · Mbale · 3h ago</p></article>
-            <article class="citizen-card"><div class="citizen-thumb road"></div><h3>Road repair crew arrives after pothole complaints</h3><p>Posted by a resident · Masaka · 5h ago</p></article>
-            <article class="citizen-card"><div class="citizen-thumb market"><span>CITIZEN REPORT</span></div><h3>Market cleanup drive begins after trader complaints</h3><p>Posted by a resident · Gulu · 6h ago</p></article>
+            <label for="citizen-modal-toggle" class="citizen-submit-card"><span>+</span><b>Share a verified news tip</b></label>
+            <article class="empty-card"><h3>Loading current community coverage…</h3></article>
           </div>
         </section>
 
         <section>
           <div class="section-header"><h2>Leading News by District</h2><a href="/#district" data-tab-link="district">VIEW ALL DISTRICTS -></a></div>
           <div class="district-scroll">
-            <article class="district-card"><div class="district-card-thumb kampala"><span>KAMPALA</span></div><h3>Cabinet approves supplementary road budget</h3><p><span class="source-chip"><span class="dot-mark dm">DM</span>Daily Monitor</span></p></article>
-            <article class="district-card"><div class="district-card-thumb road"><span>MBARARA</span></div><h3>Road upgrade enters final phase</h3><p><span class="source-chip"><span class="dot-mark cr">CR</span>ChimpReports</span></p></article>
-            <article class="district-card"><div class="district-card-thumb market"><span>GULU</span></div><h3>Market vendors relocated for renovation works</h3><p><span class="source-chip"><span class="dot-mark ur">UR</span>URN</span></p></article>
-            <article class="district-card"><div class="district-card-thumb bridge"><span>JINJA</span></div><h3>Bridge repairs to begin next week</h3><p><span class="source-chip"><span class="dot-mark de">DE</span>Daily Express</span></p></article>
-            <article class="district-card"><div class="district-card-thumb health"><span>MBALE</span></div><h3>New health center opens to the public</h3><p><span class="source-chip"><span class="dot-mark np">NP</span>Nile Post</span></p></article>
-            <article class="district-card"><div class="district-card-thumb trade"><span>ARUA</span></div><h3>Cross-border trade volumes rise this quarter</h3><p><span class="source-chip"><span class="dot-mark nv">NV</span>New Vision</span></p></article>
+            <article class="empty-card"><h3>Loading current district coverage…</h3></article>
           </div>
         </section>
 
         <section>
-          <div class="section-header"><h2>Most Read Journalist Profiles</h2><a href="/journalists/sarah-atwine/">VIEW ALL JOURNALISTS -></a></div>
+          <div class="section-header"><h2>Most Read Journalist Profiles</h2><a href="/journalists/">VIEW ALL JOURNALISTS -></a></div>
           <div class="journalist-scroll">
-            <a href="/journalists/sarah-atwine/" class="journalist-card featured"><span class="journalist-photo jp-sarah"><span>SA</span></span><h3>Sarah Atwine</h3><p>Politics & Government</p><b>312K reads · 4.8K shares</b></a>
-            <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-david"><span>DK</span></span><h3>David Kato</h3><p>Business & Markets</p><b>284K reads · 1.6M views</b></a>
-            <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-aisha"><span>AN</span></span><h3>Aisha Namuli</h3><p>Health & Communities</p><b>241K reads · 890K views</b></a>
-            <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-oscar"><span>OM</span></span><h3>Oscar Mugisha</h3><p>Sports & Live Video</p><b>218K reads · 1.2M views</b></a>
-            <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-lydia"><span>LN</span></span><h3>Lydia Nsubuga</h3><p>District Affairs</p><b>196K reads · 620K views</b></a>
-            <a href="/journalists/sarah-atwine/" class="journalist-card"><span class="journalist-photo jp-peter"><span>PN</span></span><h3>Peter Nyanzi</h3><p>Investigations</p><b>172K reads · 410K views</b></a>
+            <article class="empty-card"><h3>Loading active journalist profiles…</h3></article>
           </div>
         </section>
       </div>
@@ -279,30 +189,37 @@
 
     <section class="panel" id="panel-ecosystem">
       <div class="container">
-        <div class="section-header"><h2>256 AI Systems</h2></div>
-        <div class="eco-subnav">
-          <a href="/#ecosystem" data-tab-link="ecosystem" class="active">All 256 AI Systems News</a><a href="https://enterprise.256.co.ug" target="_blank" rel="noopener">Opportunities</a><a href="/#ecosystem" data-tab-link="ecosystem">Events</a><a href="/#ecosystem" data-tab-link="ecosystem">Press Office</a><a href="/#ecosystem" data-tab-link="ecosystem">Leadership</a><a href="/#ecosystem" data-tab-link="ecosystem">Media Library</a>
-        </div>
+        <header class="eco-directory-hero"><div><span class="eco-directory-kicker">One ecosystem · Seven specialist platforms</span><h1>256 AI Systems</h1><p>Explore the technology, commerce, mobility, relationships and digital-safety services built across the 256 ecosystem—and read every verified platform update in one place.</p></div><div class="eco-directory-actions"><a class="gold-action" href="https://256.co.ug" target="_blank" rel="noopener">Explore 256 Group ↗</a><a href="mailto:press@256newsroom.com">Press enquiries</a><a href="https://enterprise.256.co.ug/volunteer" target="_blank" rel="noopener">Opportunities</a></div></header>
         <div class="eco-platform-grid">
-          <article><span>AI</span><h3>256 AI</h3><p>Enterprise digital infrastructure and automation</p><a href="https://ai.256.co.ug" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>M</span><h3>256 Mall</h3><p>Uganda's national commerce platform</p><a href="https://256mall.com" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>E</span><h3>256 Express</h3><p>Transport, delivery and logistics</p><a href="https://256express.com" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>H</span><h3>256 Heart</h3><p>Dating and matchmaking platform</p><a href="https://256heart.com" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>C</span><h3>256 Corporate</h3><p>Business and technology services</p><a href="https://enterprise.256.co.ug" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>S</span><h3>256Shield</h3><p>Cybersecurity and digital protection</p><a href="https://shield.256.co.ug" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>LS</span><h3>256LinkShield</h3><p>Link and website reputation checking</p><a href="https://linkshield.256.co.ug" target="_blank" rel="noopener">Visit Newsroom -></a></article>
-          <article><span>+</span><h3>More Platforms</h3><p>New 256 platforms added by admins automatically appear here</p><a href="https://256.co.ug" target="_blank" rel="noopener">See All -></a></article>
+          <article data-platform="256 AI"><img src="/assets/logos/256-ai.png" alt="256 AI logo"><small>Artificial intelligence</small><h3>256 AI</h3><p>AI infrastructure, intelligent assistants and practical automation tools.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://ai.256.co.ug/news">Read News</a><a href="https://ai.256.co.ug" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256 Mall"><img src="/assets/logos/256-mall.png" alt="256 Mall logo"><small>Digital commerce</small><h3>256 Mall</h3><p>Uganda's online marketplace for retail, wholesale, fresh produce and exports.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://256.ug/news">Read News</a><a href="https://256.ug" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256 Express"><img src="/assets/logos/256-express.png" alt="256 Express logo"><small>Mobility &amp; logistics</small><h3>256 Express</h3><p>Transport, delivery, cargo, travel and nearby essential services.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://256express.com/news">Read News</a><a href="https://256express.com" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256 Heart"><img src="/assets/logos/256-heart.png" alt="256 Heart logo"><small>Relationships</small><h3>256 Heart</h3><p>Dating, matchmaking, member safety and meaningful connection.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://256heart.com/news">Read News</a><a href="https://256heart.com" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256 Corporate"><img src="/assets/logos/256-corporate.png" alt="256 Corporate logo"><small>Enterprise technology</small><h3>256 Corporate</h3><p>Business systems, cloud, cybersecurity, software, AI and data services.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://enterprise.256.co.ug/news">Read News</a><a href="https://enterprise.256.co.ug" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256Shield"><img src="/assets/logos/256-shield.svg" alt="256Shield logo"><small>Enterprise security</small><h3>256Shield</h3><p>Cybersecurity checks, monitoring, remediation and compliance visibility.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://shield.256.co.ug/news">Read News</a><a href="https://shield.256.co.ug" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
+          <article data-platform="256LinkShield"><img src="/assets/logos/256-linkshield.svg" alt="256LinkShield logo"><small>Link safety</small><h3>256LinkShield</h3><p>Evidence-led checks for suspicious links, QR codes, messages and websites.</p><div class="eco-latest">Latest verified updates appear here.</div><div class="eco-card-actions"><a href="https://linkshield.256.co.ug/news">Read News</a><a href="https://linkshield.256.co.ug" target="_blank" rel="noopener">Visit Platform ↗</a></div></article>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
+    <section class="action-banner" aria-label="Journalist and publishing services">
+      <div class="action-banner-main">
+        <a href="/journalists/" class="banner-action"><strong>Find a Journalist</strong><span>Search profiles →</span></a>
+        <a href="/dashboard/login.html?next=%2Fdashboard%2F%23%2Fstories%2Fnew" class="banner-action publish"><strong>Publish a Story</strong><span>Open newsroom →</span></a>
+      </div>
+      <aside class="banner-account">
+        <span>Journalists & publishers:</span>
+        <a class="banner-create" href="/dashboard/login.html?mode=register">Create Account</a>
+        <a class="banner-login" href="/dashboard/login.html?mode=login">Log In</a>
+      </aside>
+    </section>
     <div class="footer-grid">
-      <div><div class="footer-brand">256 Newsroom</div><p>Uganda's Digital News Infrastructure. Part of the 256 Group.</p></div>
-      <div><h3>Newsroom</h3><a href="/#home" data-tab-link="home">About 256 Newsroom</a><a href="/#home" data-tab-link="home">Editorial Standards</a><a href="/#home" data-tab-link="home">Corrections Policy</a><a href="/#home" data-tab-link="home">Fact-Checking Policy</a><a href="/#ecosystem" data-tab-link="ecosystem">Careers</a></div>
-      <div><h3>Contribute</h3><a href="#citizen-modal-toggle" data-open-citizen>Submit News</a><a href="mailto:careers@256newsroom.com">Become a Journalist</a><a href="/#ecosystem" data-tab-link="ecosystem">Publisher Registration</a><a href="/#ecosystem" data-tab-link="ecosystem">Advertise With Us</a></div>
-      <div><h3>Company</h3><a href="/#home" data-tab-link="home">Contact</a><a href="/#home" data-tab-link="home">Privacy Policy</a><a href="/#home" data-tab-link="home">Terms of Service</a><a href="/#home" data-tab-link="home">Copyright</a></div>
+      <div><a href="/" class="footer-brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>Part of the 256 Group.</p></div>
+      <div><h3>Newsroom</h3><a href="/information.html#about">About 256 Newsroom</a><a href="/information.html#editorial-standards">Editorial Standards</a><a href="/information.html#corrections">Corrections Policy</a><a href="/information.html#fact-checking">Fact-Checking Policy</a><a href="mailto:careers@256newsroom.com">Careers</a></div>
+      <div><h3>Contribute</h3><a href="#citizen-modal-toggle" data-open-citizen>Submit News Tip</a><a href="/dashboard/login.html?mode=register">Become a Journalist</a><a href="/dashboard/login.html?mode=register">Publisher Registration</a><a href="mailto:advertise@256newsroom.com">Advertise With Us</a></div>
+      <div><h3>Company</h3><a href="/information.html#contact">Contact</a><a href="/information.html#privacy">Privacy Policy</a><a href="/information.html#terms">Terms of Service</a><a href="/information.html#copyright">Copyright</a></div>
     </div>
     <p class="footer-note">© 2026 256 Newsroom, a 256 Group company. Publisher names and logos shown within stories are source attribution only and do not imply partnership or endorsement unless one exists.</p>
   </footer>
@@ -323,6 +240,7 @@
   </div>
 
   <script src="main.js?v=20260717-links"></script>
-  <script src="live.js?v=20260717-news-rotation"></script>
+  <script src="taxonomy-nav.js?v=20260722" defer></script>
+  <script src="live.js?v=20260722-auto-news-rails"></script>
 </body>
 </html>

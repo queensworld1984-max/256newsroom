@@ -1,9 +1,27 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const cron = require('node-cron');
 const pool = require('./db');
-const { crawlAllSources, crawlNewsApiSources, crawlGoogleNewsTopics } = require('../scripts/crawl');
+const { crawlAllSources, crawlNewsApiSources } = require('../scripts/crawl');
+const { loadSessionUser, requireRole } = require('./auth');
+const authRoutes = require('./routes/auth');
+const publisherApplicationRoutes = require('./routes/publisherApplications');
+const publisherProfileRoutes = require('./routes/publishers');
+const publisherAdminRoutes = require('./routes/publisherAdmin');
+const storyRoutes = require('./routes/stories');
+const meStoryRoutes = require('./routes/meStories');
+const taxonomyRoutes = require('./routes/taxonomy');
+const feedRoutes = require('./routes/feeds');
+const { pollDueFeeds } = require('./feedImport');
+const rssRoutes = require('./routes/rss');
+const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
+const platformNewsRoutes = require('./routes/platformNews');
+const storyPageRoutes = require('./routes/storyPages');
+const sectionPageRoutes = require('./routes/sectionPages');
+const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
+const { generateStorySummary, generatePendingStorySummaries } = require('./storySummaries');
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
@@ -12,16 +30,49 @@ const port = Number(process.env.PORT || 5066);
 
 app.set('trust proxy', true);
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: ['https://256newsroom.com', 'https://www.256newsroom.com'] }));
+// The session-cookie-bearing app is locked to 256newsroom's own origins.
+// /api/platforms/*/news is a public, credential-less read endpoint meant to
+// be fetched cross-origin from the individual platform sites, so it gets a
+// permissive, no-credentials CORS policy instead — resolved per-request so
+// there's only ever one `cors()` middleware in the stack (two stacked
+// instances previously produced conflicting Access-Control-* headers).
+app.use(cors((req, callback) => {
+  if (req.path.startsWith('/api/platforms/')) {
+    callback(null, { origin: true, credentials: false });
+  } else {
+    callback(null, { origin: ['https://256newsroom.com', 'https://www.256newsroom.com'], credentials: true });
+  }
+}));
 app.use(express.json({ limit: '1mb' }));
+app.use(cookieParser());
+app.use(loadSessionUser);
 
+app.use('/api/auth', authRoutes);
+app.use('/api/publisher-applications', publisherApplicationRoutes);
+app.use('/api/admin/publisher-applications', publisherApplicationRoutes.adminRouter);
+// Order matters: numeric-id admin/story routes are tried before the slug-based public
+// profile route, which acts as the catch-all fallback for /api/publishers/:slug.
+app.use('/api/publishers', publisherAdminRoutes);
+app.use('/api/publishers', storyRoutes);
+app.use('/api/publishers', feedRoutes);
+app.use('/api/admin/feeds', feedRoutes.adminRouter);
+app.use('/api/publishers', publisherProfileRoutes);
+app.use('/api/me/stories', meStoryRoutes);
+app.use('/api', taxonomyRoutes);
+app.use('/rss', rssRoutes);
+app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
+app.use('/api/platforms', platformNewsRoutes);
+app.use(storyPageRoutes);
+app.use(sectionPageRoutes);
+
+// Accepts either the legacy static admin token (existing ops/cron callers) or a
+// logged-in super_admin/newsroom_admin session — the static-token path is kept only
+// for backward compatibility during rollout and is a fast-follow removal candidate.
 function requireAdmin(req, res, next) {
   const expected = process.env.ADMIN_TOKEN;
   const provided = req.header('x-admin-token');
-  if (!expected || provided !== expected) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
+  if (expected && provided === expected) return next();
+  return requireRole('super_admin', 'newsroom_admin')(req, res, next);
 }
 
 const citizenReportAttempts = new Map();
@@ -41,12 +92,15 @@ function citizenReportRateLimit(req, res, next) {
 
 const articleSelect = `
   select
-    a.id, a.title, a.summary, a.url, a.image_url, a.author, a.published_at, a.score,
-    s.name as source_name, s.slug as source_slug, s.source_type, s.official, s.credibility_label,
+    a.id, a.title, a.summary, a.url, a.original_url, a.internal_url, a.slug, a.image_url, a.author, a.published_at, a.score,
+    coalesce(s.name, o.name, '256 Newsroom') as source_name, coalesce(s.slug, o.slug, '256-newsroom') as source_slug,
+    coalesce(s.source_type, o.org_type, 'newsroom') as source_type, coalesce(s.official, o.is_official, false) as official,
+    s.credibility_label,
     c.name as category, c.slug as category_slug,
     d.name as district, d.slug as district_slug
   from articles a
-  join sources s on s.id = a.source_id
+  left join sources s on s.id = a.source_id
+  left join organizations o on o.id = a.organization_id
   left join categories c on c.id = a.category_id
   left join districts d on d.id = a.district_id
   where a.hidden = false and a.status = 'published'
@@ -73,6 +127,11 @@ function normalizeRows(rows) {
     title: row.title,
     summary: row.summary,
     url: row.url,
+    originalUrl: row.original_url || row.url,
+    // Derive the destination from the same row that supplied the headline.
+    // Never trust a stale stored internal_url after an upstream URL collision.
+    internalUrl: row.slug ? `/news/${row.slug}` : row.internal_url,
+    slug: row.slug,
     imageUrl: row.image_url,
     author: row.author,
     publishedAt: row.published_at,
@@ -117,8 +176,8 @@ app.get('/api/news/hero', async (req, res, next) => {
     const internationalCap = Math.max(1, Math.min(3, Math.round(limit * 0.2)));
     const ugandaLimit = limit - internationalCap;
     const [ugandaRows, intlRows] = await Promise.all([
-      pool.query(`${articleSelect} and s.source_type <> 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [ugandaLimit]),
-      pool.query(`${articleSelect} and s.source_type = 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [internationalCap]),
+      pool.query(`${articleSelect} and s.source_type <> 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [ugandaLimit]),
+      pool.query(`${articleSelect} and s.source_type = 'international_publisher' and (c.slug is distinct from 'sports') order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [internationalCap]),
     ]);
     const items = interleave(normalizeRows(ugandaRows.rows), normalizeRows(intlRows.rows));
     res.json({ items });
@@ -130,7 +189,7 @@ app.get('/api/news/hero', async (req, res, next) => {
 app.get('/api/news/top', async (req, res, next) => {
   try {
     const limit = limitParam(req, 12);
-    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, a.score desc, a.published_at desc nulls last limit $1`, [limit]);
+    const { rows } = await pool.query(`${articleSelect} order by ${todayFirstOrder}, (a.image_url is not null) desc, a.score desc, a.published_at desc nulls last limit $1`, [limit]);
     res.json({ items: normalizeRows(rows) });
   } catch (err) {
     next(err);
@@ -182,7 +241,27 @@ app.get('/api/news/mentions', async (req, res, next) => {
 app.get('/api/news/category/:category', async (req, res, next) => {
   try {
     const limit = limitParam(req, 12);
-    const { rows } = await pool.query(`${articleSelect} and c.slug = $1 order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
+    const ugandaOnly = req.params.category === 'national'
+      ? ` and coalesce(s.source_type, o.org_type, 'newsroom') in ('local_publisher','government_official','social_official')`
+      : '';
+    const categoryMatch = req.params.category === 'crime-justice'
+      ? `and (
+          c.id in (
+            select id from categories
+            where slug = $1 or parent_category_id = (select id from categories where slug = $1)
+          )
+          or (
+            coalesce(s.source_type, o.org_type, 'newsroom') in ('local_publisher','government_official')
+            and lower(coalesce(a.title,'') || ' ' || coalesce(a.summary,'')) ~ '(court|police|crime|justice|arrest|charged|fraud|security|prison|bail|remand|theft|murder|robbery)'
+          )
+        )`
+      : `and c.id in (
+          select id from categories
+          where slug = $1 or parent_category_id = (select id from categories where slug = $1)
+        )`;
+    const { rows } = await pool.query(`${articleSelect}
+      ${categoryMatch}${ugandaOnly}
+      order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
     res.json({ items: normalizeRows(rows) });
   } catch (err) {
     next(err);
@@ -233,38 +312,111 @@ app.get('/api/news/sources/top', async (req, res, next) => {
   }
 });
 
+// Ranked by published story count, not fabricated engagement figures — no genuine
+// reads/views/shares tracking exists yet (see backend/sql/migrations/0008_*).
 app.get('/api/journalists/top', async (req, res, next) => {
   try {
     const limit = limitParam(req, 6);
     const { rows } = await pool.query(`
       select j.id, j.name, j.slug, j.beat, j.profile_url, j.image_url, j.verified, j.trust_score,
-        coalesce(sum(es.reads), 0)::int as reads,
-        coalesce(sum(es.views), 0)::int as views,
-        coalesce(sum(es.shares), 0)::int as shares
+        count(a.id)::int as published_story_count,
+        max(a.published_at) as most_recent_published_at
       from journalists j
-      left join engagement_stats es on es.entity_type = 'journalist' and es.entity_id = j.id
+      left join articles a on a.journalist_id = j.id and a.status = 'published'
       group by j.id
-      order by reads desc, views desc, trust_score desc
+      having j.user_id is not null or count(a.id) > 0
+      order by published_story_count desc, most_recent_published_at desc nulls last, j.name asc
       limit $1
     `, [limit]);
-    res.json({ items: rows });
+    res.json({ items: rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
   } catch (err) {
     next(err);
   }
 });
 
-app.get('/api/ecosystem', (_req, res) => {
-  res.json({
-    items: [
-      { platform: '256 Heart', type: 'Platform Update', title: 'Free access codes launched for Gold, VIP & Stealth membership plans', summary: 'All current membership tiers are available at no cost through promotional access codes as the platform expands across Uganda and the diaspora.', description: 'Dating and matchmaking platform for Uganda and the diaspora.', mark: 'H', logoUrl: '/assets/logos/256-heart.png', link: 'https://256heart.com' },
-      { platform: '256 Corporate', type: 'Opportunity', title: '256 Corporate opens applications for software-development volunteers', summary: 'Approved technical volunteers get access to development assignments, onboarding, dashboard tools and commission-based project opportunities.', description: 'Business and technology services, including software-development opportunities.', mark: 'C', logoUrl: '/assets/logos/256-corporate.png', link: 'https://enterprise.256.co.ug' },
-      { platform: '256 Mall', type: 'Milestone', title: '256 Mall onboards its 1,000th verified wholesale seller', summary: "The milestone comes as the platform's wholesale tier expands into three new districts this quarter.", description: "Uganda's national e-commerce and wholesale marketplace.", mark: 'M', logoUrl: '/assets/logos/256-mall.png', link: 'https://256mall.com' },
-      { platform: '256 Express', type: 'Safety Notice', title: '256 Express introduces in-app driver verification badges', summary: 'Riders can now confirm driver identity and vehicle details before every trip, part of a wider district-by-district safety rollout.', description: 'Transport, delivery and logistics platform.', mark: 'E', logoUrl: '/assets/logos/256-express.png', link: 'https://256express.com' },
-      { platform: '256Shield', type: 'Product Update', title: 'Domain scanner now covers four new threat categories', summary: "The update expands 256Shield's automated scanning modules to catch a wider range of phishing and spoofing patterns before they reach users.", description: 'Cybersecurity and digital protection, including domain and phishing scanning.', mark: 'S', logoUrl: '/assets/logos/256-shield.svg', link: 'https://shield.256.co.ug' },
-      { platform: '256 AI Systems', type: 'Press Briefing', title: 'Queen Dorothy Amolo Unveils 256 AI Systems During Lira Press Briefing', summary: 'At a press briefing at Pauline Hotel in Lira City on 13 July 2026, Queen Dorothy Amolo and Dr. Jason Boyle launched 256 AI Systems, covering the digital ecosystem launch, employment and digital-skills development, AI tools for Ugandan users, e-commerce through 256 Mall, transport and service access through 256 Express, private matchmaking through 256 Heart, cybersecurity and scam protection, government-accountability tools, support for farmers and businesses, and plans for Uganda to become a regional digital-innovation centre. See independent press coverage of the event on the profile linked below.', description: "Ugandan AI and digital-infrastructure company connecting commerce, transport, cybersecurity, matchmaking and public-service platforms.", mark: 'AI', logoUrl: '/assets/logos/256-ai.png', link: 'https://ai.256.co.ug', profileUrl: '/people/queen-dorothy-amolo/' },
-      { platform: '256LinkShield', type: 'Safety Update', title: 'Link reputation checks expand across public news submissions', summary: 'The platform now screens submitted URLs for spoofing, malware and suspicious redirects before they reach moderation queues.', description: 'Link and website reputation checking to catch phishing and spoofing.', mark: 'LS', logoUrl: '/assets/logos/256-linkshield.svg', link: 'https://linkshield.256.co.ug' },
-    ],
-  });
+app.get('/api/journalists', async (req, res, next) => {
+  try {
+    const limit = limitParam(req, 40, 100);
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    const { rows } = await pool.query(`
+      select j.id, j.name, j.slug, j.beat, j.bio, j.location, j.website_url, j.image_url, j.verified,
+        count(a.id)::int as published_story_count
+      from journalists j left join articles a on a.journalist_id=j.id and a.status='published' and a.hidden=false
+      where ($1 = '' or concat_ws(' ', j.name, j.beat, j.bio, j.location) ilike '%' || $1 || '%')
+      group by j.id having j.user_id is not null or count(a.id) > 0
+      order by published_story_count desc, j.name limit $2`, [q, limit]);
+    res.json({ items: rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/journalists/profile/:slug', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select j.id, j.name, j.slug, j.beat, j.bio, j.location, j.website_url, j.image_url, j.verified,
+        count(a.id)::int as published_story_count
+      from journalists j left join articles a on a.journalist_id=j.id and a.status='published' and a.hidden=false
+      where j.slug=$1 group by j.id`, [req.params.slug]);
+    if (!rows.length) return res.status(404).json({ error: 'Journalist not found.' });
+    const stories = await pool.query(`${articleSelect} and a.journalist_id=$1 order by a.published_at desc nulls last limit 20`, [rows[0].id]);
+    res.json({ item: rows[0], stories: normalizeRows(stories.rows) });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/search', async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q.length < 2) return res.json({ stories: [], journalists: [] });
+    const [storyRows, journalistRows] = await Promise.all([
+      pool.query(`${articleSelect} and concat_ws(' ', a.title, a.summary, a.seo_summary, a.author, s.name, c.name, d.name) ilike '%' || $1 || '%' order by a.published_at desc nulls last limit 30`, [q]),
+      pool.query(`select j.id,j.name,j.slug,j.beat,j.image_url,j.verified from journalists j where concat_ws(' ',j.name,j.beat,j.bio,j.location) ilike '%' || $1 || '%' and (j.user_id is not null or exists(select 1 from articles a where a.journalist_id=j.id and a.status='published' and a.hidden=false)) order by j.name limit 12`, [q]),
+    ]);
+    res.json({ stories: normalizeRows(storyRows.rows), journalists: journalistRows.rows.map((j) => ({ ...j, profile_url: `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` })) });
+  } catch (err) { next(err); }
+});
+
+// Real published stories from the internally-seeded 256 Ecosystem organization and its
+// active child platforms — never a hardcoded array. Organizations are flagged
+// is_official=true only via internal seeding (backend/sql/migrations/0009_*), never
+// through public registration, so this can't be spoofed by a third-party publisher.
+// featured_in_ecosystem lets an admin control the homepage widget without unpublishing
+// a story. Deliberately unrelated to the general "ecosystem" news category, which may
+// contain independent third-party coverage about 256 companies rather than official
+// updates from them.
+app.get('/api/ecosystem', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(`
+      select
+        o.id as organization_id, o.name as platform, o.slug as org_slug, o.logo_url, o.website_url,
+        latest.id, latest.title, latest.summary, latest.published_at, latest.slug,
+        latest.external_url, latest.content_type
+      from organizations o
+      left join lateral (
+        select a.id, a.title, a.summary, a.published_at, a.slug, a.external_url, a.content_type
+        from articles a
+        where a.organization_id=o.id and a.status='published' and a.hidden=false
+        order by a.published_at desc nulls last, a.id desc
+        limit 1
+      ) latest on true
+      where o.org_type='ecosystem_platform' and o.active=true
+      order by o.name
+    `);
+    res.json({
+      items: rows.map((row) => ({
+        organizationId: row.organization_id,
+        platform: row.platform,
+        logoUrl: row.logo_url,
+        title: row.title,
+        summary: row.summary,
+        publishedAt: row.published_at,
+        contentType: row.content_type,
+        articleUrl: row.slug ? `/news/${row.slug}` : null,
+        link: row.website_url || row.external_url || null,
+        websiteUrl: row.website_url || null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.post('/api/citizen-reports', citizenReportRateLimit, async (req, res, next) => {
@@ -307,9 +459,12 @@ app.post('/api/crawl/run-newsapi', requireAdmin, async (_req, res, next) => {
 });
 
 app.post('/api/crawl/run-googlenews', requireAdmin, async (_req, res, next) => {
+  res.status(410).json({ error: 'Google News ingestion is disabled.' });
+});
+
+app.post('/api/admin/articles/:id/generate-summary', requireAdmin, async (req, res, next) => {
   try {
-    const result = await crawlGoogleNewsTopics();
-    res.json(result);
+    res.json(await generateStorySummary(req.params.id));
   } catch (err) {
     next(err);
   }
@@ -434,7 +589,9 @@ app.get('/api/admin/crawl-logs', requireAdmin, async (_req, res, next) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  const status = Number.isInteger(err.status) ? err.status : 500;
+  const message = status < 500 ? err.message : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 if (process.env.CRAWL_INTERVAL_MINUTES !== '0') {
@@ -452,10 +609,31 @@ if (process.env.NEWSAPI_KEY && process.env.NEWSAPI_INTERVAL_MINUTES !== '0') {
   });
 }
 
-if (process.env.GOOGLENEWS_INTERVAL_MINUTES !== '0') {
-  const minutes = Math.max(15, Number(process.env.GOOGLENEWS_INTERVAL_MINUTES || 30));
+if (process.env.FEED_IMPORT_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(5, Number(process.env.FEED_IMPORT_INTERVAL_MINUTES || 15));
   cron.schedule(`*/${minutes} * * * *`, () => {
-    crawlGoogleNewsTopics().catch((err) => console.error('Scheduled Google News crawl failed:', err));
+    pollDueFeeds().catch((err) => console.error('Scheduled feed import failed:', err));
+  });
+}
+
+if (process.env.OPENAI_API_KEY && process.env.STORY_SUMMARY_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.STORY_SUMMARY_INTERVAL_MINUTES || 15));
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    generatePendingStorySummaries(10).catch((err) => console.error('Scheduled story-summary generation failed:', err));
+  });
+}
+
+// Off by default (ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES=0) — every platform
+// is also individually in 'draft' mode by default (see automation_settings),
+// so this needs two explicit opt-ins before anything can auto-publish.
+if (process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES && process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES !== '0') {
+  const minutes = Math.max(15, Number(process.env.ECOSYSTEM_AUTOMATION_INTERVAL_MINUTES));
+  console.log(`Ecosystem automation cron enabled: running every ${minutes} minutes.`);
+  cron.schedule(`*/${minutes} * * * *`, () => {
+    console.log('Ecosystem automation cycle starting...');
+    runEcosystemAutomationCycle()
+      .then((result) => console.log('Ecosystem automation cycle finished:', JSON.stringify(result.results?.map((r) => `${r.name}:${r.status}`) || result)))
+      .catch((err) => console.error('Scheduled ecosystem automation cycle failed:', err));
   });
 }
 

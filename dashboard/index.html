@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>256 Newsroom — Publisher Dashboard</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body class="dash-body">
+  <div class="dash-shell">
+    <aside class="dash-sidebar">
+      <a href="/" class="dash-sidebar-brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a>
+      <nav class="dash-nav" id="dash-nav"></nav>
+    </aside>
+    <div class="dash-main">
+      <header class="dash-topbar">
+        <div class="dash-topbar-org" id="dash-topbar-org">Loading…</div>
+        <div class="dash-topbar-user">
+          <span id="dash-topbar-user"></span>
+          <button class="secondary small" id="dash-logout">Log out</button>
+        </div>
+      </header>
+      <main class="dash-content" id="dash-content"><p class="dash-empty">Loading…</p></main>
+    </div>
+  </div>
+  <script type="module" src="/dashboard/js/app.js"></script>
+</body>
+</html>

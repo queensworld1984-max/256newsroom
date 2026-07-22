@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>256 Newsroom — Journalist and Publisher Accounts</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/dashboard/dashboard.css">
+</head>
+<body class="dash-auth-body">
+  <main class="auth-wrap">
+    <div class="auth-brand"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><span class="auth-brand-sub">Journalist & Publisher Accounts</span></div>
+
+    <section class="auth-card">
+      <div class="auth-tabs">
+        <button id="tab-login" class="auth-tab active" type="button">Log in</button>
+        <button id="tab-register" class="auth-tab" type="button">Create account</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label>Email <input type="email" id="login-email" required autocomplete="email"></label>
+        <label>Password <input type="password" id="login-password" required autocomplete="current-password"></label>
+        <button type="submit">Log in</button>
+        <p class="auth-error" id="login-error"></p>
+      </form>
+
+      <form id="register-form" class="auth-form" hidden>
+        <label>Full name <input type="text" id="register-name" required></label>
+        <label>Email <input type="email" id="register-email" required autocomplete="email"></label>
+        <label>Password (min 10 characters) <input type="password" id="register-password" required minlength="10" autocomplete="new-password"></label>
+        <button type="submit">Create account</button>
+        <p class="auth-error" id="register-error"></p>
+      </form>
+    </section>
+
+    <p class="auth-footnote">Journalists: create an account, choose “independent journalist,” then complete your public profile. Publishers can register their organization from the same dashboard.</p>
+  </main>
+  <script type="module" src="/dashboard/js/login.js"></script>
+</body>
+</html>
