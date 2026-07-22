@@ -23,6 +23,7 @@ import * as adminPlatforms from './sections/admin/platforms.js';
 import * as adminPlatformDetail from './sections/admin/platformDetail.js';
 import * as adminArticles from './sections/admin/articles.js';
 import * as adminJobs from './sections/admin/jobs.js';
+import * as adminPeople from './sections/admin/people.js';
 
 const navEl = document.getElementById('dash-nav');
 const contentEl = document.getElementById('dash-content');
@@ -74,9 +75,10 @@ const ONBOARDING_NAV = [
 ];
 
 const ADMIN_NAV = {
-  section: 'Ecosystem Automation',
+  section: 'Newsroom Admin',
   items: [
-    { path: '/admin/ecosystem/overview', label: 'Overview' },
+    { path: '/admin/people', label: 'People & Journalists' },
+    { path: '/admin/ecosystem/overview', label: 'Ecosystem Overview' },
     { path: '/admin/ecosystem/platforms', label: 'Platforms' },
     { path: '/admin/ecosystem/articles', label: 'Generated Articles' },
     { path: '/admin/ecosystem/jobs', label: 'Jobs & Audit Log' },
@@ -100,6 +102,7 @@ const ROUTES = [
   { pattern: /^\/rss-distribution$/, render: (m, c) => rssDistribution.render(contentEl, c) },
   { pattern: /^\/settings$/, render: (m, c) => settings.render(contentEl, c) },
   { pattern: /^\/journalist-profile$/, render: () => journalistProfile.render(contentEl) },
+  { pattern: /^\/admin\/people$/, render: (m, c) => adminPeople.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/overview$/, render: (m, c) => adminOverview.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms$/, render: (m, c) => adminPlatforms.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms\/(\d+)$/, render: (m, c) => adminPlatformDetail.render(contentEl, c, { orgId: m[1] }) },
@@ -115,6 +118,8 @@ function navConfigFor(mode) {
 
 function renderNav(mode, currentPath) {
   const groups = navConfigFor(mode).slice();
+  // Global admins always get the People directory + ecosystem tools,
+  // including when their personal account is in independent or onboarding mode.
   if (ctx.isGlobalAdmin) groups.push(ADMIN_NAV);
   navEl.innerHTML = '';
   for (const group of groups) {
