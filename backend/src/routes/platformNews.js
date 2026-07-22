@@ -17,13 +17,39 @@ function safeUrl(value, fallback = '#') {
   } catch { return fallback; }
 }
 
-function renderBody(body) {
-  return String(body || '').split(/\n{2,}/).filter(Boolean).map((block) => {
+function articleBlocks(body) {
+  return String(body || '').split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+}
+
+function pickPullQuote(body, summary) {
+  const candidates = articleBlocks(body)
+    .filter((block) => !/^##\s+/.test(block) && !/^\*[^*]+\*$/.test(block))
+    .flatMap((block) => block.split(/(?<=[.!?])\s+/))
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 80 && sentence.length <= 240);
+  return candidates.sort((a, b) => b.length - a.length)[0] || String(summary || '').trim().slice(0, 240);
+}
+
+function readingMinutes(body, summary) {
+  const words = String(body || summary || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 210));
+}
+
+function renderBody(body, pullQuote = '') {
+  const blocks = articleBlocks(body);
+  const paragraphTotal = blocks.filter((block) => !/^##\s+/.test(block) && !/^\*[^*]+\*$/s.test(block)).length;
+  const quoteAfter = Math.min(2, paragraphTotal);
+  let paragraphCount = 0;
+  return blocks.map((block) => {
     const text = block.trim();
     if (/^##\s+/.test(text)) return `<h2>${escapeHtml(text.replace(/^##\s+/, ''))}</h2>`;
     const disclosure = text.match(/^\*([^*]+)\*$/s);
     if (disclosure) return `<p class="disclosure"><em>${escapeHtml(disclosure[1])}</em></p>`;
-    return `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+    paragraphCount += 1;
+    const paragraph = `<p>${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+    return paragraphCount === quoteAfter && pullQuote
+      ? `${paragraph}<blockquote class="pull-quote"><span aria-hidden="true">“</span>${escapeHtml(pullQuote)}</blockquote>`
+      : paragraph;
   }).join('');
 }
 
@@ -32,7 +58,9 @@ function pageShell({ title, description, canonical, imageUrl, jsonLd, platform, 
 <title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><meta name="robots" content="index,follow,max-image-preview:large">
 <link rel="canonical" href="${safeUrl(canonical)}"><meta property="og:type" content="${jsonLd ? 'article' : 'website'}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${safeUrl(canonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta name="twitter:card" content="summary_large_image">${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>` : ''}
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght%40400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"><style>*{box-sizing:border-box}body{margin:0;background:#f7f5ef;color:#151515;font:19px/1.7 "EB Garamond",Garamond,"Times New Roman",serif}header{background:#111;color:#fff;padding:18px 5vw;display:flex;align-items:center;justify-content:space-between}header a{color:#fff;text-decoration:none}.brand{font-size:21px;font-weight:800}.brand b,.kicker{color:#c79a2b}nav a{margin-left:20px}main{max-width:1040px;margin:auto;padding:56px 24px 90px}h1{font:400 clamp(34px,6vw,64px)/1.08 "DM Serif Display",Georgia,serif;max-width:900px;margin:12px 0 22px}h2{font:400 27px/1.2 "DM Serif Display",Georgia,serif;margin:42px 0 12px}.lede{font-size:19px;color:#555;max-width:760px}.meta{color:#666;margin:0 0 28px}.hero{width:100%;max-height:560px;object-fit:cover;margin:12px 0 30px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;margin-top:36px}.card{background:#fff;border:1px solid #d4d0c5;border-top:4px solid #c79a2b;padding:26px;text-decoration:none;color:inherit;cursor:pointer;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}.card:hover,.card:focus{transform:translateY(-3px);box-shadow:0 12px 28px #0002;outline:2px solid #c79a2b}.card h2{font-size:24px;margin:8px 0;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}.card p{color:#4d4d4d}.card time{font-size:12px;color:#777}.read-more{display:inline-block;margin-top:auto;padding-top:18px;color:#171100;font-weight:800;text-decoration:underline}.article{max-width:780px}.article p{font-size:20px}.backlinks{border-top:1px solid #ccc;margin-top:48px;padding-top:24px}.backlinks a{color:#7c5b00;font-weight:700}.disclosure{background:#eee9dc;padding:15px}footer{text-align:center;border-top:1px solid #ddd;padding:28px;color:#666}@media(max-width:650px){nav{display:none}main{padding-top:38px}}</style></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght%40400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"><style>*{box-sizing:border-box}body{margin:0;background:#f7f5ef;color:#151515;font:19px/1.7 "EB Garamond",Garamond,"Times New Roman",serif}header{background:#111;color:#fff;padding:18px 5vw;display:flex;align-items:center;justify-content:space-between}header a{color:#fff;text-decoration:none}.brand{font-size:21px;font-weight:800}.brand b,.kicker{color:#c79a2b}nav a{margin-left:20px}main{max-width:1040px;margin:auto;padding:56px 24px 90px}h1{font:400 clamp(34px,6vw,64px)/1.08 "DM Serif Display",Georgia,serif;max-width:900px;margin:12px 0 22px}h2{font:400 27px/1.2 "DM Serif Display",Georgia,serif;margin:42px 0 12px}.lede{font-size:19px;color:#555;max-width:760px}.meta{color:#666;margin:0 0 28px}.hero{width:100%;max-height:560px;object-fit:cover;margin:12px 0 30px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;margin-top:36px}.card{background:#fff;border:1px solid #d4d0c5;border-top:4px solid #c79a2b;padding:26px;text-decoration:none;color:inherit;cursor:pointer;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}.card:hover,.card:focus{transform:translateY(-3px);box-shadow:0 12px 28px #0002;outline:2px solid #c79a2b}.card h2{font-size:24px;margin:8px 0;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}.card p{color:#4d4d4d}.card time{font-size:12px;color:#777}.read-more{display:inline-block;margin-top:auto;padding-top:18px;color:#171100;font-weight:800;text-decoration:underline}.article{max-width:780px}.article p{font-size:20px}.backlinks{border-top:1px solid #ccc;margin-top:48px;padding-top:24px}.backlinks a{color:#7c5b00;font-weight:700}.disclosure{background:#eee9dc;padding:15px}footer{text-align:center;border-top:1px solid #ddd;padding:28px;color:#666}
+.editorial-article{max-width:1180px}.dateline-rail{border-top:1px solid #171717;border-bottom:1px solid #171717;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;padding:8px 0;font:700 12px/1.3 Arial,sans-serif;letter-spacing:.11em;text-transform:uppercase}.dateline-rail span:last-child{color:#8d161b}.article-header{padding:26px 0 0}.article-header h1{max-width:1020px}.article-header .lede{font-size:21px;line-height:1.55;max-width:850px}.article-byline{align-items:center;border-top:1px solid #bbb3a4;border-bottom:4px double #171717;display:flex;gap:14px;margin-top:28px;padding:15px 0}.byline-avatar{align-items:center;background:#111;border:2px solid #c79a2b;border-radius:50%;color:#fff;display:flex;flex:0 0 46px;font:700 13px/1 Arial,sans-serif;height:46px;justify-content:center;overflow:hidden}.byline-avatar img{height:100%;object-fit:contain;width:100%}.byline-copy{line-height:1.25}.byline-copy strong{display:block;font-size:17px}.byline-copy span,.byline-stat small{color:#666;display:block;font:700 10px/1.3 Arial,sans-serif;letter-spacing:.09em;text-transform:uppercase}.byline-stats{display:flex;gap:26px;margin-left:auto}.byline-stat strong{display:block;font:700 14px/1.3 Arial,sans-serif}.article-figure{margin:30px 0 38px}.article-figure .hero{display:block;margin:0;max-height:620px}.article-figure figcaption{border-bottom:1px solid #ccc4b5;color:#6b665e;font-size:14px;line-height:1.4;padding:8px 0}.article-layout{display:grid;gap:54px;grid-template-columns:minmax(0,760px) minmax(220px,280px)}.story-copy>p{font-size:20px;margin:0 0 24px}.story-copy>p:first-of-type::first-letter{color:#171717;float:left;font:400 82px/.72 "DM Serif Display",Georgia,serif;margin:12px 10px 0 0}.story-copy h2{border-top:1px solid #bdb6a8;font-size:30px;margin:48px 0 18px;padding-top:17px}.story-copy h2::before{color:#a9181d;content:"◆";font-size:.52em;margin-right:.65em;vertical-align:.18em}.pull-quote{border-left:5px solid #a9181d;color:#211e19;font:400 29px/1.22 "DM Serif Display",Georgia,serif;margin:42px 0;padding:18px 20px 18px 48px;position:relative}.pull-quote span{color:#c79a2b;font:400 84px/.7 Georgia,serif;left:9px;position:absolute;top:19px}.story-facts{align-self:start;border-top:5px solid #171717;position:sticky;top:24px}.story-facts h2{border-bottom:2px solid #a9181d;font-size:25px;margin:0;padding:14px 0 10px}.fact-row{border-bottom:1px dashed #aaa296;padding:13px 0}.fact-row span{color:#766f66;display:block;font:700 10px/1.3 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}.fact-row strong,.fact-row a{color:#171717;font-size:17px;line-height:1.3}.fact-row a{text-decoration-color:#a9181d;text-underline-offset:3px}.tag-rail{align-items:center;border-top:1px solid #171717;border-bottom:1px solid #171717;display:flex;flex-wrap:wrap;gap:8px;margin-top:48px;padding:12px 0}.tag-rail>span{font:700 10px/1 Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase}.story-tag{background:#e8e2d5;border-radius:999px;font:700 12px/1 Arial,sans-serif;padding:8px 11px}.editorial-backlinks{margin-top:32px}.editorial-backlinks p{font-size:17px}.disclosure{background:#eee9dc;padding:15px}
+footer{text-align:center;border-top:1px solid #ddd;padding:28px;color:#666}@media(max-width:800px){.article-layout{grid-template-columns:1fr}.story-facts{position:static}.byline-stats{margin-left:0}.article-byline{align-items:flex-start;flex-wrap:wrap}.article-figure{margin-bottom:30px}}@media(max-width:650px){nav{display:none}main{padding-top:38px}.editorial-article{padding-inline:18px}.dateline-rail{display:block}.dateline-rail span{display:block;margin:3px 0}.article-header .lede{font-size:19px}.byline-stats{gap:18px;width:100%;padding-left:60px}.story-copy>p{font-size:19px}.pull-quote{font-size:25px;padding-left:42px}}</style></head><body>
 <header><a class="brand" href="/">${escapeHtml(platform.name)}</a><nav><a href="/">Home</a><a href="/news">News</a><a href="${NEWSROOM_SITE}/#ecosystem">256 Newsroom</a></nav></header>${body}<footer>Official ${escapeHtml(platform.name)} news, distributed with 256 Newsroom.</footer></body></html>`;
 }
 
@@ -102,14 +130,32 @@ router.get('/:slug/news-page/:articleSlug', async (req, res, next) => {
   try {
     const org = await getPlatform(req.params.slug);
     if (!org) return res.status(404).send('Platform not found');
-    const { rows } = await pool.query(`select title,summary,body,published_at,updated_at,slug,content_type,image_url from articles where organization_id=$1 and slug=$2 and status='published' and hidden=false limit 1`, [org.id, req.params.articleSlug]);
+    const { rows } = await pool.query(`select title,summary,body,published_at,updated_at,slug,content_type,image_url,tags from articles where organization_id=$1 and slug=$2 and status='published' and hidden=false limit 1`, [org.id, req.params.articleSlug]);
     const article = rows[0];
     if (!article) return res.status(404).send('Article not found');
     const canonical = `${org.website_url.replace(/\/$/, '')}/news/${article.slug}`;
     const newsroomUrl = `${NEWSROOM_SITE}/news/${article.slug}`;
     const description = String(article.summary || '').slice(0, 160);
     const jsonLd = { '@context':'https://schema.org', '@type':'NewsArticle', headline:article.title, description, image:article.image_url ? [article.image_url] : undefined, datePublished:article.published_at, dateModified:article.updated_at, author:{'@type':'Organization',name:org.name,url:org.website_url}, publisher:{'@type':'Organization',name:org.name,url:org.website_url}, mainEntityOfPage:canonical, isBasedOn:org.website_url };
-    const body = `<main class="article"><span class="kicker">${escapeHtml(article.content_type || 'Official update')}</span><h1>${escapeHtml(article.title)}</h1><p class="lede">${escapeHtml(article.summary || '')}</p><p class="meta">Published ${article.published_at ? new Date(article.published_at).toLocaleDateString('en-UG', { dateStyle:'long', timeZone:'Africa/Kampala' }) : ''} · ${escapeHtml(org.name)}</p>${article.image_url ? `<img class="hero" src="${safeUrl(article.image_url)}" alt="${escapeHtml(article.title)}" fetchpriority="high">` : ''}${renderBody(article.body || article.summary)}<div class="backlinks"><p>Also distributed and independently archived by <a href="${safeUrl(newsroomUrl)}">256 Newsroom</a>.</p><p><a href="/news">← More ${escapeHtml(org.name)} news</a></p></div></main>`;
+    const publishedDate = article.published_at ? new Date(article.published_at).toLocaleDateString('en-UG', { dateStyle:'long', timeZone:'Africa/Kampala' }) : 'Publication date unavailable';
+    const pullQuote = pickPullQuote(article.body, article.summary);
+    const readTime = readingMinutes(article.body, article.summary);
+    const initials = org.name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase();
+    const avatar = org.logo_url
+      ? `<img src="${safeUrl(org.logo_url)}" alt="${escapeHtml(org.name)} logo">`
+      : `<span>${escapeHtml(initials)}</span>`;
+    const articleTags = [...new Set([article.content_type || 'Official update', ...(Array.isArray(article.tags) ? article.tags : [])])].filter(Boolean).slice(0, 6);
+    const tagRail = articleTags.map((tag) => `<span class="story-tag">${escapeHtml(tag)}</span>`).join('');
+    const body = `<main class="editorial-article">
+      <div class="dateline-rail"><span>Uganda · ${escapeHtml(publishedDate)}</span><span>Official platform report</span></div>
+      <section class="article-header"><span class="kicker">${escapeHtml(article.content_type || 'Official update')}</span><h1>${escapeHtml(article.title)}</h1><p class="lede">${escapeHtml(article.summary || '')}</p>
+        <div class="article-byline"><div class="byline-avatar">${avatar}</div><div class="byline-copy"><strong>${escapeHtml(org.name)} News Desk</strong><span>Official platform report</span></div><div class="byline-stats"><div class="byline-stat"><strong>${readTime} min</strong><small>Read time</small></div><div class="byline-stat"><strong>Verified</strong><small>Official source</small></div></div></div>
+      </section>
+      ${article.image_url ? `<figure class="article-figure"><img class="hero" src="${safeUrl(article.image_url)}" alt="${escapeHtml(article.title)}" fetchpriority="high"><figcaption>Official image from ${escapeHtml(org.name)}.</figcaption></figure>` : ''}
+      <div class="article-layout"><article class="story-copy">${renderBody(article.body || article.summary, pullQuote)}<div class="tag-rail"><span>Filed under</span>${tagRail}</div><div class="backlinks editorial-backlinks"><p>Also distributed and independently archived by <a href="${safeUrl(newsroomUrl)}">256 Newsroom</a>.</p><p><a href="/news">← More ${escapeHtml(org.name)} news</a></p></div></article>
+        <aside class="story-facts" aria-label="Story facts"><h2>Story Facts</h2><div class="fact-row"><span>Publisher</span><strong>${escapeHtml(org.name)}</strong></div><div class="fact-row"><span>Category</span><strong>${escapeHtml(article.content_type || 'Official update')}</strong></div><div class="fact-row"><span>Published</span><strong>${escapeHtml(publishedDate)}</strong></div><div class="fact-row"><span>Reading time</span><strong>${readTime} minute${readTime === 1 ? '' : 's'}</strong></div><div class="fact-row"><span>Access</span><a href="${safeUrl(org.website_url)}">Visit ${escapeHtml(org.name)} ↗</a></div></aside>
+      </div>
+    </main>`;
     res.set('Cache-Control', 'public,max-age=120').type('html').send(pageShell({ title:`${article.title} | ${org.name}`, description, canonical, imageUrl:article.image_url, jsonLd, platform:org, body }));
   } catch (err) { next(err); }
 });
