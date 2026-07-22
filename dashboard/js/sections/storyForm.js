@@ -193,7 +193,8 @@ function wireMediaUploads(form, ctx, pageWrap) {
     const fileInput = row.querySelector('.media-file-input');
     const btn = row.querySelector('.media-upload-btn');
     const status = row.querySelector('.media-upload-status');
-    btn.addEventListener('click', async () => {
+
+    async function doUpload() {
       if (!fileInput.files?.length) {
         fileInput.click();
         return;
@@ -220,11 +221,15 @@ function wireMediaUploads(form, ctx, pageWrap) {
       } finally {
         btn.disabled = false;
       }
+    }
+
+    // Choose file → upload immediately (no second button click).
+    btn.addEventListener('click', () => {
+      if (fileInput.files?.length) doUpload();
+      else fileInput.click();
     });
     fileInput.addEventListener('change', () => {
-      if (fileInput.files?.length) {
-        status.textContent = fileInput.files[0].name;
-      }
+      if (fileInput.files?.length) doUpload();
     });
   });
 }
