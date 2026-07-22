@@ -23,14 +23,33 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
     const values = [];
     let i = 1;
     const allowed = {
-      description: 'description', logoUrl: 'logo_url', websiteUrl: 'website_url',
-      editorialContactEmail: 'editorial_contact_email', editorialContactPhone: 'editorial_contact_phone',
+      description: 'description',
+      biography: 'biography',
+      logoUrl: 'logo_url',
+      websiteUrl: 'website_url',
+      editorialContactEmail: 'editorial_contact_email',
+      editorialContactPhone: 'editorial_contact_phone',
       socialLinks: 'social_links',
+      tagline: 'tagline',
+      headquarters: 'headquarters',
+      yearsInJournalism: 'years_in_journalism',
+      foundedYear: 'founded_year',
+      areasOfPractice: 'areas_of_practice',
     };
     for (const [key, column] of Object.entries(allowed)) {
       if (fields[key] !== undefined) {
         sets.push(`${column} = $${i}`);
-        values.push(key === 'socialLinks' ? JSON.stringify(fields[key]) : fields[key]);
+        let val = fields[key];
+        if (key === 'socialLinks') val = JSON.stringify(val);
+        if (key === 'areasOfPractice') {
+          val = Array.isArray(val)
+            ? val.map((x) => String(x).trim()).filter(Boolean)
+            : String(val || '').split(',').map((x) => x.trim()).filter(Boolean);
+        }
+        if (key === 'yearsInJournalism' || key === 'foundedYear') {
+          val = val === '' || val == null ? null : Number(val);
+        }
+        values.push(val);
         i += 1;
       }
     }
@@ -194,6 +213,64 @@ router.delete('/:orgId(\\d+)/media/:id', async (req, res, next) => {
       [req.params.id, req.params.orgId],
     );
     if (!rowCount) return res.status(404).json({ error: 'Media asset not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// LinkedIn-style work / experience entries on the publisher profile
+router.get('/:orgId(\\d+)/work-profiles', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `select * from publisher_work_profiles
+       where organization_id = $1
+       order by is_current desc, sort_order asc, start_year desc nulls last, id desc`,
+      [req.params.orgId],
+    );
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:orgId(\\d+)/work-profiles', async (req, res, next) => {
+  try {
+    const title = String(req.body.title || '').trim().slice(0, 200);
+    const organizationName = String(req.body.organizationName || req.body.organization_name || '').trim().slice(0, 200);
+    if (!title || !organizationName) {
+      return res.status(400).json({ error: 'Title and organization name are required.' });
+    }
+    const { rows } = await pool.query(
+      `insert into publisher_work_profiles
+        (organization_id, title, organization_name, location, start_year, end_year, is_current, description, sort_order)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       returning *`,
+      [
+        req.params.orgId,
+        title,
+        organizationName,
+        req.body.location ? String(req.body.location).slice(0, 200) : null,
+        req.body.startYear != null && req.body.startYear !== '' ? Number(req.body.startYear) : null,
+        req.body.endYear != null && req.body.endYear !== '' ? Number(req.body.endYear) : null,
+        Boolean(req.body.isCurrent),
+        req.body.description ? String(req.body.description).slice(0, 4000) : null,
+        req.body.sortOrder != null ? Number(req.body.sortOrder) : 0,
+      ],
+    );
+    res.status(201).json({ item: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:orgId(\\d+)/work-profiles/:id', async (req, res, next) => {
+  try {
+    const { rowCount } = await pool.query(
+      'delete from publisher_work_profiles where id = $1 and organization_id = $2',
+      [req.params.id, req.params.orgId],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Work profile not found.' });
     res.json({ ok: true });
   } catch (err) {
     next(err);

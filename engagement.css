@@ -75,6 +75,71 @@
   .eng-debate-grid { grid-template-columns: 1fr; }
 }
 
+/* Single publisher card on article (not duplicated in debate) */
+.pub-card {
+  background: var(--white, #fff); border: 1px solid var(--line, #d8d2c5);
+  margin: 18px 0 24px; padding: 14px 16px;
+}
+.pub-card-main { align-items: flex-start; display: flex; gap: 12px; }
+.pub-card-name { display: block; font-size: 20px; line-height: 1.2; }
+.pub-card-badge { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 11px; margin: 4px 0 0; text-transform: uppercase; letter-spacing: .04em; }
+.pub-card-badge a { color: var(--red, #bd2428); font-weight: 700; text-decoration: none; }
+.pub-card-tagline { color: var(--ink, #0d0f0c); font-size: 15px; margin: 6px 0 0; }
+.pub-card-meta { color: var(--grey, #53534d); font-size: 13px; margin: 6px 0 0; }
+.pub-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pub-card-stats {
+  border-top: 1px solid var(--line, #d8d2c5); color: var(--grey, #53534d);
+  display: flex; flex-wrap: wrap; font-family: Inconsolata, monospace; font-size: 12px;
+  gap: 14px; margin-top: 12px; padding-top: 10px; text-transform: uppercase; letter-spacing: .03em;
+}
+.pub-card-stats b { color: var(--ink, #0d0f0c); font-family: "DM Serif Display", Georgia, serif; font-size: 18px; font-weight: 400; margin-right: 4px; text-transform: none; }
+
+/* Full publisher profile */
+.pub-profile-hero { align-items: start; }
+.publisher-tagline { font-size: 20px; line-height: 1.4; margin: 6px 0 10px; max-width: 50ch; }
+.pub-stats-grid {
+  display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 16px 0;
+}
+.pub-stat {
+  background: #fff; border: 1px solid var(--line, #d8d2c5); padding: 12px 10px; text-align: center;
+}
+.pub-stat strong { display: block; font-family: "DM Serif Display", Georgia, serif; font-size: 28px; font-weight: 400; line-height: 1.1; }
+.pub-stat span { color: var(--grey, #53534d); font-family: Inconsolata, monospace; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.pub-section { margin-top: 8px; }
+.pub-bio { font-size: 19px; line-height: 1.65; max-width: 70ch; }
+.practice-tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.practice-tags li {
+  background: #fff; border: 1px solid var(--line, #d8d2c5); font-family: Inconsolata, monospace;
+  font-size: 12px; font-weight: 700; letter-spacing: .03em; padding: 8px 12px; text-transform: uppercase;
+}
+.work-timeline { border-left: 3px solid var(--ink, #0d0f0c); list-style: none; margin: 0; padding: 0 0 0 18px; }
+.work-item { margin: 0 0 18px; position: relative; }
+.work-item::before {
+  background: var(--ink, #0d0f0c); border-radius: 50%; content: ""; height: 10px; left: -24px;
+  position: absolute; top: 6px; width: 10px;
+}
+.work-years { color: var(--gold, #8b6508); font-family: Inconsolata, monospace; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.work-org { color: var(--grey, #53534d); font-size: 15px; margin: 2px 0 6px; }
+.work-item p { font-size: 16px; line-height: 1.5; margin: 0; }
+.pub-journalists { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+.pub-journalist {
+  align-items: center; background: #fff; border: 1px solid var(--line, #d8d2c5);
+  display: flex; gap: 12px; padding: 12px; text-decoration: none;
+}
+.pub-journalist-avatar {
+  align-items: center; background: var(--ink, #0d0f0c); border-radius: 50%; color: #fff;
+  display: flex; flex-shrink: 0; font-weight: 700; height: 48px; justify-content: center; overflow: hidden; width: 48px;
+}
+.pub-journalist-avatar img { height: 100%; object-fit: cover; width: 100%; }
+.pub-journalist strong { display: block; }
+.pub-journalist small { color: var(--grey, #53534d); display: block; font-size: 13px; margin-top: 2px; }
+
+@media (max-width: 700px) {
+  .pub-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .pub-journalists { grid-template-columns: 1fr; }
+}
+
 /* Publisher profile page */
 .publisher-hero { display: grid; gap: 20px; grid-template-columns: 96px 1fr; margin-bottom: 36px; }
 .publisher-logo.large { height: 96px; width: 96px; font-size: 28px; }

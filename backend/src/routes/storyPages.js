@@ -210,7 +210,31 @@ router.get('/news/:slug', async (req, res, next) => {
           )
           : Promise.resolve({ rows: [] });
 
-    const [coverageResult, relatedResult, journalistStoriesResult] = await Promise.all([
+    const publisherStatsQuery = story.organization_id
+      ? Promise.all([
+        pool.query('select count(*)::int as c from publisher_follows where organization_id = $1', [story.organization_id]),
+        pool.query('select count(*)::int as c from publisher_likes where organization_id = $1', [story.organization_id]),
+        pool.query(
+          `select count(*)::int as c from articles
+           where organization_id = $1 and status = 'published' and hidden = false`,
+          [story.organization_id],
+        ),
+        pool.query(
+          `select verification_status, is_official, tagline
+           from organizations where id = $1`,
+          [story.organization_id],
+        ),
+      ]).then(([f, l, a, o]) => ({
+        followers: f.rows[0].c,
+        likes: l.rows[0].c,
+        articles: a.rows[0].c,
+        verificationStatus: o.rows[0]?.verification_status,
+        isOfficial: o.rows[0]?.is_official,
+        tagline: o.rows[0]?.tagline,
+      }))
+      : Promise.resolve(null);
+
+    const [coverageResult, relatedResult, journalistStoriesResult, publisherStats] = await Promise.all([
       story.cluster_id ? pool.query(`
         select a.title, a.internal_url, coalesce(s.name, o.name, '256 Newsroom') as publisher_name
         from articles a left join sources s on s.id = a.source_id left join organizations o on o.id = a.organization_id
@@ -225,6 +249,7 @@ router.get('/news/:slug', async (req, res, next) => {
         order by (a.district_id = $3) desc nulls last, a.published_at desc nulls last limit 6
       `, [story.id, story.category_id, story.district_id]),
       journalistStoriesQuery,
+      publisherStatsQuery,
     ]);
 
     const summary = String(story.seo_summary || story.summary || '').trim();
@@ -290,22 +315,44 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260722-journalist-more">
-<link rel="stylesheet" href="/engagement.css?v=20260722-debate"></head>
+<link rel="stylesheet" href="/story.css?v=20260722-pub-card">
+<link rel="stylesheet" href="/engagement.css?v=20260722-pub-card"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
 <h1>${escapeHtml(story.title)}</h1>
-<div class="publisher story-byline" aria-label="Story attribution">
+${story.organization_id && story.publisher_slug ? (() => {
+  const badge = publisherStats?.isOfficial
+    ? 'Official 256 Update'
+    : (publisherStats?.verificationStatus === 'approved' ? 'Verified publisher' : 'Registered publisher');
+  return `<div class="pub-card" data-publisher-card data-org-id="${story.organization_id}" data-org-slug="${escapeHtml(story.publisher_slug)}" aria-label="Publisher">
+  <div class="pub-card-main">
+    <div class="publisher-logo">${publisherLogo}</div>
+    <div class="pub-card-text">
+      <strong class="pub-card-name"><a class="publisher-name-link" href="/publisher/${escapeHtml(story.publisher_slug)}">${escapeHtml(story.publisher_name)}</a></strong>
+      <p class="pub-card-badge">${escapeHtml(badge)} · <a href="/publisher/${escapeHtml(story.publisher_slug)}">View profile</a></p>
+      ${publisherStats?.tagline ? `<p class="pub-card-tagline">${escapeHtml(publisherStats.tagline)}</p>` : ''}
+      <p class="pub-card-meta">${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</p>
+    </div>
+  </div>
+  <div class="pub-card-actions">
+    <button type="button" class="eng-btn eng-follow" data-action="follow-org" data-org-id="${story.organization_id}">Follow publisher</button>
+    <button type="button" class="eng-chip" data-action="like-org" data-org-id="${story.organization_id}">♥ Like <b data-pub-likes>${publisherStats?.likes ?? 0}</b></button>
+  </div>
+  <div class="pub-card-stats">
+    <span><b data-pub-followers>${publisherStats?.followers ?? 0}</b> followers</span>
+    <span><b data-pub-articles>${publisherStats?.articles ?? 0}</b> articles</span>
+    <span><b data-pub-likes-stat>${publisherStats?.likes ?? 0}</b> likes</span>
+  </div>
+</div>`;
+})() : `<div class="publisher story-byline" aria-label="Story attribution">
   <div class="publisher-logo">${publisherLogo}</div>
   <div class="publisher-text">
     <span class="byline-label">Published by</span>
-    <strong>${story.organization_id && story.publisher_slug
-      ? `<a class="publisher-name-link" href="/publisher/${escapeHtml(story.publisher_slug)}">${escapeHtml(story.publisher_name)}</a>`
-      : escapeHtml(story.publisher_name)}</strong>
-    <span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}${story.organization_id && story.publisher_slug ? ` · <a href="/publisher/${escapeHtml(story.publisher_slug)}">Publisher page</a>` : ''}</span>
+    <strong>${escapeHtml(story.publisher_name)}</strong>
+    <span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span>
   </div>
-</div>
+</div>`}
 ${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>${escapeHtml(story.image_caption || story.image_credit || `Image · ${story.publisher_name}`)}</figcaption></figure>` : ''}
 ${soundbiteBlock}
 ${videoBlock}
@@ -330,7 +377,7 @@ ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank
 </section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
 </article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer>
-<script src="/engagement.js?v=20260722-debate" defer></script>
+<script src="/engagement.js?v=20260722-pub-card" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);

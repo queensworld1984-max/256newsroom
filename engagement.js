@@ -389,46 +389,117 @@
     }
   }
 
-  async function initPublisherPage() {
-    const shell = document.querySelector('[data-publisher-org-id]');
-    if (!shell) return;
+  function paintPublisherState(root, data) {
+    const following = Boolean(data.following);
+    const liked = Boolean(data.liked);
+    const followers = data.followerCount ?? data.stats?.followerCount ?? data.organization?.followerCount;
+    const likes = data.likeCount ?? data.stats?.likeCount ?? data.organization?.likeCount;
+    const articles = data.articleCount ?? data.stats?.articleCount ?? data.organization?.articleCount;
 
-    shell.querySelectorAll('[data-engagement-article-id]').forEach((node) => node.remove());
+    root.querySelectorAll('[data-action="follow-org"]').forEach((btn) => {
+      btn.textContent = following ? 'Following' : 'Follow publisher';
+      btn.classList.toggle('is-on', following);
+    });
+    root.querySelectorAll('[data-action="like-org"]').forEach((btn) => {
+      btn.classList.toggle('is-on', liked);
+    });
+    if (followers != null) {
+      root.querySelectorAll('[data-follower-count], [data-pub-followers]').forEach((el) => {
+        el.textContent = followers;
+      });
+    }
+    if (likes != null) {
+      root.querySelectorAll('[data-pub-likes], [data-pub-likes-btn], [data-pub-likes-stat]').forEach((el) => {
+        el.textContent = likes;
+      });
+    }
+    if (articles != null) {
+      root.querySelectorAll('[data-pub-articles]').forEach((el) => {
+        el.textContent = articles;
+      });
+    }
+  }
 
-    const orgId = Number(shell.getAttribute('data-publisher-org-id'));
-    const slug = shell.getAttribute('data-publisher-slug');
-    const followBtn = shell.querySelector('[data-action="follow-org"]');
-    if (!followBtn || !orgId) return;
+  function wirePublisherActions(root, orgId) {
+    if (!root || !orgId || root.dataset.pubWired === '1') return;
+    root.dataset.pubWired = '1';
 
-    try {
-      const data = await api(`/publishers/${encodeURIComponent(slug)}`);
-      if (data.following) {
-        followBtn.textContent = 'Following';
-        followBtn.classList.add('is-on');
-      }
-      const countEl = shell.querySelector('[data-follower-count]');
-      if (countEl && data.organization) countEl.textContent = data.organization.followerCount;
-    } catch { /* ignore */ }
-
-    followBtn.addEventListener('click', async () => {
+    root.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-action="follow-org"], [data-action="like-org"]');
+      if (!btn || !root.contains(btn)) return;
+      e.preventDefault();
       if (!(await ensureCanEngage())) return;
+      const action = btn.getAttribute('data-action');
       try {
-        const r = await api('/publishers/follow', { method: 'POST', body: { organizationId: orgId } });
-        followBtn.textContent = r.following ? 'Following' : 'Follow publisher';
-        followBtn.classList.toggle('is-on', Boolean(r.following));
-        const countEl = shell.querySelector('[data-follower-count]');
-        if (countEl) {
-          const n = Number(countEl.textContent || 0);
-          countEl.textContent = Math.max(0, n + (r.following ? 1 : -1));
+        if (action === 'follow-org') {
+          const r = await api('/publishers/follow', { method: 'POST', body: { organizationId: orgId } });
+          paintPublisherState(root, r);
+        } else if (action === 'like-org') {
+          const r = await api('/publishers/like', { method: 'POST', body: { organizationId: orgId } });
+          paintPublisherState(root, r);
         }
       } catch (err) {
-        alert(err.message || 'Could not update follow.');
+        if (err.status === 401) location.href = loginNext();
+        else alert(err.message || 'Could not update publisher engagement.');
       }
     });
   }
 
+  /** Compact publisher card above each article (follow + like + counts). */
+  async function initPublisherCards() {
+    const cards = document.querySelectorAll('[data-publisher-card][data-org-id]');
+    for (const card of cards) {
+      const orgId = Number(card.getAttribute('data-org-id'));
+      const slug = card.getAttribute('data-org-slug');
+      if (!orgId) continue;
+      wirePublisherActions(card, orgId);
+      if (slug) {
+        try {
+          const data = await api(`/publishers/${encodeURIComponent(slug)}`);
+          paintPublisherState(card, {
+            following: data.following,
+            liked: data.liked,
+            followerCount: data.organization?.followerCount ?? data.stats?.followerCount,
+            likeCount: data.organization?.likeCount ?? data.stats?.likeCount,
+            articleCount: data.organization?.articleCount ?? data.stats?.articleCount,
+          });
+        } catch { /* keep server-rendered counts */ }
+      }
+    }
+  }
+
+  /** Full publisher profile page. */
+  async function initPublisherPage() {
+    const shell = document.querySelector('[data-publisher-org-id][data-publisher-profile]');
+    if (!shell) {
+      // Article pages may also mount a card; still wire any bare org shells without profile flag
+      // only when there is no article debate panel confusion.
+      return;
+    }
+
+    const orgId = Number(shell.getAttribute('data-publisher-org-id'));
+    const slug = shell.getAttribute('data-publisher-slug');
+    if (!orgId) return;
+
+    wirePublisherActions(shell, orgId);
+
+    if (slug) {
+      try {
+        const data = await api(`/publishers/${encodeURIComponent(slug)}`);
+        paintPublisherState(shell, {
+          following: data.following,
+          liked: data.liked,
+          followerCount: data.organization?.followerCount ?? data.stats?.followerCount,
+          likeCount: data.organization?.likeCount ?? data.stats?.likeCount,
+          articleCount: data.organization?.articleCount ?? data.stats?.articleCount,
+        });
+      } catch { /* ignore */ }
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
-    initArticle();
+    initPublisherCards();
     initPublisherPage();
+    initArticle();
   });
 })();

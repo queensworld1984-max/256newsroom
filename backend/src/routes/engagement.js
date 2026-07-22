@@ -497,6 +497,43 @@ router.post('/articles/:id/comments', ...requireContributor, async (req, res, ne
   }
 });
 
+async function organizationPublicStats(orgId, userId = null) {
+  const [followers, likes, articles, following, liked] = await Promise.all([
+    pool.query('select count(*)::int as c from publisher_follows where organization_id = $1', [orgId]),
+    pool.query('select count(*)::int as c from publisher_likes where organization_id = $1', [orgId]),
+    pool.query(
+      `select count(*)::int as c from articles
+       where organization_id = $1 and status = 'published' and hidden = false`,
+      [orgId],
+    ),
+    userId
+      ? pool.query(
+        'select 1 from publisher_follows where user_id = $1 and organization_id = $2',
+        [userId, orgId],
+      )
+      : Promise.resolve({ rows: [] }),
+    userId
+      ? pool.query(
+        'select 1 from publisher_likes where user_id = $1 and organization_id = $2',
+        [userId, orgId],
+      )
+      : Promise.resolve({ rows: [] }),
+  ]);
+  return {
+    followerCount: followers.rows[0].c,
+    likeCount: likes.rows[0].c,
+    articleCount: articles.rows[0].c,
+    following: following.rows.length > 0,
+    liked: liked.rows.length > 0,
+  };
+}
+
+function orgBadge(org) {
+  if (org.is_official) return 'Official 256 Update';
+  if (org.verification_status === 'approved') return 'Verified publisher';
+  return 'Registered publisher';
+}
+
 // POST /api/engagement/publishers/follow  { organizationId } or { journalistId }
 router.post('/publishers/follow', ...requireContributor, async (req, res, next) => {
   try {
@@ -513,15 +550,18 @@ router.post('/publishers/follow', ...requireContributor, async (req, res, next) 
         'select id from publisher_follows where user_id = $1 and organization_id = $2',
         [req.user.id, organizationId],
       );
+      let following = true;
       if (existing.length) {
         await pool.query('delete from publisher_follows where id = $1', [existing[0].id]);
-        return res.json({ ok: true, following: false });
+        following = false;
+      } else {
+        await pool.query(
+          'insert into publisher_follows (user_id, organization_id) values ($1, $2) on conflict do nothing',
+          [req.user.id, organizationId],
+        );
       }
-      await pool.query(
-        'insert into publisher_follows (user_id, organization_id) values ($1, $2) on conflict do nothing',
-        [req.user.id, organizationId],
-      );
-      return res.json({ ok: true, following: true });
+      const stats = await organizationPublicStats(organizationId, req.user.id);
+      return res.json({ ok: true, following, ...stats });
     }
 
     const { rows } = await pool.query('select id from journalists where id = $1', [journalistId]);
@@ -530,48 +570,113 @@ router.post('/publishers/follow', ...requireContributor, async (req, res, next) 
       'select id from publisher_follows where user_id = $1 and journalist_id = $2',
       [req.user.id, journalistId],
     );
+    let following = true;
     if (existing.length) {
       await pool.query('delete from publisher_follows where id = $1', [existing[0].id]);
-      return res.json({ ok: true, following: false });
+      following = false;
+    } else {
+      await pool.query(
+        'insert into publisher_follows (user_id, journalist_id) values ($1, $2) on conflict do nothing',
+        [req.user.id, journalistId],
+      );
     }
-    await pool.query(
-      'insert into publisher_follows (user_id, journalist_id) values ($1, $2) on conflict do nothing',
-      [req.user.id, journalistId],
-    );
-    res.json({ ok: true, following: true });
+    res.json({ ok: true, following });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/engagement/publishers/:slug — public org profile + follow state + recent stories
+// POST /api/engagement/publishers/like  { organizationId } or { journalistId }
+router.post('/publishers/like', ...requireContributor, async (req, res, next) => {
+  try {
+    const organizationId = req.body.organizationId ? Number(req.body.organizationId) : null;
+    const journalistId = req.body.journalistId ? Number(req.body.journalistId) : null;
+    if ((!organizationId && !journalistId) || (organizationId && journalistId)) {
+      return res.status(400).json({ error: 'Provide organizationId or journalistId (one only).' });
+    }
+
+    if (organizationId) {
+      const { rows } = await pool.query('select id from organizations where id = $1 and active = true', [organizationId]);
+      if (!rows.length) return res.status(404).json({ error: 'Publisher not found.' });
+      const { rows: existing } = await pool.query(
+        'select id from publisher_likes where user_id = $1 and organization_id = $2',
+        [req.user.id, organizationId],
+      );
+      let liked = true;
+      if (existing.length) {
+        await pool.query('delete from publisher_likes where id = $1', [existing[0].id]);
+        liked = false;
+      } else {
+        await pool.query(
+          'insert into publisher_likes (user_id, organization_id) values ($1, $2) on conflict do nothing',
+          [req.user.id, organizationId],
+        );
+      }
+      const stats = await organizationPublicStats(organizationId, req.user.id);
+      return res.json({ ok: true, liked, ...stats });
+    }
+
+    const { rows } = await pool.query('select id from journalists where id = $1', [journalistId]);
+    if (!rows.length) return res.status(404).json({ error: 'Journalist not found.' });
+    const { rows: existing } = await pool.query(
+      'select id from publisher_likes where user_id = $1 and journalist_id = $2',
+      [req.user.id, journalistId],
+    );
+    let liked = true;
+    if (existing.length) {
+      await pool.query('delete from publisher_likes where id = $1', [existing[0].id]);
+      liked = false;
+    } else {
+      await pool.query(
+        'insert into publisher_likes (user_id, journalist_id) values ($1, $2) on conflict do nothing',
+        [req.user.id, journalistId],
+      );
+    }
+    res.json({ ok: true, liked });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/engagement/publishers/:slug — full public org profile + stats + work history
 router.get('/publishers/:slug', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `select id, name, slug, org_type, description, logo_url, website_url,
-              verification_status, is_official, active
+      `select id, name, slug, org_type, description, biography, logo_url, website_url,
+              verification_status, is_official, active, tagline, headquarters,
+              areas_of_practice, years_in_journalism, founded_year, created_at
        from organizations where slug = $1`,
       [req.params.slug],
     );
     const org = rows[0];
     if (!org || !org.active) return res.status(404).json({ error: 'Publisher not found.' });
 
-    const [followers, stories, following] = await Promise.all([
-      pool.query('select count(*)::int as c from publisher_follows where organization_id = $1', [org.id]),
+    const userId = req.user?.id || null;
+    const [stats, stories, work, journalists] = await Promise.all([
+      organizationPublicStats(org.id, userId),
       pool.query(
         `select id, title, summary, slug, internal_url, image_url, published_at, status
          from articles
          where organization_id = $1 and status = 'published' and hidden = false
          order by published_at desc nulls last
-         limit 30`,
+         limit 40`,
         [org.id],
       ),
-      req.user && isContributor(req.user)
-        ? pool.query(
-          'select 1 from publisher_follows where user_id = $1 and organization_id = $2',
-          [req.user.id, org.id],
-        )
-        : Promise.resolve({ rows: [] }),
+      pool.query(
+        `select id, title, organization_name, location, start_year, end_year, is_current, description, sort_order
+         from publisher_work_profiles
+         where organization_id = $1
+         order by is_current desc, sort_order asc, start_year desc nulls last, id desc`,
+        [org.id],
+      ),
+      pool.query(
+        `select id, name, slug, bio, image_url, years_in_journalism, areas_of_practice, tagline
+         from journalists
+         where organization_id = $1
+         order by name
+         limit 50`,
+        [org.id],
+      ),
     ]);
 
     res.json({
@@ -581,19 +686,49 @@ router.get('/publishers/:slug', async (req, res, next) => {
         slug: org.slug,
         orgType: org.org_type,
         description: org.description,
+        biography: org.biography || org.description,
+        tagline: org.tagline,
+        headquarters: org.headquarters,
+        areasOfPractice: org.areas_of_practice || [],
+        yearsInJournalism: org.years_in_journalism,
+        foundedYear: org.founded_year,
         logoUrl: org.logo_url,
         websiteUrl: org.website_url,
         verificationStatus: org.verification_status,
         isOfficial: org.is_official,
-        badge: org.is_official
-          ? 'Official 256 Update'
-          : (org.verification_status === 'approved' ? 'Verified publisher' : 'Registered publisher'),
-        followerCount: followers.rows[0].c,
+        badge: orgBadge(org),
         profileUrl: `/publisher/${org.slug}`,
+        followerCount: stats.followerCount,
+        likeCount: stats.likeCount,
+        articleCount: stats.articleCount,
+        memberSince: org.created_at,
       },
-      following: following.rows.length > 0,
+      following: stats.following,
+      liked: stats.liked,
+      stats,
       canEngage: isContributor(req.user),
       authenticated: Boolean(req.user),
+      workProfiles: work.rows.map((w) => ({
+        id: w.id,
+        title: w.title,
+        organizationName: w.organization_name,
+        location: w.location,
+        startYear: w.start_year,
+        endYear: w.end_year,
+        isCurrent: w.is_current,
+        description: w.description,
+      })),
+      journalists: journalists.rows.map((j) => ({
+        id: j.id,
+        name: j.name,
+        slug: j.slug,
+        bio: j.bio,
+        imageUrl: j.image_url,
+        yearsInJournalism: j.years_in_journalism,
+        areasOfPractice: j.areas_of_practice || [],
+        tagline: j.tagline,
+        profileUrl: j.slug ? `/journalists/profile.html?slug=${encodeURIComponent(j.slug)}` : null,
+      })),
       stories: stories.rows.map((s) => ({
         id: s.id,
         title: s.title,
@@ -611,3 +746,4 @@ router.get('/publishers/:slug', async (req, res, next) => {
 module.exports = router;
 module.exports.isContributor = isContributor;
 module.exports.CONTRIBUTOR_ROLES = CONTRIBUTOR_ROLES;
+module.exports.organizationPublicStats = organizationPublicStats;
