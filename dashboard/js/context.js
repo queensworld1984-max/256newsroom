@@ -20,13 +20,31 @@ export async function loadContext() {
     isEditor = isEditor || EDITOR_ROLES.has(orgRole.key);
   }
 
+  // Independent journalists publish under their own byline without admin approval.
+  // If they also applied as a publisher but the org is not yet approved, keep them
+  // in independent mode so publishing is not blocked by the org verification gate.
+  const orgApproved = Boolean(
+    organization && (organization.verification_status === 'approved' || organization.is_official),
+  );
+  let mode = 'onboarding';
+  if (organization && orgApproved) {
+    mode = 'org';
+  } else if (isIndependentJournalist) {
+    mode = 'independent';
+  } else if (organization) {
+    mode = 'org'; // draft-only until approved
+  }
+
   return {
     user,
     isGlobalAdmin,
     isEditor,
     organization,
     orgId: orgRole ? orgRole.organizationId : null,
+    orgApproved,
     isIndependentJournalist,
-    mode: organization ? 'org' : (isIndependentJournalist ? 'independent' : 'onboarding'),
+    // Journalists may publish immediately (independent always; org after approval).
+    canPublish: isIndependentJournalist || orgApproved || isGlobalAdmin,
+    mode,
   };
 }

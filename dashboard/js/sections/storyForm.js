@@ -85,13 +85,28 @@ export async function render(container, ctx, { id }) {
   wireDeviceAttach(form, ctx, wrap);
 
   const actions = el('div', { class: 'dash-actions full' });
-  const saveBtn = el('button', { type: 'submit', text: story ? 'Save Changes' : 'Save Draft' });
+  const saveBtn = el('button', { type: 'submit', class: 'secondary', text: story ? 'Save draft' : 'Save draft' });
   actions.appendChild(saveBtn);
+
+  // Independent journalists publish immediately — no admin review queue.
+  const canAutoPublish = ctx.mode === 'independent' || (ctx.mode === 'org' && ctx.canPublish);
+  let publishBtn = null;
+  if (canAutoPublish && (!story || story.status !== 'published')) {
+    publishBtn = el('button', {
+      type: 'button',
+      text: story?.status === 'published' ? 'Update & republish' : 'Publish now',
+    });
+    actions.appendChild(publishBtn);
+  }
+  if (ctx.mode === 'independent') {
+    actions.appendChild(el('span', {
+      style: 'align-self:center;color:var(--grey);font-size:12px;',
+      text: 'Independent journalists publish live immediately — no admin approval required.',
+    }));
+  }
   form.appendChild(actions);
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    saveBtn.disabled = true;
+  function buildPayload() {
     const raw = Object.fromEntries(new FormData(form).entries());
     const payload = {
       title: raw.title,
@@ -109,22 +124,61 @@ export async function render(container, ctx, { id }) {
       developing: form.developing.checked,
     };
     if (ctx.mode === 'org' && raw.journalistId) payload.journalistId = raw.journalistId;
+    return payload;
+  }
+
+  async function saveStory({ publish }) {
+    saveBtn.disabled = true;
+    if (publishBtn) publishBtn.disabled = true;
+    const payload = buildPayload();
+    if (publish) payload.publish = true;
 
     try {
       if (story) {
-        await api.patch(storyPath(ctx, story.id), payload);
-        toast(wrap, 'Saved.', 'success');
+        if (publish && ctx.mode === 'independent') {
+          // patch with publish:true saves + goes live in one request
+          await api.patch(storyPath(ctx, story.id), { ...payload, publish: true });
+          toast(wrap, 'Published live.', 'success');
+          setTimeout(() => render(wrap.parentElement, ctx, { id: story.id }), 600);
+        } else if (publish && ctx.mode === 'org') {
+          await api.patch(storyPath(ctx, story.id), payload);
+          await api.post(`${storyPath(ctx, story.id)}/publish`, {});
+          toast(wrap, 'Published live.', 'success');
+          setTimeout(() => render(wrap.parentElement, ctx, { id: story.id }), 600);
+        } else {
+          await api.patch(storyPath(ctx, story.id), payload);
+          toast(wrap, 'Draft saved.', 'success');
+        }
+      } else if (publish && ctx.mode === 'independent') {
+        const { item } = await api.post(storiesBasePath(ctx), { ...payload, publish: true });
+        toast(wrap, 'Published live.', 'success');
+        window.location.hash = `/stories/${item.id}/edit`;
+      } else if (publish && ctx.mode === 'org') {
+        const { item } = await api.post(storiesBasePath(ctx), payload);
+        await api.post(`${storyPath(ctx, item.id)}/publish`, {});
+        toast(wrap, 'Published live.', 'success');
+        window.location.hash = `/stories/${item.id}/edit`;
       } else {
         const { item } = await api.post(storiesBasePath(ctx), payload);
         window.location.hash = `/stories/${item.id}/edit`;
-        return;
       }
     } catch (err) {
       toast(wrap, err instanceof ApiError ? err.message : 'Something went wrong.');
     } finally {
       saveBtn.disabled = false;
+      if (publishBtn) publishBtn.disabled = false;
     }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await saveStory({ publish: false });
   });
+  if (publishBtn) {
+    publishBtn.addEventListener('click', async () => {
+      await saveStory({ publish: true });
+    });
+  }
 
   wrap.appendChild(form);
 
@@ -219,7 +273,8 @@ function buildWorkflowCard(pageWrap, ctx, story) {
     }
   }
 
-  if (ctx.mode === 'org' && story.status === 'draft') {
+  // Optional editorial review remains for orgs; journalists can still publish directly when allowed.
+  if (ctx.mode === 'org' && story.status === 'draft' && ctx.isEditor) {
     const btn = el('button', { class: 'secondary', text: 'Submit for Review', onclick: () => runAction(`${storyPath(ctx, story.id)}/submit-for-review`, {}, 'Submitted for review.') });
     actions.appendChild(btn);
   }
@@ -243,8 +298,18 @@ function buildWorkflowCard(pageWrap, ctx, story) {
     actions.appendChild(scheduleBtn);
   }
 
-  const publishBtn = el('button', { text: story.status === 'scheduled' ? 'Publish now' : 'Publish', onclick: () => runAction(`${storyPath(ctx, story.id)}/publish`, {}, 'Published.') });
-  actions.appendChild(publishBtn);
+  if (ctx.canPublish !== false || ctx.mode === 'independent') {
+    const publishBtn = el('button', {
+      text: story.status === 'scheduled' ? 'Publish now' : 'Publish live',
+      onclick: () => runAction(`${storyPath(ctx, story.id)}/publish`, {}, 'Published live.'),
+    });
+    actions.appendChild(publishBtn);
+  } else {
+    card.appendChild(el('p', {
+      style: 'margin-top:8px;color:var(--grey);font-size:13px;',
+      text: 'Publishing is locked until this organization is approved. Independent journalists can publish under their own byline without waiting.',
+    }));
+  }
 
   if (story.status !== 'withdrawn') {
     const withdrawBtn = el('button', {

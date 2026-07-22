@@ -167,13 +167,20 @@ async function isOrgApproved(organizationId) {
 }
 
 async function publishStory(articleId) {
-  const { rows } = await pool.query('select organization_id, published_at from articles where id = $1', [articleId]);
+  const { rows } = await pool.query(
+    'select organization_id, published_at, status from articles where id = $1',
+    [articleId],
+  );
   const article = rows[0];
   if (!article) throw Object.assign(new Error('Story not found.'), { status: 404 });
 
-  const approved = await isOrgApproved(article.organization_id);
-  if (!approved) {
-    throw Object.assign(new Error('This organization is not yet an approved publisher and cannot publish stories.'), { status: 403 });
+  // Independent journalist stories (no organization) publish immediately — no admin gate.
+  // Organization stories still require the outlet to be approved / official.
+  if (article.organization_id) {
+    const approved = await isOrgApproved(article.organization_id);
+    if (!approved) {
+      throw Object.assign(new Error('This organization is not yet an approved publisher and cannot publish stories.'), { status: 403 });
+    }
   }
 
   let featuredInEcosystem = false;

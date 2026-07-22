@@ -28,12 +28,16 @@ router.post('/', async (req, res, next) => {
     );
     const journalistId = journalistRows[0]?.id || null;
 
-    const story = await core.createStory({
+    let story = await core.createStory({
       organizationId: null,
       journalistId,
       createdByUserId: req.user.id,
       input,
     });
+    // Independent journalists may publish immediately (no admin / org gate).
+    if (req.body.publish === true || req.body.publish === 'true') {
+      story = await core.publishStory(story.id);
+    }
     res.status(201).json({ item: story });
   } catch (err) {
     next(err);
@@ -55,7 +59,10 @@ router.get('/:id', loadOwnStory, (req, res) => res.json({ item: req.story }));
 router.patch('/:id', loadOwnStory, async (req, res, next) => {
   try {
     const input = core.pickStoryInput(req.body);
-    const updated = await core.updateStory(req.story.id, input);
+    let updated = await core.updateStory(req.story.id, input);
+    if (req.body.publish === true || req.body.publish === 'true') {
+      updated = await core.publishStory(req.story.id);
+    }
     res.json({ item: updated });
   } catch (err) {
     next(err);
@@ -65,6 +72,19 @@ router.patch('/:id', loadOwnStory, async (req, res, next) => {
 router.post('/:id/publish', loadOwnStory, async (req, res, next) => {
   try {
     const updated = await core.publishStory(req.story.id);
+    res.json({ item: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/schedule', loadOwnStory, async (req, res, next) => {
+  try {
+    const at = req.body.scheduledPublishAt ? new Date(req.body.scheduledPublishAt) : null;
+    if (!at || Number.isNaN(at.getTime())) {
+      return res.status(400).json({ error: 'A valid scheduledPublishAt is required.' });
+    }
+    const updated = await core.scheduleStory(req.story.id, at);
     res.json({ item: updated });
   } catch (err) {
     next(err);

@@ -11,15 +11,33 @@ export async function render(container, ctx) {
 
   const wrap = el('div');
 
-  if (ctx.mode === 'org') {
+  if (ctx.mode === 'independent') {
+    wrap.appendChild(el('div', { class: 'dash-card' }, [
+      el('h2', { text: 'Independent journalist' }),
+      el('p', {}, [el('span', { class: 'badge badge-green', text: 'Auto-publish enabled' })]),
+      el('p', {
+        style: 'margin-top:10px;color:var(--grey);font-size:13px;',
+        text: 'You can publish stories live immediately under your own byline. No admin review is required — use “Publish now” on any story.',
+      }),
+    ]));
+  } else if (ctx.mode === 'org') {
     const org = ctx.organization;
     const statusLabel = org.is_official ? 'Official 256 Update' : org.verification_status.replace(/_/g, ' ');
+    const approved = org.verification_status === 'approved' || org.is_official;
     wrap.appendChild(el('div', { class: 'dash-card' }, [
       el('h2', { text: org.name }),
-      el('p', {}, [el('span', { class: `badge ${org.verification_status === 'approved' ? 'badge-green' : 'badge-gold'}`, text: statusLabel })]),
-      org.verification_status !== 'approved'
-        ? el('p', { style: 'margin-top:10px;color:var(--grey);font-size:13px;', text: 'Stories can be drafted now, but publishing is disabled until an admin approves this organization. See Verification for status.' })
-        : null,
+      el('p', {}, [el('span', { class: `badge ${approved ? 'badge-green' : 'badge-gold'}`, text: statusLabel })]),
+      !approved
+        ? el('p', {
+          style: 'margin-top:10px;color:var(--grey);font-size:13px;',
+          text: ctx.isIndependentJournalist
+            ? 'Organization publishing is locked until admin approval. Your independent journalist account can still publish under your own byline (switch is automatic while the org is pending).'
+            : 'Stories can be drafted now, but organization publishing is disabled until an admin approves this outlet. See Verification for status.',
+        })
+        : el('p', {
+          style: 'margin-top:10px;color:var(--grey);font-size:13px;',
+          text: 'This organization is approved. Journalists and editors can publish stories live.',
+        }),
     ].filter(Boolean)));
   }
 
