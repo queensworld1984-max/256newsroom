@@ -1,5 +1,6 @@
 import { api, ApiError } from '../api.js';
 import { el } from '../util.js';
+import { buildDeviceAttach } from '../deviceUpload.js';
 
 export async function render(container) {
   const { item } = await api.get('/auth/journalist-profile');
@@ -14,20 +15,39 @@ export async function render(container) {
     <label>Topics <input value="${escapeAttr(topics)}" disabled></label>
     <label>Location <input name="location" value="${escapeAttr(item.location)}" placeholder="Kampala, Uganda"></label>
     <label>Website <input name="websiteUrl" type="url" value="${escapeAttr(item.website_url)}" placeholder="https://"></label>
-    <label class="full">Profile photo URL <input name="imageUrl" type="url" value="${escapeAttr(item.image_url)}" placeholder="https://"></label>
+    <div class="full story-media-block">
+      <div class="story-media-label">Profile photo</div>
+      <p class="story-media-hint">Attach a photo directly from your phone or computer.</p>
+      <div class="device-attach-host" id="profile-photo-attach"></div>
+      ${item.image_url ? `<div class="device-attach-preview" style="margin-top:8px;"><img src="${escapeAttr(item.image_url)}" alt="Current profile photo"></div>` : ''}
+      <label class="story-url-fallback">Or photo URL <input name="imageUrl" type="url" value="${escapeAttr(item.image_url)}" placeholder="https://"></label>
+    </div>
     <label class="full">Biography <textarea name="bio" rows="7" maxlength="2000">${escapeText(item.bio)}</textarea></label>
     <p class="full" style="color:var(--grey);font-size:12px;margin:0;">Contact on file: ${escapeHtml(item.contact_email || '—')} · WhatsApp ${escapeHtml(item.whatsapp_number || '—')} · Phone ${escapeHtml(item.contact_phone || '—')} · NIN …${escapeHtml(item.national_id_last4 || '—')}</p>
     <div class="dash-actions full"><button type="submit">Save public profile</button><a href="/journalists/profile.html?slug=${encodeURIComponent(item.slug)}" target="_blank">View public profile</a></div><p class="auth-error full"></p>
   </form></div>`;
+
   const form = wrap.querySelector('form');
+  const host = wrap.querySelector('#profile-photo-attach');
+  host.appendChild(buildDeviceAttach({
+    kind: 'image',
+    label: 'Attach photo from device',
+    onUploaded: ({ url }) => {
+      form.imageUrl.value = url;
+      const existing = wrap.querySelector('.device-attach-preview img[alt="Current profile photo"]');
+      if (existing) existing.src = url;
+    },
+  }));
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const button = form.querySelector('button');
+    const button = form.querySelector('button[type="submit"]');
     const error = form.querySelector('.auth-error');
     button.disabled = true;
     error.textContent = '';
     try {
-      await api.patch('/auth/journalist-profile', Object.fromEntries(new FormData(form)));
+      const data = Object.fromEntries(new FormData(form).entries());
+      await api.patch('/auth/journalist-profile', data);
       button.textContent = 'Saved';
       setTimeout(() => { button.textContent = 'Save public profile'; }, 1500);
     } catch (err) {

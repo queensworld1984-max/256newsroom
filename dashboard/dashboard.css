@@ -85,8 +85,25 @@ table.dash-table tr:hover td { background: var(--paper-dim); }
 .media-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
 .media-upload-row .media-file-input { flex: 1; min-width: 140px; }
 
+/* Device-first attach (gallery / camera) */
+.story-media-block { grid-column: 1 / -1; background: var(--paper-dim); border: 1px solid var(--line); padding: 14px; }
+.story-media-label { color: var(--ink); font-family: "Inconsolata", monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 4px; text-transform: uppercase; }
+.story-media-hint { color: var(--grey); font-size: 13px; margin: 0 0 12px; text-transform: none; letter-spacing: 0; font-family: inherit; font-weight: 400; }
+.story-url-fallback { margin-top: 12px; }
+.device-attach { display: grid; gap: 10px; }
+.device-attach-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.device-pick-btn { background: var(--ink); color: var(--paper); font-weight: 700; min-height: 44px; padding: 12px 16px; }
+.device-camera-btn { min-height: 44px; }
+.device-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0,0,0,0); }
+.device-attach-preview { background: #111; border: 1px solid var(--line); max-width: 360px; overflow: hidden; }
+.device-attach-preview img,
+.device-attach-preview video { display: block; max-height: 220px; object-fit: contain; width: 100%; }
+.device-attach-status { color: var(--grey); font-size: 12.5px; margin: 0; min-height: 1.2em; }
+.device-attach-status.is-error { color: var(--red); }
+
 @media (max-width: 900px) {
   .onboard-grid { grid-template-columns: 1fr; }
+  .device-pick-btn, .device-camera-btn { flex: 1 1 100%; width: 100%; }
 }
 
 @media (max-width: 860px) {

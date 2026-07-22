@@ -10,6 +10,7 @@ const {
   MAX_VIDEO_BYTES,
   ensureUploadDirs,
   mediaTypeForMime,
+  resolveMime,
   extensionForMime,
   publicUrlFor,
   fileUrlFor,
@@ -23,18 +24,22 @@ const router = express.Router();
 
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    const mediaType = mediaTypeForMime(file.mimetype);
-    if (!mediaType) return cb(new Error('Unsupported file type.'));
+    const mime = resolveMime(file);
+    const mediaType = mediaTypeForMime(mime);
+    if (!mediaType) return cb(new Error('Unsupported file type. Attach a photo (JPEG/PNG/WebP/GIF/HEIC) or video (MP4/WebM/MOV) from your device.'));
+    file.mimetype = mime || file.mimetype;
     const dir = path.join(UPLOAD_ROOT, mediaType === 'video' ? 'videos' : 'images');
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
   filename(req, file, cb) {
-    const mediaType = mediaTypeForMime(file.mimetype);
+    const mime = resolveMime(file);
+    const mediaType = mediaTypeForMime(mime);
     const publicId = newPublicId();
-    const ext = extensionForMime(file.mimetype) || path.extname(file.originalname || '').slice(0, 10);
+    const ext = extensionForMime(mime) || path.extname(file.originalname || '').slice(0, 10) || (mediaType === 'video' ? '.mp4' : '.jpg');
     req._uploadPublicId = publicId;
     req._uploadMediaType = mediaType;
+    req._uploadMime = mime;
     cb(null, `${publicId}${ext}`);
   },
 });
@@ -43,11 +48,12 @@ const upload = multer({
   storage,
   limits: { fileSize: MAX_VIDEO_BYTES },
   fileFilter(req, file, cb) {
-    const mediaType = mediaTypeForMime(file.mimetype);
-    if (!mediaType) return cb(new Error('Only JPEG, PNG, WebP, GIF images and MP4/WebM/MOV videos are allowed.'));
-    if (mediaType === 'image' && file.size > MAX_IMAGE_BYTES) {
-      return cb(new Error('Images must be 12 MB or smaller.'));
+    const mime = resolveMime(file);
+    const mediaType = mediaTypeForMime(mime);
+    if (!mediaType) {
+      return cb(new Error('Only photos and videos from your device are allowed (JPEG, PNG, WebP, GIF, HEIC, MP4, WebM, MOV).'));
     }
+    file.mimetype = mime || file.mimetype;
     cb(null, true);
   },
 });
@@ -75,11 +81,12 @@ router.post(
     try {
       if (!req.file) return res.status(400).json({ error: 'Choose a file to upload.' });
 
-      const mediaType = req._uploadMediaType || mediaTypeForMime(req.file.mimetype);
+      const mediaType = req._uploadMediaType || mediaTypeForMime(resolveMime(req.file));
       if (mediaType === 'image' && req.file.size > MAX_IMAGE_BYTES) {
         fs.unlink(req.file.path, () => {});
-        return res.status(400).json({ error: 'Images must be 12 MB or smaller.' });
+        return res.status(400).json({ error: 'Photos must be 12 MB or smaller.' });
       }
+      const storedMime = req._uploadMime || resolveMime(req.file) || req.file.mimetype;
 
       const organizationId = req.body.organizationId ? Number(req.body.organizationId) : null;
       if (organizationId && !canUseOrg(req, organizationId)) {
@@ -118,7 +125,7 @@ router.post(
           mediaType,
           publicId,
           storagePath,
-          req.file.mimetype,
+          storedMime,
           req.file.size,
           String(req.file.originalname || '').slice(0, 255) || null,
         ],

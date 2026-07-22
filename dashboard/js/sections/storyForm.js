@@ -1,6 +1,7 @@
-import { api, ApiError, uploadFile } from '../api.js';
+import { api, ApiError } from '../api.js';
 import { el, escapeHtml, formatDate, statusBadgeClass } from '../util.js';
 import { storiesBasePath, storyPath } from '../storiesApi.js';
+import { buildDeviceAttach } from '../deviceUpload.js';
 
 function toast(container, message, kind = 'error') {
   const existing = container.querySelector('.dash-toast');
@@ -61,32 +62,27 @@ export async function render(container, ctx, { id }) {
         ${journalists.map((j) => `<option value="${j.id}" ${story?.journalist_id === j.id ? 'selected' : ''}>${escapeHtml(j.name)}</option>`).join('')}
       </select>
     </label>` : ''}
-    <label class="full">Image
-      <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}" placeholder="https://… or upload below">
-      <div class="media-upload-row" data-upload="image">
-        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="media-file-input">
-        <button type="button" class="secondary small media-upload-btn">Upload image</button>
-        <span class="media-upload-status" style="color:var(--grey);font-size:12px;"></span>
-      </div>
-    </label>
+    <div class="full story-media-block" data-media-slot="image">
+      <div class="story-media-label">Story photo</div>
+      <p class="story-media-hint">Attach a photo directly from your phone gallery or computer. Optional: paste an external URL.</p>
+      <div class="device-attach-host" data-kind="image"></div>
+      <label class="story-url-fallback">Or image URL <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}" placeholder="https://…"></label>
+    </div>
     <label>Image credit <input name="imageCredit" maxlength="200" value="${escapeHtml(story?.image_credit || '')}"></label>
     <label class="full">Image caption <input name="imageCaption" maxlength="300" value="${escapeHtml(story?.image_caption || '')}"></label>
-    <label class="full">Video (shareable watch URL)
-      <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…">
-      <div class="media-upload-row" data-upload="video">
-        <input type="file" accept="video/mp4,video/webm,video/quicktime" class="media-file-input">
-        <button type="button" class="secondary small media-upload-btn">Upload video</button>
-        <span class="media-upload-status" style="color:var(--grey);font-size:12px;"></span>
-      </div>
-      <span style="color:var(--grey);font-size:12px;font-weight:400;text-transform:none;letter-spacing:0;font-family:inherit;">Uploads create a public watch page URL (like YouTube). MP4/WebM/MOV, up to 200&nbsp;MB.</span>
-    </label>
+    <div class="full story-media-block" data-media-slot="video">
+      <div class="story-media-label">Story video</div>
+      <p class="story-media-hint">Attach a video from your device. Creates a shareable watch URL (like YouTube). MP4/WebM/MOV, up to 200&nbsp;MB.</p>
+      <div class="device-attach-host" data-kind="video"></div>
+      <label class="story-url-fallback">Or video URL <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…"></label>
+    </div>
     <label>Tags (comma separated) <input name="tags" value="${escapeHtml((story?.tags || []).join(', '))}"></label>
     <label>External URL (source link) <input name="externalUrl" type="url" maxlength="1000" value="${escapeHtml(story?.external_url || '')}"></label>
     <label><span><input type="checkbox" name="breaking" ${story?.breaking ? 'checked' : ''}> Mark as breaking</span></label>
     <label><span><input type="checkbox" name="developing" ${story?.developing ? 'checked' : ''}> Mark as developing</span></label>
   `;
 
-  wireMediaUploads(form, ctx, wrap);
+  wireDeviceAttach(form, ctx, wrap);
 
   const actions = el('div', { class: 'dash-actions full' });
   const saveBtn = el('button', { type: 'submit', text: story ? 'Save Changes' : 'Save Draft' });
@@ -187,50 +183,25 @@ function buildAiDrafterCard(pageWrap) {
   return card;
 }
 
-function wireMediaUploads(form, ctx, pageWrap) {
-  form.querySelectorAll('.media-upload-row').forEach((row) => {
-    const kind = row.getAttribute('data-upload');
-    const fileInput = row.querySelector('.media-file-input');
-    const btn = row.querySelector('.media-upload-btn');
-    const status = row.querySelector('.media-upload-status');
+function wireDeviceAttach(form, ctx, pageWrap) {
+  const orgId = ctx.mode === 'org' && ctx.orgId ? ctx.orgId : null;
 
-    async function doUpload() {
-      if (!fileInput.files?.length) {
-        fileInput.click();
-        return;
-      }
-      btn.disabled = true;
-      status.textContent = 'Uploading…';
-      try {
-        const fd = new FormData();
-        fd.append('file', fileInput.files[0]);
-        if (ctx.mode === 'org' && ctx.orgId) fd.append('organizationId', String(ctx.orgId));
-        const result = await uploadFile('/media/upload', fd);
-        if (kind === 'video') {
-          form.videoUrl.value = result.shareUrl || result.url;
-          status.textContent = 'Video ready — shareable watch URL filled in.';
+  form.querySelectorAll('.device-attach-host').forEach((host) => {
+    const kind = host.getAttribute('data-kind') || 'image';
+    host.appendChild(buildDeviceAttach({
+      kind,
+      organizationId: orgId,
+      label: kind === 'video' ? 'Attach video from device' : 'Attach photo from device',
+      onUploaded: ({ url, shareUrl, mediaType }) => {
+        if (mediaType === 'video' || kind === 'video') {
+          form.videoUrl.value = shareUrl || url;
+          toast(pageWrap, 'Video attached from your device.', 'success');
         } else {
-          form.imageUrl.value = result.url;
-          status.textContent = 'Image uploaded.';
+          form.imageUrl.value = url;
+          toast(pageWrap, 'Photo attached from your device.', 'success');
         }
-        toast(pageWrap, kind === 'video' ? 'Video uploaded. Watch URL is ready to share.' : 'Image uploaded.', 'success');
-        fileInput.value = '';
-      } catch (err) {
-        status.textContent = '';
-        toast(pageWrap, err instanceof ApiError ? err.message : 'Upload failed.');
-      } finally {
-        btn.disabled = false;
-      }
-    }
-
-    // Choose file → upload immediately (no second button click).
-    btn.addEventListener('click', () => {
-      if (fileInput.files?.length) doUpload();
-      else fileInput.click();
-    });
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files?.length) doUpload();
-    });
+      },
+    }));
   });
 }
 

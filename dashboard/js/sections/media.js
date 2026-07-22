@@ -1,5 +1,6 @@
-import { api, ApiError, uploadFile } from '../api.js';
+import { api, ApiError } from '../api.js';
 import { el, escapeHtml } from '../util.js';
+import { buildDeviceAttach } from '../deviceUpload.js';
 
 export async function render(container, ctx) {
   const query = ctx.mode === 'org' && ctx.orgId
@@ -23,40 +24,16 @@ export async function render(container, ctx) {
   wrap.appendChild(el('h2', { text: 'Media Library', style: 'margin-bottom:8px;' }));
   wrap.appendChild(el('p', {
     style: 'margin-bottom:16px;color:var(--grey);font-size:13px;',
-    text: 'Upload images and videos. Videos get a public watch page URL you can share (like YouTube). You can also paste an external image URL.',
+    text: 'Attach photos and videos directly from your phone or computer. Videos get a public watch page URL you can share (like YouTube).',
   }));
 
-  const uploadCard = el('div', { class: 'dash-card' }, [el('h3', { text: 'Upload file' })]);
-  const uploadForm = el('form', { class: 'dash-form' });
-  uploadForm.innerHTML = `
-    <label class="full">File (image or video)
-      <input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" required>
-    </label>
-    <label>Caption <input name="caption"></label>
-    <label>Credit <input name="credit"></label>
-    <label class="full">Alt text (images) <input name="altText"></label>
-  `;
-  const uploadActions = el('div', { class: 'dash-actions full' });
-  const uploadBtn = el('button', { type: 'submit', text: 'Upload' });
-  const uploadErr = el('p', { class: 'auth-error full' });
-  uploadActions.appendChild(uploadBtn);
-  uploadForm.appendChild(uploadActions);
-  uploadForm.appendChild(uploadErr);
-  uploadForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    uploadErr.textContent = '';
-    uploadBtn.disabled = true;
-    try {
-      const fd = new FormData(uploadForm);
-      if (ctx.mode === 'org' && ctx.orgId) fd.append('organizationId', String(ctx.orgId));
-      await uploadFile('/media/upload', fd);
-      render(container, ctx);
-    } catch (err) {
-      uploadErr.textContent = err instanceof ApiError ? err.message : 'Upload failed.';
-      uploadBtn.disabled = false;
-    }
-  });
-  uploadCard.appendChild(uploadForm);
+  const uploadCard = el('div', { class: 'dash-card' }, [el('h3', { text: 'Attach from device' })]);
+  uploadCard.appendChild(buildDeviceAttach({
+    kind: 'both',
+    organizationId: ctx.mode === 'org' && ctx.orgId ? ctx.orgId : null,
+    label: 'Choose photo or video from device',
+    onUploaded: () => render(container, ctx),
+  }));
   wrap.appendChild(uploadCard);
 
   if (ctx.mode === 'org' && ctx.orgId) {
