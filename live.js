@@ -611,14 +611,14 @@ function setCitizenLatest(items) {
   `;
 }
 
+const MIN_JOURNALISTS_TO_SHOW = 5;
+
 function setJournalists(items) {
+  const section = document.querySelector('#section-journalists');
   const mount = document.querySelector('.journalist-scroll');
-  if (!mount) return;
   const profiles = items || [];
-  if (!profiles.length) {
-    mount.innerHTML = '<a class="journalist-card featured" href="/dashboard/login.html"><span class="journalist-photo"><span>+</span></span><h3>Create your journalist profile</h3><p>Independent journalists and newsroom teams</p><b>Join 256 Newsroom →</b></a><a class="journalist-card" href="/journalists/"><span class="journalist-photo"><span>⌕</span></span><h3>Journalist directory</h3><p>Search by name, beat or location</p><b>Find journalists →</b></a>';
-    return;
-  }
+  if (section) section.hidden = profiles.length < MIN_JOURNALISTS_TO_SHOW;
+  if (!mount || profiles.length < MIN_JOURNALISTS_TO_SHOW) return;
   mount.innerHTML = profiles.slice(0, 6).map((item, index) => `
     <a href="${safeHref(item.profile_url || '#')}" class="journalist-card ${index === 0 ? 'featured' : ''}">
       <span class="journalist-photo jp-${index + 1}"${item.image_url ? imageStyle({ imageUrl: item.image_url }) : ''}><span>${escapeHtml(sourceInitials(item.name))}</span></span>
