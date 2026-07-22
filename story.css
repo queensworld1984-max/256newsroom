@@ -24,5 +24,9 @@ figure { margin:30px 0; }figure img { display:block; max-height:540px; object-fi
 .original-button { background:var(--red); color:var(--white); display:inline-block; font-weight:700; margin:22px 0 12px; padding:15px 20px; text-decoration:none; }
 .coverage-list { list-style:none; margin:0; padding:0; }.coverage-list li { border-bottom:1px solid var(--line); display:flex; gap:20px; justify-content:space-between; padding:13px 0; }.coverage-list a { font-weight:600; }.coverage-list span,.empty-note { color:var(--grey); font-size:13px; }
 .related-grid { display:grid; gap:16px; grid-template-columns:repeat(3,1fr); }.related-card { background:var(--white); border:1px solid var(--line); display:flex; flex-direction:column; min-height:230px; text-decoration:none; }.related-card img,.related-placeholder { height:130px; object-fit:cover; width:100%; }.related-placeholder { background:#fff; object-fit:contain; }.related-card strong { line-height:1.3; padding:12px 12px 5px; }.related-card small { color:var(--gold); margin-top:auto; padding:0 12px 12px; }
+.journalist-more-stories { margin-top:8px; }
+.journalist-more-link { margin:0 0 14px; font-size:15px; }
+.journalist-more-link a { color:var(--red); font-weight:700; text-decoration:none; }
+.journalist-more-link a:hover { text-decoration:underline; }
 .story-footer { background:var(--ink); color:#bcbcb4; font-family:Inconsolata,monospace; font-size:12px; padding:28px; text-align:center; }.story-footer a{display:block;margin:0 auto 14px;max-width:360px}.story-footer img{display:block;height:46px;object-fit:cover;width:100%}.story-footer p{margin:0}
 @media(max-width:650px){.site-head { align-items:flex-start; flex-direction:column; gap:6px; padding:16px; }.story-shell{padding:22px 16px 50px}.related-grid{grid-template-columns:1fr}.related-card{min-height:0}.coverage-list li{align-items:flex-start;flex-direction:column;gap:4px}.summary p{font-size:19px}}

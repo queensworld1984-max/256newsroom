@@ -63,6 +63,31 @@ function renderRelated(items) {
   `).join('')}</div>`;
 }
 
+/** More stories by the same journalist, or by journalists under the same publisher. */
+function renderJournalistStories(items, { journalistName, publisherName, journalistSlug }) {
+  if (!items.length) {
+    return '<p class="empty-note">No other published stories from this journalist yet.</p>';
+  }
+  const profile = journalistSlug
+    ? `<p class="journalist-more-link"><a href="/journalists/profile.html?slug=${escapeHtml(journalistSlug)}">View ${escapeHtml(journalistName || 'journalist')} profile →</a></p>`
+    : '';
+  return `${profile}<div class="related-grid journalist-stories-grid">${items.map((item) => {
+    const href = escapeHtml(item.internal_url || (item.slug ? `/news/${item.slug}` : '#'));
+    const byline = item.journalist_name
+      ? `${item.journalist_name}${item.publisher_name ? ` · ${item.publisher_name}` : ''}`
+      : (item.publisher_name || publisherName || '256 Newsroom');
+    const when = item.published_at
+      ? new Intl.DateTimeFormat('en-UG', { dateStyle: 'medium', timeZone: 'Africa/Kampala' }).format(new Date(item.published_at))
+      : '';
+    return `
+    <a class="related-card" href="${href}">
+      ${item.image_url ? `<img src="${safeUrl(item.image_url)}" alt="" loading="lazy">` : '<img class="related-placeholder" src="/assets/logos/256-newsroom.png" alt="256 Newsroom">'}
+      <strong>${escapeHtml(item.title)}</strong>
+      <small>${escapeHtml(byline)}${when ? ` · ${escapeHtml(when)}` : ''}</small>
+    </a>`;
+  }).join('')}</div>`;
+}
+
 function renderSummary(summary) {
   return String(summary || '').split(/\n{2,}/).filter(Boolean).map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`).join('');
 }
@@ -103,6 +128,7 @@ router.get('/news/:slug', async (req, res, next) => {
         coalesce(o.slug, s.slug) as publisher_slug, s.homepage_url, o.website_url as platform_website_url,
         coalesce(o.logo_url, j.image_url) as publisher_logo,
         o.id as organization_id, j.id as journalist_id, j.slug as journalist_slug, j.is_independent,
+        j.name as journalist_name, j.user_id as journalist_user_id,
         c.name as category_name, c.slug as category_slug,
         d.name as district_name, d.slug as district_slug
       from articles a
@@ -117,7 +143,74 @@ router.get('/news/:slug', async (req, res, next) => {
     const story = rows[0];
     if (!story) return res.status(404).type('html').send('<!doctype html><title>Story not found | 256 Newsroom</title><h1>Story not found</h1><p><a href="/">Return to 256 Newsroom</a></p>');
 
-    const [coverageResult, relatedResult] = await Promise.all([
+    // More stories: same journalist first; if none, all journalists under this publisher org.
+    const journalistStoriesQuery = story.journalist_id
+      ? pool.query(
+        `select a.id, a.title, a.slug, a.internal_url, a.image_url, a.published_at, a.summary,
+                j.name as journalist_name, j.slug as journalist_slug,
+                coalesce(o.name, s.name, '256 Newsroom') as publisher_name
+         from articles a
+         left join journalists j on j.id = a.journalist_id
+         left join organizations o on o.id = a.organization_id
+         left join sources s on s.id = a.source_id
+         where a.hidden = false and a.status = 'published'
+           and a.id <> $1
+           and (
+             a.journalist_id = $2
+             or ($3::bigint is not null and a.created_by_user_id = $3)
+           )
+           and (a.internal_url is not null or a.slug is not null)
+         order by a.published_at desc nulls last
+         limit 24`,
+        [story.id, story.journalist_id, story.journalist_user_id || story.created_by_user_id || null],
+      )
+      : story.organization_id
+        ? pool.query(
+          `select a.id, a.title, a.slug, a.internal_url, a.image_url, a.published_at, a.summary,
+                  j.name as journalist_name, j.slug as journalist_slug,
+                  coalesce(o.name, s.name, '256 Newsroom') as publisher_name
+           from articles a
+           left join journalists j on j.id = a.journalist_id
+           left join organizations o on o.id = a.organization_id
+           left join sources s on s.id = a.source_id
+           where a.hidden = false and a.status = 'published'
+             and a.id <> $1
+             and a.organization_id = $2
+             and (
+               a.journalist_id is not null
+               or a.created_by_user_id in (
+                 select user_id from journalists
+                 where organization_id = $2 and user_id is not null
+               )
+             )
+             and (a.internal_url is not null or a.slug is not null)
+           order by a.published_at desc nulls last
+           limit 24`,
+          [story.id, story.organization_id],
+        )
+        : story.created_by_user_id
+          ? pool.query(
+            `select distinct on (a.id)
+                    a.id, a.title, a.slug, a.internal_url, a.image_url, a.published_at, a.summary,
+                    coalesce(j.name, j2.name) as journalist_name,
+                    coalesce(j.slug, j2.slug) as journalist_slug,
+                    coalesce(o.name, s.name, '256 Newsroom') as publisher_name
+             from articles a
+             left join journalists j on j.id = a.journalist_id
+             left join journalists j2 on j2.user_id = a.created_by_user_id
+             left join organizations o on o.id = a.organization_id
+             left join sources s on s.id = a.source_id
+             where a.hidden = false and a.status = 'published'
+               and a.id <> $1
+               and a.created_by_user_id = $2
+               and (a.internal_url is not null or a.slug is not null)
+             order by a.id, a.published_at desc nulls last
+             limit 24`,
+            [story.id, story.created_by_user_id],
+          )
+          : Promise.resolve({ rows: [] });
+
+    const [coverageResult, relatedResult, journalistStoriesResult] = await Promise.all([
       story.cluster_id ? pool.query(`
         select a.title, a.internal_url, coalesce(s.name, o.name, '256 Newsroom') as publisher_name
         from articles a left join sources s on s.id = a.source_id left join organizations o on o.id = a.organization_id
@@ -131,6 +224,7 @@ router.get('/news/:slug', async (req, res, next) => {
           and (a.category_id = $2 or ($3::bigint is not null and a.district_id = $3))
         order by (a.district_id = $3) desc nulls last, a.published_at desc nulls last limit 6
       `, [story.id, story.category_id, story.district_id]),
+      journalistStoriesQuery,
     ]);
 
     const summary = String(story.seo_summary || story.summary || '').trim();
@@ -196,7 +290,7 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260722-debate">
+<link rel="stylesheet" href="/story.css?v=20260722-journalist-more">
 <link rel="stylesheet" href="/engagement.css?v=20260722-debate"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
@@ -222,6 +316,18 @@ ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank
   <p class="eng-note">Loading debate for this article…</p>
 </div>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
+<section class="journalist-more-stories">
+  <h2>${story.journalist_id && story.journalist_name
+    ? `More stories by ${escapeHtml(story.journalist_name)}`
+    : story.organization_id
+      ? `More stories by journalists at ${escapeHtml(story.publisher_name)}`
+      : 'More stories by this journalist'}</h2>
+  ${renderJournalistStories(journalistStoriesResult.rows, {
+    journalistName: story.journalist_name,
+    publisherName: story.publisher_name,
+    journalistSlug: story.journalist_slug,
+  })}
+</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
 </article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer>
 <script src="/engagement.js?v=20260722-debate" defer></script>
