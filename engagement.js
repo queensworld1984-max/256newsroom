@@ -69,7 +69,7 @@
         <p class="eng-note eng-scope-note">Agree and Disagree require a short reason. All positions stay on this story only.</p>
       </div>
       <div class="eng-actions" role="group" aria-label="Reactions for this article">
-        <button type="button" class="eng-chip${eng.liked ? ' is-on' : ''}" data-action="like" ${can ? '' : 'data-need-auth="1"'} title="Like this article">
+        <button type="button" class="eng-chip eng-chip-like${eng.liked ? ' is-on' : ''}" data-action="like" ${can ? '' : 'data-need-auth="1"'} title="Like this article">
           ♥ Like <b data-count="likes">${eng.likes || 0}</b>
         </button>
         <button type="button" class="eng-chip eng-chip-agree${myStance === 'agree' ? ' is-on' : ''}" data-action="open-stance" data-stance="agree" ${can ? '' : 'data-need-auth="1"'} title="Agree and explain why">
@@ -78,7 +78,7 @@
         <button type="button" class="eng-chip eng-chip-disagree${myStance === 'disagree' ? ' is-on' : ''}" data-action="open-stance" data-stance="disagree" ${can ? '' : 'data-need-auth="1"'} title="Disagree and explain why">
           ✗ Disagree <b data-count="disagrees">${eng.disagrees || 0}</b>
         </button>
-        <button type="button" class="eng-chip" data-action="focus-comment" ${can ? '' : 'data-need-auth="1"'} title="Comment on this article">
+        <button type="button" class="eng-chip eng-chip-comment" data-action="focus-comment" ${can ? '' : 'data-need-auth="1"'} title="Comment on this article">
           💬 Comment <b data-count="comments">${eng.comments || 0}</b>
         </button>
         ${!data.authenticated ? `<a class="eng-btn eng-secondary" href="${loginNext()}">Sign in to debate</a>` : ''}
