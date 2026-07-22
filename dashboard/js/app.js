@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { loadContext } from './context.js';
+import { loadContext, setWorkspace } from './context.js';
 import { escapeHtml } from './util.js';
 
 import * as onboarding from './sections/onboarding.js';
@@ -18,12 +18,15 @@ import * as rssDistribution from './sections/rssDistribution.js';
 import * as settings from './sections/settings.js';
 import * as journalistProfile from './sections/journalistProfile.js';
 
+import * as adminCommandCenter from './sections/admin/commandCenter.js';
+import * as adminPeople from './sections/admin/people.js';
+import * as adminApplications from './sections/admin/applications.js';
+import * as adminModerationStories from './sections/admin/moderationStories.js';
 import * as adminOverview from './sections/admin/overview.js';
 import * as adminPlatforms from './sections/admin/platforms.js';
 import * as adminPlatformDetail from './sections/admin/platformDetail.js';
 import * as adminArticles from './sections/admin/articles.js';
 import * as adminJobs from './sections/admin/jobs.js';
-import * as adminPeople from './sections/admin/people.js';
 
 const navEl = document.getElementById('dash-nav');
 const contentEl = document.getElementById('dash-content');
@@ -74,16 +77,21 @@ const ONBOARDING_NAV = [
   { section: 'Get started', items: [{ path: '/overview', label: 'Overview' }] },
 ];
 
-const ADMIN_NAV = {
-  section: 'Newsroom Admin',
-  items: [
-    { path: '/admin/people', label: 'People & Journalists' },
-    { path: '/admin/ecosystem/overview', label: 'Ecosystem Overview' },
+/** Full platform control room — primary UI for newsroom_admin / super_admin. */
+const ADMIN_NAV_GROUPS = [
+  { section: 'Control room', items: [
+    { path: '/admin', label: 'Command center' },
+    { path: '/admin/people', label: 'People & accounts' },
+    { path: '/admin/applications', label: 'Publisher applications' },
+    { path: '/admin/stories', label: 'Story queue' },
+  ] },
+  { section: 'Ecosystem automation', items: [
+    { path: '/admin/ecosystem/overview', label: 'Automation overview' },
     { path: '/admin/ecosystem/platforms', label: 'Platforms' },
-    { path: '/admin/ecosystem/articles', label: 'Generated Articles' },
-    { path: '/admin/ecosystem/jobs', label: 'Jobs & Audit Log' },
-  ],
-};
+    { path: '/admin/ecosystem/articles', label: 'Generated articles' },
+    { path: '/admin/ecosystem/jobs', label: 'Jobs & audit log' },
+  ] },
+];
 
 const ROUTES = [
   { pattern: /^\/overview$/, render: (m, c) => overview.render(contentEl, c) },
@@ -102,7 +110,10 @@ const ROUTES = [
   { pattern: /^\/rss-distribution$/, render: (m, c) => rssDistribution.render(contentEl, c) },
   { pattern: /^\/settings$/, render: (m, c) => settings.render(contentEl, c) },
   { pattern: /^\/journalist-profile$/, render: () => journalistProfile.render(contentEl) },
+  { pattern: /^\/admin$/, render: () => adminCommandCenter.render(contentEl) },
   { pattern: /^\/admin\/people$/, render: (m, c) => adminPeople.render(contentEl, c) },
+  { pattern: /^\/admin\/applications$/, render: () => adminApplications.render(contentEl) },
+  { pattern: /^\/admin\/stories$/, render: (m, c, q) => adminModerationStories.render(contentEl, c, q) },
   { pattern: /^\/admin\/ecosystem\/overview$/, render: (m, c) => adminOverview.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms$/, render: (m, c) => adminPlatforms.render(contentEl, c) },
   { pattern: /^\/admin\/ecosystem\/platforms\/(\d+)$/, render: (m, c) => adminPlatformDetail.render(contentEl, c, { orgId: m[1] }) },
@@ -111,16 +122,28 @@ const ROUTES = [
 ];
 
 function navConfigFor(mode) {
+  if (mode === 'admin') return ADMIN_NAV_GROUPS;
   if (mode === 'org') return ORG_NAV;
   if (mode === 'independent') return INDEPENDENT_NAV;
   return ONBOARDING_NAV;
 }
 
 function renderNav(mode, currentPath) {
-  const groups = navConfigFor(mode).slice();
-  // Global admins always get the People directory + ecosystem tools,
-  // including when their personal account is in independent or onboarding mode.
-  if (ctx.isGlobalAdmin) groups.push(ADMIN_NAV);
+  const groups = navConfigFor(mode).map((g) => ({ section: g.section, items: g.items.slice() }));
+
+  // Admins can jump into personal workspaces without losing control-room access.
+  if (ctx.isGlobalAdmin && mode === 'admin') {
+    const switchers = [];
+    if (ctx.hasOrgWorkspace) switchers.push({ path: '/__workspace/org', label: '→ My outlet workspace' });
+    if (ctx.isIndependentJournalist) switchers.push({ path: '/__workspace/independent', label: '→ My journalist workspace' });
+    if (switchers.length) groups.push({ section: 'Personal workspaces', items: switchers });
+  } else if (ctx.isGlobalAdmin && mode !== 'admin') {
+    groups.push({
+      section: 'Platform admin',
+      items: [{ path: '/__workspace/admin', label: '← Back to control room' }],
+    });
+  }
+
   navEl.innerHTML = '';
   for (const group of groups) {
     const heading = document.createElement('div');
@@ -129,10 +152,26 @@ function renderNav(mode, currentPath) {
     navEl.appendChild(heading);
     for (const item of group.items) {
       const a = document.createElement('a');
-      a.href = `#${item.path}`;
+      a.href = item.path.startsWith('/__workspace') ? '#' : `#${item.path}`;
       a.textContent = item.label;
+      if (item.path.startsWith('/__workspace')) {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const ws = item.path.split('/').pop();
+          setWorkspace(ws === 'admin' ? 'admin' : ws);
+          window.location.hash = ws === 'admin' ? '#/admin' : '#/overview';
+          boot(true);
+        });
+      }
       const isPlatformDetail = item.path === '/admin/ecosystem/platforms' && currentPath.startsWith('/admin/ecosystem/platforms/');
-      if (item.path === currentPath || isPlatformDetail || (item.path === '/stories' && currentPath.startsWith('/stories/') && currentPath !== '/stories/new' && currentPath !== '/stories/scheduled')) {
+      const isAdminHome = item.path === '/admin' && (currentPath === '/admin' || currentPath === '/admin/');
+      if (
+        item.path === currentPath
+        || isPlatformDetail
+        || isAdminHome
+        || (item.path === '/stories' && currentPath.startsWith('/stories/') && currentPath !== '/stories/new' && currentPath !== '/stories/scheduled')
+        || (item.path === '/admin/stories' && currentPath.startsWith('/admin/stories'))
+      ) {
         a.classList.add('active');
       }
       navEl.appendChild(a);
@@ -141,27 +180,52 @@ function renderNav(mode, currentPath) {
 }
 
 function renderTopbar() {
-  if (ctx.organization) {
+  const roleEl = document.getElementById('dash-sidebar-role');
+  if (ctx.mode === 'admin') {
+    topbarOrgEl.innerHTML = `<span class="admin-topbar-title">Platform control room</span> <span class="badge badge-gold" style="margin-left:8px;">Admin</span>`;
+    if (roleEl) roleEl.textContent = 'Platform admin';
+  } else if (ctx.organization) {
     const statusLabel = ctx.organization.is_official ? 'Official 256 Update' : ctx.organization.verification_status.replace(/_/g, ' ');
     const statusClass = ctx.organization.verification_status === 'approved' ? 'badge-green' : 'badge-gold';
     topbarOrgEl.innerHTML = `${escapeHtml(ctx.organization.name)} <span class="badge ${statusClass}" style="margin-left:8px;">${escapeHtml(statusLabel)}</span>`;
+    if (roleEl) roleEl.textContent = 'Publisher outlet';
   } else if (ctx.isIndependentJournalist) {
     topbarOrgEl.textContent = 'Independent Journalist';
+    if (roleEl) roleEl.textContent = 'Independent journalist';
   } else {
     topbarOrgEl.textContent = 'Get started';
+    if (roleEl) roleEl.textContent = 'Onboarding';
   }
   topbarUserEl.textContent = ctx.user.displayName || ctx.user.email;
+  document.body.classList.toggle('is-admin-mode', ctx.mode === 'admin');
+  document.title = ctx.mode === 'admin'
+    ? '256 Newsroom — Platform Admin'
+    : '256 Newsroom — Dashboard';
 }
 
 async function route() {
-  const raw = window.location.hash.replace('#', '') || '/overview';
+  let raw = window.location.hash.replace('#', '') || (ctx.mode === 'admin' ? '/admin' : '/overview');
+  if (ctx.mode === 'admin' && (raw === '/overview' || raw === '')) {
+    raw = '/admin';
+    if (window.location.hash !== '#/admin') {
+      window.location.hash = '#/admin';
+      return;
+    }
+  }
+
   const [path, search] = raw.split('?');
   const query = Object.fromEntries(new URLSearchParams(search || ''));
 
-  if (ctx.mode === 'onboarding' && path !== '/settings' && !(ctx.isGlobalAdmin && path.startsWith('/admin/'))) {
+  if (ctx.mode === 'onboarding' && path !== '/settings' && !(ctx.isGlobalAdmin && path.startsWith('/admin'))) {
     renderNav('onboarding', '/overview');
     contentEl.innerHTML = '';
     contentEl.appendChild(await onboarding.render(contentEl, ctx));
+    return;
+  }
+
+  // Guard non-admin users off admin routes
+  if (path.startsWith('/admin') && !ctx.isGlobalAdmin) {
+    contentEl.innerHTML = '<div class="dash-toast error">Admin access required.</div>';
     return;
   }
 
@@ -179,7 +243,7 @@ async function route() {
   }
 }
 
-async function boot() {
+async function boot(reloading = false) {
   try {
     ctx = await loadContext();
   } catch {
@@ -191,13 +255,19 @@ async function boot() {
     return;
   }
 
-  renderTopbar();
-  document.getElementById('dash-logout').addEventListener('click', async () => {
-    await api.post('/auth/logout');
-    window.location.href = '/dashboard/login.html';
-  });
+  // Default admins into control room on first load
+  if (ctx.mode === 'admin' && (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/overview')) {
+    window.location.hash = '#/admin';
+  }
 
-  window.addEventListener('hashchange', route);
+  renderTopbar();
+  if (!reloading) {
+    document.getElementById('dash-logout').addEventListener('click', async () => {
+      await api.post('/auth/logout');
+      window.location.href = '/dashboard/login.html';
+    });
+    window.addEventListener('hashchange', route);
+  }
   await route();
 }
 

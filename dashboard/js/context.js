@@ -20,19 +20,27 @@ export async function loadContext() {
     isEditor = isEditor || EDITOR_ROLES.has(orgRole.key);
   }
 
-  // Independent journalists publish under their own byline without admin approval.
-  // If they also applied as a publisher but the org is not yet approved, keep them
-  // in independent mode so publishing is not blocked by the org verification gate.
   const orgApproved = Boolean(
     organization && (organization.verification_status === 'approved' || organization.is_official),
   );
+
+  // Workspace mode:
+  // - Global admins land in the platform control room (not a shallow publisher shell).
+  // - They can still open their personal outlet via ?workspace=org when needed.
   let mode = 'onboarding';
-  if (organization && orgApproved) {
+  const workspaceHint = new URLSearchParams(window.location.hash.split('?')[1] || '').get('workspace')
+    || sessionStorage.getItem('nr_workspace');
+
+  if (isGlobalAdmin && workspaceHint !== 'org' && workspaceHint !== 'independent') {
+    mode = 'admin';
+  } else if (organization && orgApproved) {
     mode = 'org';
   } else if (isIndependentJournalist) {
     mode = 'independent';
   } else if (organization) {
-    mode = 'org'; // draft-only until approved
+    mode = 'org';
+  } else if (isGlobalAdmin) {
+    mode = 'admin';
   }
 
   return {
@@ -43,8 +51,16 @@ export async function loadContext() {
     orgId: orgRole ? orgRole.organizationId : null,
     orgApproved,
     isIndependentJournalist,
-    // Journalists may publish immediately (independent always; org after approval).
     canPublish: isIndependentJournalist || orgApproved || isGlobalAdmin,
     mode,
+    hasOrgWorkspace: Boolean(organization),
   };
+}
+
+export function setWorkspace(workspace) {
+  if (workspace === 'admin' || workspace === 'org' || workspace === 'independent') {
+    sessionStorage.setItem('nr_workspace', workspace);
+  } else {
+    sessionStorage.removeItem('nr_workspace');
+  }
 }

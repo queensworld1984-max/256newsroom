@@ -73,15 +73,61 @@ router.get('/users', async (req, res, next) => {
   }
 });
 
-// GET /api/admin/people/summary
+// GET /api/admin/people/summary — command-center KPIs
 router.get('/summary', async (req, res, next) => {
   try {
-    const [users, independents, withAccounts, apps, pendingStories] = await Promise.all([
+    const [
+      users,
+      independents,
+      withAccounts,
+      apps,
+      pendingStories,
+      publishedToday,
+      publishedTotal,
+      orgsUnverified,
+      orgsApproved,
+      recentUsers,
+      recentJournalists,
+      recentPending,
+    ] = await Promise.all([
       pool.query('select count(*)::int as c from users'),
       pool.query(`select count(*)::int as c from journalists where is_independent = true and user_id is not null`),
       pool.query(`select count(*)::int as c from journalists where user_id is not null`),
       pool.query(`select count(*)::int as c from publisher_applications where stage not in ('approved','rejected')`),
-      pool.query(`select count(*)::int as c from articles where status = 'pending_review' and origin = 'publisher_authored'`),
+      pool.query(`select count(*)::int as c from articles where status in ('pending_review','draft') and origin = 'publisher_authored'`),
+      pool.query(`select count(*)::int as c from articles where status = 'published' and published_at::date = current_date`),
+      pool.query(`select count(*)::int as c from articles where status = 'published' and hidden = false`),
+      pool.query(`select count(*)::int as c from organizations where verification_status not in ('approved') and is_official = false`),
+      pool.query(`select count(*)::int as c from organizations where verification_status = 'approved' or is_official = true`),
+      pool.query(`
+        select u.id, u.email, u.display_name, u.created_at, u.last_login_at,
+               coalesce(array_agg(distinct r.key) filter (where r.key is not null), '{}') as roles
+        from users u
+        left join user_roles ur on ur.user_id = u.id
+        left join roles r on r.id = ur.role_id
+        group by u.id
+        order by u.created_at desc
+        limit 8
+      `),
+      pool.query(`
+        select j.id, j.name, j.slug, j.is_independent, j.user_id, u.email, j.created_at
+        from journalists j
+        left join users u on u.id = j.user_id
+        where j.user_id is not null
+        order by j.created_at desc
+        limit 8
+      `),
+      pool.query(`
+        select a.id, a.title, a.status, a.organization_id, a.created_by_user_id, a.updated_at,
+               u.email as author_email, u.display_name as author_name,
+               o.name as org_name, o.verification_status
+        from articles a
+        left join users u on u.id = a.created_by_user_id
+        left join organizations o on o.id = a.organization_id
+        where a.status in ('pending_review', 'draft') and a.origin = 'publisher_authored'
+        order by a.updated_at desc
+        limit 12
+      `),
     ]);
     res.json({
       users: users.rows[0].c,
@@ -89,7 +135,115 @@ router.get('/summary', async (req, res, next) => {
       journalistsWithAccounts: withAccounts.rows[0].c,
       openPublisherApplications: apps.rows[0].c,
       pendingReviewStories: pendingStories.rows[0].c,
+      publishedToday: publishedToday.rows[0].c,
+      publishedTotal: publishedTotal.rows[0].c,
+      orgsUnverified: orgsUnverified.rows[0].c,
+      orgsApproved: orgsApproved.rows[0].c,
+      recentUsers: recentUsers.rows,
+      recentJournalists: recentJournalists.rows,
+      recentPendingStories: recentPending.rows,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/people/stories?status=pending_review|draft|published
+router.get('/stories', async (req, res, next) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : null;
+    const params = [];
+    let where = `a.origin = 'publisher_authored'`;
+    if (status) {
+      params.push(status);
+      where += ` and a.status = $${params.length}`;
+    }
+    const { rows } = await pool.query(
+      `select a.id, a.title, a.status, a.organization_id, a.journalist_id, a.created_by_user_id,
+              a.created_at, a.updated_at, a.published_at, a.summary,
+              u.email as author_email, u.display_name as author_name,
+              j.name as journalist_name, j.is_independent,
+              o.name as org_name, o.verification_status, o.slug as org_slug
+       from articles a
+       left join users u on u.id = a.created_by_user_id
+       left join journalists j on j.id = a.journalist_id
+       left join organizations o on o.id = a.organization_id
+       where ${where}
+       order by a.updated_at desc
+       limit 150`,
+      params,
+    );
+    res.json({ items: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/admin/people/stories/:id/publish — force-publish (bypasses unapproved-org gate)
+router.post('/stories/:id/publish', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const { rows: before } = await pool.query(
+      'select id, title, status, organization_id, created_by_user_id, journalist_id from articles where id = $1',
+      [id],
+    );
+    if (!before.length) return res.status(404).json({ error: 'Story not found.' });
+
+    // Prefer independent byline when org is not approved so the piece can go live.
+    if (before[0].organization_id) {
+      const { rows: orgRows } = await pool.query(
+        'select verification_status, is_official from organizations where id = $1',
+        [before[0].organization_id],
+      );
+      const org = orgRows[0];
+      const approved = org && (org.verification_status === 'approved' || org.is_official);
+      if (!approved) {
+        let journalistId = before[0].journalist_id;
+        if (!journalistId && before[0].created_by_user_id) {
+          const { rows: j } = await pool.query(
+            'select id from journalists where user_id = $1',
+            [before[0].created_by_user_id],
+          );
+          journalistId = j[0]?.id || null;
+        }
+        await pool.query(
+          `update articles set organization_id = null, journalist_id = coalesce(journalist_id, $2), updated_at = now()
+           where id = $1`,
+          [id, journalistId],
+        );
+      }
+    }
+
+    const { rows } = await pool.query(
+      `update articles set
+         status = 'published',
+         published_at = coalesce(published_at, now()),
+         approved_at = coalesce(approved_at, now()),
+         approved_by_user_id = coalesce(approved_by_user_id, $2),
+         withdrawn_at = null,
+         withdrawn_reason = null,
+         updated_at = now()
+       where id = $1
+       returning id, title, status, organization_id, journalist_id, published_at`,
+      [id, req.user.id],
+    );
+    res.json({ item: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/admin/people/journalists/:id/verify
+router.post('/journalists/:id/verify', async (req, res, next) => {
+  try {
+    const verified = req.body.verified !== false;
+    const { rows } = await pool.query(
+      `update journalists set verified = $2, updated_at = now() where id = $1
+       returning id, name, slug, verified, is_independent, user_id`,
+      [req.params.id, verified],
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Journalist not found.' });
+    res.json({ item: rows[0] });
   } catch (err) {
     next(err);
   }
