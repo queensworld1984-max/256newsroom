@@ -3,7 +3,6 @@ const READER_PROFILE_KEY = '256newsroom_reader_profile';
 let heroRotationTimer = null;
 let heroStories = [];
 let heroStoryIndex = 0;
-let trendingRotationTimer = null;
 let carouselRotationTimer = null;
 let headlineRefreshTimer = null;
 const storyIndex = new Map();
@@ -231,7 +230,7 @@ async function safeJson(path) {
 
 function initializeLiveMounts() {
   const skeleton = (className, count) => Array.from({ length: count }, () => `<article class="${className} loading-card" aria-label="Loading current live coverage"><div class="loading-media"></div><div class="loading-line wide"></div><div class="loading-line"></div></article>`).join('');
-  document.querySelectorAll('#panel-home .trending-row.in-column').forEach((mount) => { mount.innerHTML = skeleton('cluster-card', 4); });
+  document.querySelectorAll('#panel-home .trending-row.in-column').forEach((mount) => { mount.innerHTML = skeleton('cluster-card', 6); });
   document.querySelectorAll('#panel-home .card-grid').forEach((mount) => { mount.innerHTML = skeleton('grid-card', 6); });
   document.querySelectorAll('#panel-home .story-list').forEach((mount) => { mount.innerHTML = skeleton('story-card', 2); });
   document.querySelectorAll('#panel-home .social-scroll').forEach((mount) => { mount.innerHTML = skeleton('social-card', 6); });
@@ -402,10 +401,10 @@ function setCardGrid(heading, items) {
 function setTrending(items) {
   const mount = document.querySelector('.trending-row.in-column');
   if (!mount || !items?.length) return;
-  mount.innerHTML = items.slice(0, 4).map((item) => `
+  mount.innerHTML = items.slice(0, 6).map((item) => `
     <article class="cluster-card story-clickable" role="link" tabindex="0" data-story-id="${escapeHtml(item.id)}" data-category="${escapeHtml(item.category?.slug || '')}" data-district="${escapeHtml(item.district?.slug || '')}">
       <div class="trend-thumb ${imageClass(item)}"${imageStyle(item)}></div>
-      <span class="cat-tag">${escapeHtml(item.category?.name || 'News')}</span>
+      <span class="cat-tag">${escapeHtml(item.trendingLabel || item.category?.name || 'News')}</span>
       <h3>${escapeHtml(item.title)}</h3>
       <div class="cmeta">${sourceBadges(item)}<span>${escapeHtml(item.source?.name || '256 Newsroom')}</span></div>
       <div class="trend-tag">updated ${formatTime(item.publishedAt)}</div>
@@ -415,15 +414,21 @@ function setTrending(items) {
   loadVisibleImages();
 }
 
-function startTrendingRotation(items = []) {
-  const stories = items.filter(Boolean);
-  if (trendingRotationTimer) clearInterval(trendingRotationTimer);
-  if (stories.length <= 4) return;
-  let index = 0;
-  trendingRotationTimer = setInterval(() => {
-    index = (index + 4) % stories.length;
-    setTrending(rotatedWindow(stories, index, 4));
-  }, 60000);
+function trendingByTopic({ national = [], international = [], district = [], health = [], education = [], justice = [] }) {
+  const used = new Set();
+  return [
+    ['National', national],
+    ['International', international],
+    ['District', district],
+    ['Health', health],
+    ['Education', education],
+    ['Crime & Justice', justice],
+  ].flatMap(([trendingLabel, items]) => {
+    const item = items.find((candidate) => candidate?.id && !used.has(String(candidate.id)));
+    if (!item) return [];
+    used.add(String(item.id));
+    return [{ ...item, trendingLabel }];
+  });
 }
 
 function startCarouselRotation() {
@@ -445,10 +450,14 @@ function startCarouselRotation() {
 function startHeadlineRefresh() {
   if (headlineRefreshTimer) clearInterval(headlineRefreshTimer);
   headlineRefreshTimer = setInterval(async () => {
-    const [national, world, sports] = await Promise.all([
+    const [national, world, sports, district, health, education, justice] = await Promise.all([
       safeJson('/news/category/national?limit=50'),
       safeJson('/news/category/world?limit=50'),
       safeJson('/news/category/sports?limit=50'),
+      safeJson('/news/districts/latest?limit=12'),
+      safeJson('/news/category/health?limit=12'),
+      safeJson('/news/category/education?limit=12'),
+      safeJson('/news/category/crime-justice?limit=12'),
     ]);
     const sections = [
       ['National Headlines', national.items || []],
@@ -459,6 +468,9 @@ function startHeadlineRefresh() {
       rememberStories(items);
       setCardGrid(heading, items);
     });
+    const trending = trendingByTopic({ national:national.items, international:world.items, district:district.items, health:health.items, education:education.items, justice:justice.items });
+    rememberStories(trending);
+    setTrending(trending);
   }, 120000);
 }
 
@@ -734,13 +746,16 @@ async function bootLiveNews() {
   setupStoryNavigation();
   setMastheadDate();
   try {
-    const [hero, top, latest, national, world, sports, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
+    const [hero, top, latest, national, world, sports, health, education, justice, districtNews, ecosystemNews, sources, ecosystem, journalists, readerProfile] = await Promise.all([
       safeJson('/news/hero?limit=12'),
       safeJson('/news/top?limit=12'),
       safeJson('/news/latest?limit=12'),
       safeJson('/news/category/national?limit=50'),
       safeJson('/news/category/world?limit=50'),
       safeJson('/news/category/sports?limit=50'),
+      safeJson('/news/category/health?limit=12'),
+      safeJson('/news/category/education?limit=12'),
+      safeJson('/news/category/crime-justice?limit=12'),
       safeJson('/news/districts/latest?limit=12'),
       safeJson('/news/ecosystem?limit=6'),
       safeJson('/news/sources/top?limit=50'),
@@ -759,14 +774,16 @@ async function bootLiveNews() {
       ...(national.items || []),
       ...(world.items || []),
       ...(sports.items || []),
+      ...(health.items || []),
+      ...(education.items || []),
+      ...(justice.items || []),
       ...districtStories,
       ...(ecosystemNews.items || []),
     ]);
 
     setTicker(topStories);
     setMastheadStatus((sources.items || []).length);
-    setTrending(rotatedWindow(topStories, 0, 4));
-    startTrendingRotation(topStories);
+    setTrending(trendingByTopic({ national:national.items, international:world.items, district:districtStories, health:health.items, education:education.items, justice:justice.items }));
     setHero(heroStories[0]);
     startHeroRotation(heroStories);
     setCardGrid('National Headlines', national.items || []);

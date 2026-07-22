@@ -244,7 +244,24 @@ app.get('/api/news/category/:category', async (req, res, next) => {
     const ugandaOnly = req.params.category === 'national'
       ? ` and coalesce(s.source_type, o.org_type, 'newsroom') in ('local_publisher','government_official','social_official')`
       : '';
-    const { rows } = await pool.query(`${articleSelect} and c.slug = $1${ugandaOnly} order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
+    const categoryMatch = req.params.category === 'crime-justice'
+      ? `and (
+          c.id in (
+            select id from categories
+            where slug = $1 or parent_category_id = (select id from categories where slug = $1)
+          )
+          or (
+            coalesce(s.source_type, o.org_type, 'newsroom') in ('local_publisher','government_official')
+            and lower(coalesce(a.title,'') || ' ' || coalesce(a.summary,'')) ~ '(court|police|crime|justice|arrest|charged|fraud|security|prison|bail|remand|theft|murder|robbery)'
+          )
+        )`
+      : `and c.id in (
+          select id from categories
+          where slug = $1 or parent_category_id = (select id from categories where slug = $1)
+        )`;
+    const { rows } = await pool.query(`${articleSelect}
+      ${categoryMatch}${ugandaOnly}
+      order by ${todayFirstOrder}, a.published_at desc nulls last limit $2`, [req.params.category, limit]);
     res.json({ items: normalizeRows(rows) });
   } catch (err) {
     next(err);
