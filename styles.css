@@ -236,9 +236,26 @@ input[name="cattab"], .toggle-input { display: none; }
 }
 .dot { animation: pulse 1.8s infinite; background: var(--red); border-radius: 50%; height: 6px; width: 6px; }
 @keyframes pulse { 50% { opacity: 0.3; } }
-.hero-headline { font-family: "DM Serif Display", serif; font-size: 38px; line-height: 1.12; margin-bottom: 12px; }
+.hero-headline {
+  color: #0a0b09;
+  font-family: "DM Serif Display", serif;
+  font-size: 38px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 14px;
+}
 .hero-headline a,.hero-excerpt a { color:inherit; display:block; }
 .hero-headline a:hover { color:var(--red); }
+.hero-excerpt,
+.hero-excerpt a {
+  color: #4a4740 !important;
+  font-family: "EB Garamond", Garamond, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.55;
+}
 .hero-img {
   align-items: end;
   background: linear-gradient(180deg, rgba(13, 15, 12, 0) 40%, rgba(13, 15, 12, 0.78) 100%), linear-gradient(135deg, #bbb390, #6d7968 55%, #544031);
