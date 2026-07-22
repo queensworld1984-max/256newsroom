@@ -48,7 +48,15 @@ server {
         try_files $uri =404;
     }
 
-    location / { try_files $uri $uri/ =404; }
+    location / { try_files $uri $uri/ @section_page; }
+    location @section_page {
+        proxy_pass http://127.0.0.1:5066;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
     location ~ /\. { deny all; access_log off; log_not_found off; }
 
     listen [::]:443 ssl;

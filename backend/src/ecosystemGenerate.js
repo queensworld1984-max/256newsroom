@@ -14,7 +14,7 @@ const PERMITTED_CONTENT_TYPES = [
   'Frequently Asked Question', 'Platform Overview',
 ];
 
-const PERMITTED_CATEGORIES = ['business', 'ecosystem', 'education', 'health', 'national', 'politics', 'sports', 'technology', 'world', 'district'];
+const PERMITTED_CATEGORIES = ['business', 'ecosystem', 'education', 'health', 'national', 'politics', 'sports', 'consumer-technology', 'world'];
 
 const GENERATION_SYSTEM_PROMPT = `You are the service-news writer for 256 Newsroom, preparing a substantial, persuasive but factual article about one platform in the 256 Ecosystem. The article should market the service by clearly explaining its usefulness, while maintaining newsroom accuracy. You are given trusted platform identity plus extracted information from the platform's official public website.
 

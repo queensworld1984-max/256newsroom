@@ -53,35 +53,11 @@
   <input type="checkbox" id="more-toggle" class="toggle-input">
   <input type="checkbox" id="citizen-modal-toggle" class="toggle-input">
 
-  <nav class="nav-strip" aria-label="Primary navigation">
-    <label for="tab-home">Home</label>
-    <label for="tab-uganda">Uganda</label>
-    <label for="tab-politics">Politics</label>
-    <label for="tab-business">Business</label>
-    <label for="tab-district">District News</label>
-    <label for="tab-sports">Sports</label>
-    <label for="tab-world">World</label>
-    <label for="tab-ecosystem" class="eco-label">256 AI Systems</label>
-    <label for="more-toggle" class="more-label">More ▾</label>
+  <nav class="taxonomy-nav" aria-label="Primary navigation">
+    <div class="taxonomy-mobile-bar"><button id="taxonomy-menu-button" aria-expanded="false" aria-controls="taxonomy-mobile-menu">Menu</button><a href="/" class="taxonomy-mobile-logo">256 Newsroom</a><button class="taxonomy-search-button" aria-label="Open search">Search</button></div>
+    <div class="taxonomy-desktop"><a href="/" class="taxonomy-home">Home</a><a href="/latest">Latest</a><div id="taxonomy-desktop-items" class="taxonomy-desktop-items"></div><div class="taxonomy-overflow"><button id="taxonomy-more-button" aria-expanded="false">More <span aria-hidden="true">▾</span></button><div id="taxonomy-overflow-items" class="taxonomy-overflow-menu" hidden></div></div><a href="/districts">Districts <span aria-hidden="true">▾</span></a><button class="taxonomy-search-button" aria-label="Open search">Search</button></div>
+    <div id="taxonomy-mobile-backdrop" class="taxonomy-mobile-backdrop" hidden></div><div id="taxonomy-mobile-menu" class="taxonomy-mobile-menu" hidden aria-label="News sections"><div class="taxonomy-mobile-head"><strong>Sections</strong><button id="taxonomy-menu-close" aria-label="Close menu">×</button></div><a href="/">Home</a><a href="/latest">Latest</a><div id="taxonomy-mobile-items"></div><a href="/districts">Districts</a></div>
   </nav>
-
-  <div class="more-dropdown">
-    <div class="more-dropdown-inner">
-      <a href="/#home" data-tab-link="home">Breaking</a>
-      <a href="/?search=East%20Africa">East Africa</a>
-      <a href="/?search=Africa">Africa</a>
-      <a href="/?search=Technology">Technology</a>
-      <a href="/?search=Health">Health</a>
-      <a href="/?search=Agriculture">Agriculture</a>
-      <a href="/?search=Education">Education</a>
-      <a href="/?search=Courts">Courts</a>
-      <a href="/?search=Entertainment">Entertainment</a>
-      <a href="/?search=Opinion">Opinion</a>
-      <a href="/?search=Investigation">Investigations</a>
-      <a href="/?search=Fact%20Check">Fact Check</a>
-      <a href="/?search=Video">Video</a>
-    </div>
-  </div>
 
   <main class="panels">
     <section class="panel" id="panel-home">
@@ -265,6 +241,7 @@
   </div>
 
   <script src="main.js?v=20260717-links"></script>
+  <script src="taxonomy-nav.js?v=20260722" defer></script>
   <script src="live.js?v=20260722-auto-news-rails"></script>
 </body>
 </html>

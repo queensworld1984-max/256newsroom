@@ -19,6 +19,7 @@ const rssRoutes = require('./routes/rss');
 const ecosystemAdminRoutes = require('./routes/ecosystemAdmin');
 const platformNewsRoutes = require('./routes/platformNews');
 const storyPageRoutes = require('./routes/storyPages');
+const sectionPageRoutes = require('./routes/sectionPages');
 const { runEcosystemAutomationCycle } = require('./ecosystemScheduler');
 const { generateStorySummary, generatePendingStorySummaries } = require('./storySummaries');
 
@@ -62,6 +63,7 @@ app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);
 app.use('/api/platforms', platformNewsRoutes);
 app.use(storyPageRoutes);
+app.use(sectionPageRoutes);
 
 // Accepts either the legacy static admin token (existing ops/cron callers) or a
 // logged-in super_admin/newsroom_admin session — the static-token path is kept only

@@ -79,7 +79,7 @@ function renderArticleBody(body) {
 
 router.get('/sitemap.xml', async (_req, res, next) => {
   try {
-    const { rows } = await pool.query(`
+    const [{ rows }, { rows: categoryRows }, { rows: districtRows }] = await Promise.all([pool.query(`
       select a.internal_url, a.updated_at
       from articles a
       where a.hidden = false and a.status = 'published'
@@ -88,8 +88,9 @@ router.get('/sitemap.xml', async (_req, res, next) => {
         and array_length(regexp_split_to_array(trim(coalesce(a.seo_summary, a.summary, '')), '\\s+'), 1) between 200 and 300
       order by a.updated_at desc
       limit 50000
-    `);
-    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${SITE}/</loc></url>${rows.map((row) => `\n  <url><loc>${SITE}${escapeHtml(row.internal_url)}</loc><lastmod>${new Date(row.updated_at).toISOString()}</lastmod></url>`).join('')}\n</urlset>`);
+    `), pool.query(`select slug from categories where is_active and (navbar_visibility or parent_category_id is not null)`), pool.query('select slug from districts')]);
+    const taxonomyUrls = ['/latest', ...categoryRows.map(r => `/${r.slug}`), '/districts', ...districtRows.map(r => `/districts/${r.slug}`)];
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${SITE}/</loc></url>${taxonomyUrls.map(url => `\n  <url><loc>${SITE}${escapeHtml(url)}</loc></url>`).join('')}${rows.map((row) => `\n  <url><loc>${SITE}${escapeHtml(row.internal_url)}</loc><lastmod>${new Date(row.updated_at).toISOString()}</lastmod></url>`).join('')}\n</urlset>`);
   } catch (err) {
     next(err);
   }

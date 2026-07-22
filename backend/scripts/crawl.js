@@ -45,7 +45,7 @@ const categoryKeywords = [
   ['sports', ['cranes', 'football', 'sport', 'league', 'kcca fc', 'netball', 'marathon', 'fufa']],
   ['health', ['health', 'hospital', 'malaria', 'doctor', 'clinic', 'medicine']],
   ['education', ['school', 'education', 'university', 'student', 'makerere']],
-  ['technology', ['technology', 'digital', 'cyber', 'artificial intelligence', 'software']],
+  ['consumer-technology', ['technology', 'digital', 'cyber', 'artificial intelligence', 'software']],
 ];
 
 const ecosystemKeywords = [
@@ -145,7 +145,7 @@ function classify(title, summary, url = '', itemCategories = [], source = {}) {
   if (/\/(politics|elections?)\//.test(urlText) || /\b(politics|elections?)\b/.test(categoryText)) return 'politics';
   if (/\/(health|medical)\//.test(urlText) || /\bhealth\b/.test(categoryText)) return 'health';
   if (/\/education\//.test(urlText) || /\beducation\b/.test(categoryText)) return 'education';
-  if (/\/(technology|tech)\//.test(urlText) || /\b(technology|tech)\b/.test(categoryText)) return 'technology';
+  if (/\/(technology|tech)\//.test(urlText) || /\b(technology|tech)\b/.test(categoryText)) return 'consumer-technology';
   if (/\/(world|international|africa|east-africa)\//.test(urlText) || /\b(world|international|africa|east africa)\b/.test(categoryText)) return 'world';
 
   for (const [slug, keywords] of categoryKeywords) {
@@ -416,7 +416,7 @@ const NEWSAPI_CATEGORIES = [
   ['general', 'world'],
   ['health', 'health'],
   ['sports', 'sports'],
-  ['technology', 'technology'],
+  ['technology', 'consumer-technology'],
 ];
 
 async function upsertAggregatedSource(name, homepageUrl, defaultCategoryId, sourceType) {
@@ -557,7 +557,7 @@ async function crawlNewsApiSources() {
 
 const GOOGLE_NEWS_TOPICS = [
   ['business', 'business'],
-  ['technology', 'technology'],
+  ['technology', 'consumer-technology'],
   ['sports', 'sports'],
   ['health', 'health'],
   ['world', 'world'],
