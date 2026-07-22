@@ -67,7 +67,7 @@ router.get('/publisher/:slug', async (req, res, next) => {
           <div><strong>${escapeHtml(s.title)}</strong>
           <small>${escapeHtml(formatDate(s.published_at))}</small>
           <p>${escapeHtml(String(s.summary || '').slice(0, 160))}</p>
-          <span class="pub-story-engage">Open article to like, agree &amp; comment</span></div>
+          <span class="pub-story-engage">Open article to debate (agree / disagree + why)</span></div>
         </a>`;
       }).join('')
       : '<p class="empty-note">No published stories yet.</p>';
@@ -98,12 +98,12 @@ router.get('/publisher/:slug', async (req, res, next) => {
         ${org.website_url ? `<a class="eng-btn eng-secondary" href="${safeUrl(org.website_url)}" target="_blank" rel="noopener">Website</a>` : ''}
         <a class="eng-btn eng-secondary" href="/dashboard/login.html?next=${encodeURIComponent(`/publisher/${org.slug}`)}">Journalist / publisher login</a>
       </div>
-      <p class="eng-note">You can follow this publisher here. To like, agree with, or comment on a story, open that article — reactions are not posted on the publisher profile.</p>
+      <p class="eng-note">You can follow this publisher here. Debate (agree / disagree with reasons) lives on each article page — not on this profile.</p>
     </div>
   </header>
   <section>
     <h2>Stories from this publisher</h2>
-    <p class="eng-note">Like, agree, and comment live on each article page, not on this profile.</p>
+    <p class="eng-note">Open a story to agree or disagree with a written reason. Debate is per article only.</p>
     <div class="pub-story-list">${storyCards}</div>
   </section>
 </main>

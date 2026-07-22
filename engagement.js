@@ -1,9 +1,10 @@
 /**
- * 256 Newsroom article engagement — like, agree, and comment on a single article.
- * Follow publisher lives only on the publisher profile page (not mixed with article comments).
- * Actions are restricted to logged-in registered journalists/publishers (server-enforced).
+ * 256 Newsroom article debate — like, agree/disagree with reasons, comments.
+ * Agree and Disagree both require a written explanation (per article only).
  */
 (function () {
+  const REASON_MIN = 15;
+
   const api = async (path, options = {}) => {
     const res = await fetch(`/api/engagement${path}`, {
       credentials: 'same-origin',
@@ -34,7 +35,7 @@
       return null;
     }
     if (!me.canEngage) {
-      alert('Only registered 256 Newsroom journalists and publishers can like, agree with, or comment on an article.');
+      alert('Only registered 256 Newsroom journalists and publishers can debate or comment on an article.');
       return null;
     }
     return me;
@@ -55,50 +56,103 @@
     }
   }
 
-  /**
-   * Article-only engagement UI. Like / Agree / Comment are scoped to this articleId.
-   * Publisher follow is not shown here — use the publisher profile page.
-   */
   function paintArticleBar(root, data) {
     const eng = data.engagement || {};
     const can = data.canEngage;
-    const articleTitle = data.title ? escapeHtml(data.title) : 'this article';
+    const myStance = eng.myStance || null;
+    const myReason = eng.myReason || '';
 
     root.innerHTML = `
       <div class="eng-article-head">
-        <p class="eng-kicker">On this article only</p>
-        <h2 class="eng-article-title">Like, agree, or comment</h2>
-        <p class="eng-note eng-scope-note">Your reaction applies to this story alone — not the publisher’s profile.</p>
+        <p class="eng-kicker">Debate on this article</p>
+        <h2 class="eng-article-title">Like, agree, disagree — then explain why</h2>
+        <p class="eng-note eng-scope-note">Agree and Disagree require a short reason. All positions stay on this story only.</p>
       </div>
       <div class="eng-actions" role="group" aria-label="Reactions for this article">
         <button type="button" class="eng-chip${eng.liked ? ' is-on' : ''}" data-action="like" ${can ? '' : 'data-need-auth="1"'} title="Like this article">
           ♥ Like <b data-count="likes">${eng.likes || 0}</b>
         </button>
-        <button type="button" class="eng-chip${eng.upvoted ? ' is-on' : ''}" data-action="agree" ${can ? '' : 'data-need-auth="1"'} title="Agree with this article">
-          ✓ Agree <b data-count="agrees">${eng.upvotes || 0}</b>
+        <button type="button" class="eng-chip eng-chip-agree${myStance === 'agree' ? ' is-on' : ''}" data-action="open-stance" data-stance="agree" ${can ? '' : 'data-need-auth="1"'} title="Agree and explain why">
+          ✓ Agree <b data-count="agrees">${eng.agrees || eng.upvotes || 0}</b>
+        </button>
+        <button type="button" class="eng-chip eng-chip-disagree${myStance === 'disagree' ? ' is-on' : ''}" data-action="open-stance" data-stance="disagree" ${can ? '' : 'data-need-auth="1"'} title="Disagree and explain why">
+          ✗ Disagree <b data-count="disagrees">${eng.disagrees || 0}</b>
         </button>
         <button type="button" class="eng-chip" data-action="focus-comment" ${can ? '' : 'data-need-auth="1"'} title="Comment on this article">
           💬 Comment <b data-count="comments">${eng.comments || 0}</b>
         </button>
-        ${!data.authenticated ? `<a class="eng-btn eng-secondary" href="${loginNext()}">Sign in to react</a>` : ''}
+        ${!data.authenticated ? `<a class="eng-btn eng-secondary" href="${loginNext()}">Sign in to debate</a>` : ''}
       </div>
+
+      <form class="eng-stance-form" data-stance-form hidden>
+        <p class="eng-stance-prompt" data-stance-prompt>Why do you agree?</p>
+        <textarea name="reason" rows="4" maxlength="2000" minlength="${REASON_MIN}"
+          placeholder="Write at least ${REASON_MIN} characters explaining your position…" required></textarea>
+        <div class="eng-stance-actions">
+          <button type="submit" class="eng-btn" data-stance-submit>Post my position</button>
+          <button type="button" class="eng-btn eng-secondary" data-action="cancel-stance">Cancel</button>
+          ${myStance ? `<button type="button" class="eng-btn eng-secondary" data-action="withdraw-stance">Withdraw my position</button>` : ''}
+        </div>
+        <p class="eng-note eng-stance-status" data-stance-status></p>
+      </form>
+
+      <div class="eng-debate" id="eng-debate">
+        <h3 class="eng-comments-title">Debate board</h3>
+        <p class="eng-note">Arguments for and against this article. Each entry includes the writer’s reason.</p>
+        <div class="eng-debate-grid">
+          <section class="eng-debate-col eng-debate-agree" aria-label="Agree arguments">
+            <h4>✓ Agree <span data-count="agrees-list">${eng.agrees || 0}</span></h4>
+            <div data-debate-agree>Loading…</div>
+          </section>
+          <section class="eng-debate-col eng-debate-disagree" aria-label="Disagree arguments">
+            <h4>✗ Disagree <span data-count="disagrees-list">${eng.disagrees || 0}</span></h4>
+            <div data-debate-disagree>Loading…</div>
+          </section>
+        </div>
+      </div>
+
       <div class="eng-comments" id="eng-comments">
-        <h3 class="eng-comments-title">Comments on this article</h3>
-        <p class="eng-note">Each comment is stored against this story only.</p>
+        <h3 class="eng-comments-title">Further comments</h3>
+        <p class="eng-note">Use this for replies and follow-up discussion on this article.</p>
         <div class="eng-comment-list" data-comment-list>Loading comments…</div>
         <form class="eng-comment-form" data-comment-form ${can ? '' : 'hidden'}>
-          <label class="eng-sr-only" for="eng-comment-body">Comment on ${articleTitle}</label>
-          <textarea id="eng-comment-body" name="body" rows="3" maxlength="2000" placeholder="Write a comment on this article…" required></textarea>
-          <button type="submit" class="eng-btn">Post comment on this article</button>
+          <textarea name="body" rows="3" maxlength="2000" placeholder="Add a comment on this article…" required></textarea>
+          <button type="submit" class="eng-btn">Post comment</button>
         </form>
-        ${can ? '' : `<p class="eng-note">Only registered 256 Newsroom journalists and publishers can comment on articles. <a href="${loginNext()}">Sign in</a></p>`}
+        ${can ? '' : `<p class="eng-note">Only registered 256 Newsroom journalists and publishers can debate. <a href="${loginNext()}">Sign in</a></p>`}
       </div>
     `;
+
+    // Prefill reason if user already has a stance
+    if (myReason) {
+      const ta = root.querySelector('[data-stance-form] textarea');
+      if (ta) ta.value = myReason;
+    }
+  }
+
+  function renderDebateColumn(el, items, emptyLabel) {
+    if (!el) return;
+    if (!items.length) {
+      el.innerHTML = `<p class="eng-empty">${escapeHtml(emptyLabel)}</p>`;
+      return;
+    }
+    el.innerHTML = items.map((s) => `
+      <article class="eng-stance eng-stance-${escapeHtml(s.stance)}" data-stance-id="${s.id}">
+        <header>
+          ${s.author?.profileUrl
+            ? `<a href="${escapeHtml(s.author.profileUrl)}"><strong>${escapeHtml(s.author.name)}</strong></a>`
+            : `<strong>${escapeHtml(s.author?.name || 'Member')}</strong>`}
+          <time>${escapeHtml(formatWhen(s.updatedAt || s.createdAt))}</time>
+        </header>
+        <p class="eng-stance-reason">${escapeHtml(s.reason)}</p>
+      </article>
+    `).join('');
   }
 
   function renderComments(listEl, items) {
+    if (!listEl) return;
     if (!items.length) {
-      listEl.innerHTML = '<p class="eng-empty">No comments on this article yet. Be the first to comment here.</p>';
+      listEl.innerHTML = '<p class="eng-empty">No further comments yet.</p>';
       return;
     }
     listEl.innerHTML = items.map((c) => `
@@ -115,16 +169,68 @@
   }
 
   function updateCounts(root, eng) {
-    const likes = root.querySelector('[data-count="likes"]');
-    const agrees = root.querySelector('[data-count="agrees"]');
-    const com = root.querySelector('[data-count="comments"]');
-    if (likes) likes.textContent = eng.likes || 0;
-    if (agrees) agrees.textContent = eng.upvotes || 0;
-    if (com) com.textContent = eng.comments || 0;
+    const set = (sel, val) => {
+      root.querySelectorAll(sel).forEach((n) => { n.textContent = val; });
+    };
+    set('[data-count="likes"]', eng.likes || 0);
+    set('[data-count="agrees"]', eng.agrees || eng.upvotes || 0);
+    set('[data-count="agrees-list"]', eng.agrees || eng.upvotes || 0);
+    set('[data-count="disagrees"]', eng.disagrees || 0);
+    set('[data-count="disagrees-list"]', eng.disagrees || 0);
+    set('[data-count="comments"]', eng.comments || 0);
+
     const likeBtn = root.querySelector('[data-action="like"]');
-    const agreeBtn = root.querySelector('[data-action="agree"]');
     if (likeBtn) likeBtn.classList.toggle('is-on', Boolean(eng.liked));
-    if (agreeBtn) agreeBtn.classList.toggle('is-on', Boolean(eng.upvoted));
+    const agreeBtn = root.querySelector('[data-stance="agree"]');
+    const disagreeBtn = root.querySelector('[data-stance="disagree"]');
+    if (agreeBtn) agreeBtn.classList.toggle('is-on', eng.myStance === 'agree');
+    if (disagreeBtn) disagreeBtn.classList.toggle('is-on', eng.myStance === 'disagree');
+  }
+
+  function openStanceForm(root, stance, eng) {
+    const form = root.querySelector('[data-stance-form]');
+    if (!form) return;
+    form.hidden = false;
+    form.dataset.stance = stance;
+    const prompt = form.querySelector('[data-stance-prompt]');
+    const submit = form.querySelector('[data-stance-submit]');
+    const ta = form.querySelector('textarea');
+    const status = form.querySelector('[data-stance-status]');
+    if (prompt) {
+      prompt.textContent = stance === 'disagree'
+        ? 'Why do you disagree with this article?'
+        : 'Why do you agree with this article?';
+      prompt.className = `eng-stance-prompt eng-stance-prompt-${stance}`;
+    }
+    if (submit) {
+      submit.textContent = stance === 'disagree' ? 'Post disagree + reason' : 'Post agree + reason';
+    }
+    if (ta) {
+      if (eng?.myStance === stance && eng?.myReason) ta.value = eng.myReason;
+      else if (eng?.myStance && eng?.myStance !== stance) {
+        // Switching side — clear so they write a new reason
+        ta.value = '';
+      }
+      ta.focus();
+    }
+    if (status) status.textContent = `Your reason must be at least ${REASON_MIN} characters.`;
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function refreshDebate(root, articleId) {
+    const debate = await api(`/articles/${articleId}/debate`);
+    renderDebateColumn(
+      root.querySelector('[data-debate-agree]'),
+      debate.agrees || [],
+      'No agree arguments yet. Be the first to agree and explain why.',
+    );
+    renderDebateColumn(
+      root.querySelector('[data-debate-disagree]'),
+      debate.disagrees || [],
+      'No disagree arguments yet. Be the first to disagree and explain why.',
+    );
+    if (debate.engagement) updateCounts(root, debate.engagement);
+    return debate;
   }
 
   async function initArticle() {
@@ -133,19 +239,22 @@
     const articleId = root.getAttribute('data-engagement-article-id');
     if (!articleId) return;
 
-    // Guard: never mount article reactions on a publisher profile shell.
     if (document.querySelector('[data-publisher-org-id]') && !root.closest('article')) {
       root.innerHTML = '';
       return;
     }
 
+    let engState = {};
+
     try {
       const data = await api(`/articles/${articleId}`);
+      engState = data.engagement || {};
       paintArticleBar(root, data);
 
+      await refreshDebate(root, articleId);
+
       const comments = await api(`/articles/${articleId}/comments`);
-      const listEl = root.querySelector('[data-comment-list]');
-      if (listEl) renderComments(listEl, comments.items || []);
+      renderComments(root.querySelector('[data-comment-list]'), comments.items || []);
 
       root.addEventListener('click', async (e) => {
         const btn = e.target.closest('[data-action]');
@@ -156,12 +265,28 @@
           if (action === 'like') {
             if (!(await ensureCanEngage())) return;
             const r = await api(`/articles/${articleId}/like`, { method: 'POST', body: {} });
-            updateCounts(root, r.engagement);
-          } else if (action === 'agree') {
+            engState = r.engagement || engState;
+            updateCounts(root, engState);
+          } else if (action === 'open-stance') {
             if (!(await ensureCanEngage())) return;
-            // Server endpoint remains /upvote; UI label is "Agree".
-            const r = await api(`/articles/${articleId}/upvote`, { method: 'POST', body: {} });
-            updateCounts(root, r.engagement);
+            const stance = btn.getAttribute('data-stance') || 'agree';
+            openStanceForm(root, stance, engState);
+          } else if (action === 'cancel-stance') {
+            const form = root.querySelector('[data-stance-form]');
+            if (form) form.hidden = true;
+          } else if (action === 'withdraw-stance') {
+            if (!(await ensureCanEngage())) return;
+            if (!confirm('Withdraw your agree/disagree position on this article?')) return;
+            const r = await api(`/articles/${articleId}/debate`, { method: 'DELETE' });
+            engState = r.engagement || {};
+            updateCounts(root, engState);
+            await refreshDebate(root, articleId);
+            const form = root.querySelector('[data-stance-form]');
+            if (form) {
+              form.hidden = true;
+              const ta = form.querySelector('textarea');
+              if (ta) ta.value = '';
+            }
           } else if (action === 'focus-comment') {
             if (btn.getAttribute('data-need-auth') === '1' && !(await ensureCanEngage())) return;
             const form = root.querySelector('[data-comment-form]');
@@ -177,41 +302,98 @@
         }
       });
 
-      const form = root.querySelector('[data-comment-form]');
-      if (form) {
-        form.addEventListener('submit', async (e) => {
+      const stanceForm = root.querySelector('[data-stance-form]');
+      if (stanceForm) {
+        stanceForm.addEventListener('submit', async (e) => {
           e.preventDefault();
           if (!(await ensureCanEngage())) return;
-          const ta = form.querySelector('textarea');
+          const stance = stanceForm.dataset.stance || 'agree';
+          const ta = stanceForm.querySelector('textarea');
+          const status = stanceForm.querySelector('[data-stance-status]');
+          const reason = (ta?.value || '').trim();
+          if (reason.length < REASON_MIN) {
+            if (status) {
+              status.textContent = `Please write at least ${REASON_MIN} characters explaining why.`;
+              status.classList.add('is-error');
+            }
+            ta?.focus();
+            return;
+          }
+          const submitBtn = stanceForm.querySelector('[data-stance-submit]');
+          if (submitBtn) submitBtn.disabled = true;
+          try {
+            const r = await api(`/articles/${articleId}/debate`, {
+              method: 'POST',
+              body: { stance, reason },
+            });
+            engState = r.engagement || engState;
+            updateCounts(root, engState);
+            if (r.debate) {
+              renderDebateColumn(
+                root.querySelector('[data-debate-agree]'),
+                (r.debate || []).filter((x) => x.stance === 'agree'),
+                'No agree arguments yet.',
+              );
+              renderDebateColumn(
+                root.querySelector('[data-debate-disagree]'),
+                (r.debate || []).filter((x) => x.stance === 'disagree'),
+                'No disagree arguments yet.',
+              );
+            } else {
+              await refreshDebate(root, articleId);
+            }
+            if (status) {
+              status.classList.remove('is-error');
+              status.textContent = stance === 'disagree'
+                ? 'Disagree posted with your reason. It’s on the debate board below.'
+                : 'Agree posted with your reason. It’s on the debate board below.';
+            }
+            stanceForm.hidden = true;
+          } catch (err) {
+            if (err.status === 401) location.href = loginNext();
+            else if (status) {
+              status.textContent = err.message || 'Could not post position.';
+              status.classList.add('is-error');
+            } else alert(err.message || 'Could not post position.');
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        });
+      }
+
+      const commentForm = root.querySelector('[data-comment-form]');
+      if (commentForm) {
+        commentForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if (!(await ensureCanEngage())) return;
+          const ta = commentForm.querySelector('textarea');
           const body = (ta?.value || '').trim();
           if (body.length < 2) return;
           try {
             const r = await api(`/articles/${articleId}/comments`, { method: 'POST', body: { body } });
             ta.value = '';
-            if (r.engagement) updateCounts(root, r.engagement);
+            if (r.engagement) {
+              engState = r.engagement;
+              updateCounts(root, engState);
+            }
             const list = await api(`/articles/${articleId}/comments`);
-            const listEl2 = root.querySelector('[data-comment-list]');
-            if (listEl2) renderComments(listEl2, list.items || []);
+            renderComments(root.querySelector('[data-comment-list]'), list.items || []);
           } catch (err) {
             if (err.status === 401) location.href = loginNext();
-            else alert(err.message || 'Could not post comment on this article.');
+            else alert(err.message || 'Could not post comment.');
           }
         });
       }
     } catch (err) {
-      root.innerHTML = `<p class="eng-note">Article engagement unavailable (${escapeHtml(err.message || 'error')}).</p>`;
+      root.innerHTML = `<p class="eng-note">Article debate unavailable (${escapeHtml(err.message || 'error')}).</p>`;
     }
   }
 
-  /** Publisher profile: follow only — never like/agree/comment on the profile. */
   async function initPublisherPage() {
     const shell = document.querySelector('[data-publisher-org-id]');
     if (!shell) return;
 
-    // Strip any accidental article engagement mounts on the profile page.
-    shell.querySelectorAll('[data-engagement-article-id]').forEach((node) => {
-      node.remove();
-    });
+    shell.querySelectorAll('[data-engagement-article-id]').forEach((node) => node.remove());
 
     const orgId = Number(shell.getAttribute('data-publisher-org-id'));
     const slug = shell.getAttribute('data-publisher-slug');

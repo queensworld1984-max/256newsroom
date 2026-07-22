@@ -196,8 +196,8 @@ router.get('/news/:slug', async (req, res, next) => {
 <meta property="og:url" content="${safeUrl(internalCanonical)}">${imageUrl ? `<meta property="og:image" content="${safeUrl(imageUrl)}">` : ''}
 <meta property="article:published_time" content="${escapeHtml(story.published_at || '')}"><meta property="article:modified_time" content="${escapeHtml(story.updated_at || '')}">
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
-<link rel="stylesheet" href="/story.css?v=20260722-one-byline">
-<link rel="stylesheet" href="/engagement.css?v=20260722-one-byline"></head>
+<link rel="stylesheet" href="/story.css?v=20260722-debate">
+<link rel="stylesheet" href="/engagement.css?v=20260722-debate"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
 <main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
@@ -218,13 +218,13 @@ ${videoBlock}
 ${audioBlock}
 <section class="summary"><h2>${story.body ? 'Full report' : 'What the report says'}</h2>${story.body ? renderArticleBody(story.body) : renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
 ${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>` : ''}
-<div class="eng-panel" data-engagement-article-id="${story.id}" aria-label="Like, agree, and comment on this article">
-  <p class="eng-note">Loading reactions for this article…</p>
+<div class="eng-panel" data-engagement-article-id="${story.id}" aria-label="Debate this article — agree, disagree, and explain why">
+  <p class="eng-note">Loading debate for this article…</p>
 </div>
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
 </article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer>
-<script src="/engagement.js?v=20260722-one-byline" defer></script>
+<script src="/engagement.js?v=20260722-debate" defer></script>
 </body></html>`);
   } catch (err) {
     next(err);
