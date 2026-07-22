@@ -102,20 +102,29 @@ function imageClass(item) {
   return item.district?.slug || item.category?.slug || 'trade';
 }
 
+const STORY_IMAGE_FALLBACK = '/assets/images/newsroom-fallback.png';
+
 function imageStyle(item) {
   const raw = String(item?.imageUrl ?? '').trim();
-  if (!/^https?:\/\//i.test(raw)) return '';
-  const cssSafe = raw.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
+  const imageUrl = /^https?:\/\//i.test(raw) ? raw : STORY_IMAGE_FALLBACK;
+  const cssSafe = imageUrl.replace(/\\/g, '%5C').replace(/'/g, '%27').replace(/"/g, '&quot;');
   return ` data-bg-image="${cssSafe}"`;
 }
 
 function loadBackgroundImage(element) {
   const url = element?.dataset.bgImage;
   if (!url) return;
-  element.style.backgroundImage = `linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${url}')`;
-  element.style.backgroundSize = 'cover';
-  element.style.backgroundPosition = 'center';
   delete element.dataset.bgImage;
+  const paint = (imageUrl) => {
+    const safeUrl = String(imageUrl).replace(/\\/g, '%5C').replace(/'/g, '%27');
+    element.style.backgroundImage = `linear-gradient(180deg, rgba(13,15,12,0) 45%, rgba(13,15,12,0.45) 100%), url('${safeUrl}')`;
+    element.style.backgroundSize = 'cover';
+    element.style.backgroundPosition = 'center';
+  };
+  const image = new Image();
+  image.onload = () => paint(url);
+  image.onerror = () => paint(STORY_IMAGE_FALLBACK);
+  image.src = url;
 }
 
 let backgroundImageObserver = null;
