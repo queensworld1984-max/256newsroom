@@ -412,6 +412,26 @@ function buildWorkflowCard(pageWrap, ctx, story) {
     actions.appendChild(withdrawBtn);
   }
 
+  // Platform admins can permanently delete any story from the editor.
+  if (ctx.isGlobalAdmin) {
+    const delBtn = el('button', {
+      class: 'danger',
+      text: 'Delete permanently',
+      onclick: async () => {
+        if (!confirm(`Permanently delete this story?\n\n#${story.id}\n${story.title || ''}`)) return;
+        if (prompt('Type DELETE to confirm:') !== 'DELETE') return;
+        try {
+          await api.del(`/admin/people/stories/${story.id}`);
+          toast(pageWrap, 'Story deleted.', 'success');
+          setTimeout(() => { window.location.hash = ctx.mode === 'admin' ? '#/admin/stories' : '#/stories'; }, 600);
+        } catch (err) {
+          toast(pageWrap, err instanceof ApiError ? err.message : 'Could not delete story.');
+        }
+      },
+    });
+    actions.appendChild(delBtn);
+  }
+
   card.appendChild(actions);
 
   if (story.status === 'scheduled' && story.scheduled_publish_at) {

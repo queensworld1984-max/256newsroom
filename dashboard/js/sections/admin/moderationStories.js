@@ -12,7 +12,7 @@ export async function render(container, _ctx, query = {}) {
   ]));
   wrap.appendChild(el('p', {
     style: 'margin:0 0 12px;color:var(--grey);font-size:13px;',
-    text: 'All publisher-authored drafts and pending reviews across the platform. Force-publish puts a story live immediately (independent byline if the org is still unverified).',
+    text: 'All publisher-authored stories across the platform. Force-publish goes live immediately. Delete removes the story permanently (or archive/hide with Soft delete).',
   }));
 
   const filters = el('div', { class: 'dash-actions', style: 'margin-bottom:16px;' });
@@ -37,7 +37,9 @@ export async function render(container, _ctx, query = {}) {
     const tbody = el('tbody');
     for (const s of items) {
       const act = el('td');
-      if (s.status !== 'published') {
+      const rowActions = el('div', { class: 'dash-actions', style: 'margin:0;gap:6px;' });
+
+      if (s.status !== 'published' && s.status !== 'archived') {
         const btn = el('button', { class: 'small', text: 'Publish live' });
         btn.addEventListener('click', async () => {
           btn.disabled = true;
@@ -49,10 +51,50 @@ export async function render(container, _ctx, query = {}) {
             alert(err instanceof ApiError ? err.message : 'Failed.');
           }
         });
-        act.appendChild(btn);
-      } else {
-        act.appendChild(el('span', { class: 'badge badge-green', text: 'Live' }));
+        rowActions.appendChild(btn);
+      } else if (s.status === 'published') {
+        rowActions.appendChild(el('span', { class: 'badge badge-green', text: 'Live' }));
       }
+
+      const softBtn = el('button', { class: 'small secondary', text: 'Hide' });
+      softBtn.title = 'Archive and hide from public (soft delete)';
+      softBtn.addEventListener('click', async () => {
+        if (!confirm(`Hide/archive this story?\n\n#${s.id} ${s.title || '(untitled)'}`)) return;
+        softBtn.disabled = true;
+        try {
+          await api.del(`/admin/people/stories/${s.id}?soft=1`);
+          render(container, _ctx, query);
+        } catch (err) {
+          softBtn.disabled = false;
+          alert(err instanceof ApiError ? err.message : 'Could not hide story.');
+        }
+      });
+      rowActions.appendChild(softBtn);
+
+      const delBtn = el('button', { class: 'small danger', text: 'Delete' });
+      delBtn.title = 'Permanently delete this story';
+      delBtn.addEventListener('click', async () => {
+        const ok = confirm(
+          `Permanently DELETE this story? This cannot be undone.\n\n#${s.id}\n${s.title || '(untitled)'}`,
+        );
+        if (!ok) return;
+        const typed = prompt('Type DELETE to confirm permanent removal:');
+        if (typed !== 'DELETE') {
+          alert('Delete cancelled.');
+          return;
+        }
+        delBtn.disabled = true;
+        try {
+          await api.del(`/admin/people/stories/${s.id}`);
+          render(container, _ctx, query);
+        } catch (err) {
+          delBtn.disabled = false;
+          alert(err instanceof ApiError ? err.message : 'Could not delete story.');
+        }
+      });
+      rowActions.appendChild(delBtn);
+
+      act.appendChild(rowActions);
       tbody.appendChild(el('tr', {}, [
         el('td', { text: String(s.id) }),
         el('td', { text: s.title || '(untitled)' }),

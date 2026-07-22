@@ -131,6 +131,7 @@ export async function render(container) {
     const tbody = el('tbody');
     for (const s of pending) {
       const actions = el('td');
+      const row = el('div', { class: 'dash-actions', style: 'margin:0;gap:6px;' });
       const pubBtn = el('button', { class: 'small', text: 'Publish live' });
       pubBtn.addEventListener('click', async () => {
         pubBtn.disabled = true;
@@ -142,7 +143,22 @@ export async function render(container) {
           alert(err instanceof ApiError ? err.message : 'Publish failed.');
         }
       });
-      actions.appendChild(pubBtn);
+      row.appendChild(pubBtn);
+      const delBtn = el('button', { class: 'small danger', text: 'Delete' });
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`Permanently delete #${s.id}?\n${s.title || ''}`)) return;
+        if (prompt('Type DELETE to confirm:') !== 'DELETE') return;
+        delBtn.disabled = true;
+        try {
+          await api.del(`/admin/people/stories/${s.id}`);
+          render(container);
+        } catch (err) {
+          delBtn.disabled = false;
+          alert(err instanceof ApiError ? err.message : 'Delete failed.');
+        }
+      });
+      row.appendChild(delBtn);
+      actions.appendChild(row);
       tbody.appendChild(el('tr', {}, [
         el('td', { text: s.title || '(untitled)' }),
         el('td', { text: s.author_name || s.author_email || '—' }),

@@ -233,6 +233,75 @@ router.post('/stories/:id/publish', async (req, res, next) => {
   }
 });
 
+// DELETE /api/admin/people/stories/:id — permanent delete (admin only)
+// Query/body: ?soft=1 or { soft: true } to hide/archive instead of hard delete.
+router.delete('/stories/:id', async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid story id.' });
+    }
+
+    const soft = req.query.soft === '1'
+      || req.query.soft === 'true'
+      || req.body?.soft === true
+      || req.body?.soft === 'true';
+
+    const { rows: existing } = await client.query(
+      `select id, title, status, slug, organization_id, origin, published_at
+       from articles where id = $1`,
+      [id],
+    );
+    if (!existing.length) return res.status(404).json({ error: 'Story not found.' });
+    const article = existing[0];
+
+    if (soft) {
+      const { rows } = await client.query(
+        `update articles set
+           hidden = true,
+           status = 'archived',
+           updated_at = now()
+         where id = $1
+         returning id, title, status, hidden`,
+        [id],
+      );
+      return res.json({
+        ok: true,
+        mode: 'soft',
+        item: rows[0],
+        message: 'Story archived and hidden from public feeds.',
+      });
+    }
+
+    await client.query('begin');
+    // Detach FKs that do not cascade
+    await client.query('update generation_jobs set article_id = null where article_id = $1', [id]);
+    // article_corrections cascades; delete article
+    const { rowCount } = await client.query('delete from articles where id = $1', [id]);
+    await client.query('commit');
+
+    if (!rowCount) return res.status(404).json({ error: 'Story not found.' });
+
+    res.json({
+      ok: true,
+      mode: 'hard',
+      deleted: {
+        id: article.id,
+        title: article.title,
+        status: article.status,
+        slug: article.slug,
+      },
+      message: 'Story permanently deleted.',
+    });
+  } catch (err) {
+    try { await client.query('rollback'); } catch { /* ignore */ }
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // POST /api/admin/people/journalists/:id/verify
 router.post('/journalists/:id/verify', async (req, res, next) => {
   try {
