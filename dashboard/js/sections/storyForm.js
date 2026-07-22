@@ -6,7 +6,16 @@ import { buildDeviceAttach } from '../deviceUpload.js';
 function toast(container, message, kind = 'error') {
   const existing = container.querySelector('.dash-toast');
   if (existing) existing.remove();
-  container.prepend(el('div', { class: `dash-toast ${kind}`, text: message }));
+  const node = el('div', { class: `dash-toast ${kind}`, text: message });
+  container.prepend(node);
+  try { node.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch { /* ignore */ }
+}
+
+function liveStoryHref(story) {
+  if (!story) return null;
+  if (story.internal_url) return story.internal_url;
+  if (story.slug) return `/news/${story.slug}`;
+  return null;
 }
 
 export async function render(container, ctx, { id }) {
@@ -36,10 +45,34 @@ export async function render(container, ctx, { id }) {
     story ? el('span', { class: `badge ${statusBadgeClass(story.status)}`, text: story.status.replace(/_/g, ' ') }) : null,
   ].filter(Boolean)));
 
+  // Live status strip so authors know what “published” means
+  if (story?.status === 'published') {
+    const href = liveStoryHref(story);
+    const live = el('div', { class: 'dash-card story-live-banner' });
+    live.appendChild(el('p', {
+      style: 'margin:0 0 8px;font-weight:700;',
+      text: 'This story is LIVE on 256 Newsroom.',
+    }));
+    if (href) {
+      live.appendChild(el('a', {
+        href,
+        target: '_blank',
+        rel: 'noopener',
+        text: `Open live page → ${href}`,
+        style: 'font-weight:700;color:var(--gold);',
+      }));
+    }
+    live.appendChild(el('p', {
+      style: 'margin:8px 0 0;color:var(--grey);font-size:12.5px;',
+      text: 'Use “Save changes” to update the live page. Photo/video URLs below are what readers see.',
+    }));
+    wrap.appendChild(live);
+  }
+
   // —— AI drafter (both independent + publisher) ——
   wrap.appendChild(buildAiDrafterCard(wrap));
 
-  const form = el('form', { class: 'dash-form dash-card' });
+  const form = el('form', { class: 'dash-form dash-card', id: 'story-editor-form' });
   form.innerHTML = `
     <label class="full">Title <input name="title" required maxlength="300" value="${escapeHtml(story?.title || '')}"></label>
     <label class="full">Summary <textarea name="summary" rows="2" maxlength="500">${escapeHtml(story?.summary || '')}</textarea></label>
@@ -64,17 +97,24 @@ export async function render(container, ctx, { id }) {
     </label>` : ''}
     <div class="full story-media-block" data-media-slot="image">
       <div class="story-media-label">Story photo</div>
-      <p class="story-media-hint">Attach a photo directly from your phone gallery or computer (large photos up to 100&nbsp;MB). Optional: paste an external URL.</p>
+      <p class="story-media-hint">Tap the button to pick a photo from your phone or computer (up to 100&nbsp;MB). After upload, a preview appears and the image URL is filled automatically — then click Save.</p>
+      <div class="attached-media-preview" data-preview="image" ${story?.image_url ? '' : 'hidden'}>
+        ${story?.image_url ? `<img src="${escapeHtml(story.image_url)}" alt="Story photo preview">` : '<img alt="Story photo preview">'}
+        <p class="attached-media-label">Photo attached — remember to Save.</p>
+      </div>
       <div class="device-attach-host" data-kind="image"></div>
-      <label class="story-url-fallback">Or image URL <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}" placeholder="https://…"></label>
+      <label class="story-url-fallback">Image URL (auto-filled on upload) <input name="imageUrl" type="url" maxlength="1000" value="${escapeHtml(story?.image_url || '')}" placeholder="https://…"></label>
     </div>
     <label>Image credit <input name="imageCredit" maxlength="200" value="${escapeHtml(story?.image_credit || '')}"></label>
     <label class="full">Image caption <input name="imageCaption" maxlength="300" value="${escapeHtml(story?.image_caption || '')}"></label>
     <div class="full story-media-block" data-media-slot="video">
       <div class="story-media-label">Story video</div>
-      <p class="story-media-hint">Attach a video from your device (up to 2&nbsp;GB). The server compresses it for faster playback, then creates a shareable watch URL.</p>
+      <p class="story-media-hint">Attach a video (up to 2&nbsp;GB). It uploads, then the server compresses it. The watch URL is filled when ready — then Save.</p>
+      <div class="attached-media-preview" data-preview="video" ${story?.video_url ? '' : 'hidden'}>
+        <p class="attached-media-label">${story?.video_url ? `Video linked: ${escapeHtml(story.video_url)}` : 'Video attached'}</p>
+      </div>
       <div class="device-attach-host" data-kind="video"></div>
-      <label class="story-url-fallback">Or video URL <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…"></label>
+      <label class="story-url-fallback">Video URL (auto-filled on upload) <input name="videoUrl" type="url" maxlength="1000" value="${escapeHtml(story?.video_url || '')}" placeholder="https://256newsroom.com/media/watch/…"></label>
     </div>
     <label>Tags (comma separated) <input name="tags" value="${escapeHtml((story?.tags || []).join(', '))}"></label>
     <label>External URL (source link) <input name="externalUrl" type="url" maxlength="1000" value="${escapeHtml(story?.external_url || '')}"></label>
@@ -85,23 +125,25 @@ export async function render(container, ctx, { id }) {
   wireDeviceAttach(form, ctx, wrap);
 
   const actions = el('div', { class: 'dash-actions full' });
-  const saveBtn = el('button', { type: 'submit', class: 'secondary', text: story ? 'Save draft' : 'Save draft' });
+  const saveBtn = el('button', {
+    type: 'submit',
+    class: story?.status === 'published' ? '' : 'secondary',
+    text: story?.status === 'published' ? 'Save changes to live story' : 'Save draft',
+  });
   actions.appendChild(saveBtn);
 
-  // Independent journalists publish immediately — no admin review queue.
-  const canAutoPublish = ctx.mode === 'independent' || (ctx.mode === 'org' && ctx.canPublish);
+  const canAutoPublish = ctx.mode === 'independent' || (ctx.mode === 'org' && ctx.canPublish) || ctx.isGlobalAdmin;
   let publishBtn = null;
-  if (canAutoPublish && (!story || story.status !== 'published')) {
+  if (canAutoPublish) {
     publishBtn = el('button', {
       type: 'button',
-      text: story?.status === 'published' ? 'Update & republish' : 'Publish now',
+      text: story?.status === 'published' ? 'Save & keep live' : 'Publish live now',
     });
     actions.appendChild(publishBtn);
-  }
-  if (ctx.mode === 'independent') {
+  } else if (ctx.mode === 'org') {
     actions.appendChild(el('span', {
-      style: 'align-self:center;color:var(--grey);font-size:12px;',
-      text: 'Independent journalists publish live immediately — no admin approval required.',
+      style: 'align-self:center;color:var(--red);font-size:12.5px;font-weight:700;',
+      text: 'Publishing locked: this organization is not approved yet. You can still save drafts and attach media.',
     }));
   }
   form.appendChild(actions);
@@ -128,42 +170,59 @@ export async function render(container, ctx, { id }) {
   }
 
   async function saveStory({ publish }) {
+    if (!form.title.value.trim()) {
+      toast(wrap, 'Title is required.');
+      form.title.focus();
+      return;
+    }
     saveBtn.disabled = true;
     if (publishBtn) publishBtn.disabled = true;
     const payload = buildPayload();
-    if (publish) payload.publish = true;
 
     try {
+      let saved = story;
       if (story) {
-        if (publish && ctx.mode === 'independent') {
-          // patch with publish:true saves + goes live in one request
-          await api.patch(storyPath(ctx, story.id), { ...payload, publish: true });
-          toast(wrap, 'Published live.', 'success');
-          setTimeout(() => render(wrap.parentElement, ctx, { id: story.id }), 600);
-        } else if (publish && ctx.mode === 'org') {
-          await api.patch(storyPath(ctx, story.id), payload);
-          await api.post(`${storyPath(ctx, story.id)}/publish`, {});
-          toast(wrap, 'Published live.', 'success');
-          setTimeout(() => render(wrap.parentElement, ctx, { id: story.id }), 600);
-        } else {
-          await api.patch(storyPath(ctx, story.id), payload);
-          toast(wrap, 'Draft saved.', 'success');
+        const { item } = await api.patch(storyPath(ctx, story.id), payload);
+        saved = item || story;
+        if (publish && saved.status !== 'published') {
+          const pub = await api.post(`${storyPath(ctx, story.id)}/publish`, {});
+          saved = pub.item || saved;
         }
-      } else if (publish && ctx.mode === 'independent') {
-        const { item } = await api.post(storiesBasePath(ctx), { ...payload, publish: true });
-        toast(wrap, 'Published live.', 'success');
-        window.location.hash = `/stories/${item.id}/edit`;
-      } else if (publish && ctx.mode === 'org') {
-        const { item } = await api.post(storiesBasePath(ctx), payload);
-        await api.post(`${storyPath(ctx, item.id)}/publish`, {});
-        toast(wrap, 'Published live.', 'success');
-        window.location.hash = `/stories/${item.id}/edit`;
       } else {
         const { item } = await api.post(storiesBasePath(ctx), payload);
-        window.location.hash = `/stories/${item.id}/edit`;
+        saved = item;
+        if (publish) {
+          try {
+            const pub = await api.post(`${storyPath(ctx, item.id)}/publish`, {});
+            saved = pub.item || item;
+          } catch (pubErr) {
+            // Draft exists; surface publish error clearly
+            window.location.hash = `/stories/${item.id}/edit`;
+            throw pubErr;
+          }
+        }
+      }
+
+      const href = liveStoryHref(saved);
+      if (publish || saved.status === 'published') {
+        toast(wrap, href
+          ? `Saved & live. Open: ${href}`
+          : 'Saved. Story is published.', 'success');
+      } else {
+        toast(wrap, 'Draft saved. Use “Publish live now” when ready.', 'success');
+      }
+
+      if (!story || (publish && saved.status === 'published')) {
+        setTimeout(() => {
+          window.location.hash = `/stories/${saved.id}/edit`;
+          if (story) render(wrap.parentElement || container, ctx, { id: saved.id });
+        }, 500);
+      } else {
+        setTimeout(() => render(wrap.parentElement || container, ctx, { id: saved.id }), 500);
       }
     } catch (err) {
-      toast(wrap, err instanceof ApiError ? err.message : 'Something went wrong.');
+      const msg = err instanceof ApiError ? err.message : 'Something went wrong.';
+      toast(wrap, msg);
     } finally {
       saveBtn.disabled = false;
       if (publishBtn) publishBtn.disabled = false;
@@ -237,8 +296,35 @@ function buildAiDrafterCard(pageWrap) {
   return card;
 }
 
+function setMediaPreview(form, kind, url) {
+  const box = form.querySelector(`.attached-media-preview[data-preview="${kind}"]`);
+  if (!box) return;
+  if (!url) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (kind === 'image') {
+    const img = box.querySelector('img');
+    if (img) {
+      img.src = url;
+      img.onerror = () => { img.alt = 'Preview failed to load — URL may still work after save.'; };
+    }
+    const label = box.querySelector('.attached-media-label');
+    if (label) label.textContent = 'Photo attached — click Save to keep it on the story.';
+  } else {
+    const label = box.querySelector('.attached-media-label');
+    if (label) label.textContent = `Video linked — click Save to keep it on the story. ${url}`;
+  }
+}
+
 function wireDeviceAttach(form, ctx, pageWrap) {
   const orgId = ctx.mode === 'org' && ctx.orgId ? ctx.orgId : null;
+
+  // Live preview when URL fields change (paste)
+  form.imageUrl?.addEventListener('change', () => setMediaPreview(form, 'image', form.imageUrl.value));
+  form.imageUrl?.addEventListener('input', () => setMediaPreview(form, 'image', form.imageUrl.value));
+  form.videoUrl?.addEventListener('change', () => setMediaPreview(form, 'video', form.videoUrl.value));
 
   form.querySelectorAll('.device-attach-host').forEach((host) => {
     const kind = host.getAttribute('data-kind') || 'image';
@@ -249,10 +335,12 @@ function wireDeviceAttach(form, ctx, pageWrap) {
       onUploaded: ({ url, shareUrl, mediaType }) => {
         if (mediaType === 'video' || kind === 'video') {
           form.videoUrl.value = shareUrl || url;
-          toast(pageWrap, 'Video attached from your device.', 'success');
+          setMediaPreview(form, 'video', form.videoUrl.value);
+          toast(pageWrap, 'Video attached. Click “Save changes” / “Save draft” to keep it on this story.', 'success');
         } else {
           form.imageUrl.value = url;
-          toast(pageWrap, 'Photo attached from your device.', 'success');
+          setMediaPreview(form, 'image', url);
+          toast(pageWrap, 'Photo attached. Click “Save changes” / “Save draft” to keep it on this story.', 'success');
         }
       },
     }));

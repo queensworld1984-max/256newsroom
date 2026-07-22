@@ -134,20 +134,33 @@ router.get('/news/:slug', async (req, res, next) => {
     // Breaking-news publishers should not be penalized while they are still the
     // only source covering an event. A validated, independently worded digest is
     // sufficient for indexing; additional publishers enhance the page later.
-    const substantive = story.summary_is_original && wordCount(summary) >= 200 && wordCount(summary) <= 300;
-    const internalCanonical = `${SITE}${story.internal_url}`;
+    // Publisher-authored and independent stories with a real body are first-party
+    // content — always treat as full reports on 256 Newsroom.
+    const isFirstParty = story.origin === 'publisher_authored' || Boolean(story.body && String(story.body).trim().length > 80);
+    const substantive = isFirstParty
+      || (story.summary_is_original && wordCount(summary) >= 200 && wordCount(summary) <= 300);
+    const internalCanonical = `${SITE}${story.internal_url || (story.slug ? `/news/${story.slug}` : '/')}`;
     const platformCanonical = story.origin === 'ecosystem_ai_generated' && story.platform_website_url && story.slug
       ? `${String(story.platform_website_url).replace(/\/$/, '')}/news/${story.slug}`
       : null;
-    const canonical = platformCanonical || (substantive ? internalCanonical : story.original_url);
+    const externalOriginal = story.original_url && /^https?:\/\//i.test(String(story.original_url))
+      ? String(story.original_url)
+      : (story.external_url && /^https?:\/\//i.test(String(story.external_url)) ? String(story.external_url) : null);
+    const canonical = platformCanonical || (substantive || isFirstParty ? internalCanonical : (externalOriginal || internalCanonical));
     const description = summary.slice(0, 160) || `${story.title} — report attributed to ${story.publisher_name}.`;
     const imageUrl = story.image_url || null;
-    const originalUrl = safeUrl(story.original_url);
+    const videoUrl = story.video_url && /^https?:\/\//i.test(String(story.video_url)) ? String(story.video_url) : null;
+    const originalUrl = externalOriginal ? safeUrl(externalOriginal) : null;
     const publisherLogo = story.publisher_logo
       ? `<img src="${safeUrl(story.publisher_logo)}" alt="${escapeHtml(story.publisher_name)} logo">`
       : `<span>${escapeHtml(story.publisher_name.split(/\s+/).map((word) => word[0]).join('').slice(0, 2))}</span>`;
+    const videoBlock = videoUrl
+      ? (videoUrl.includes('/media/watch/') || videoUrl.includes('/media/file/')
+        ? `<div class="story-video"><video controls playsinline preload="metadata" src="${safeUrl(videoUrl.includes('/media/watch/') ? videoUrl.replace('/media/watch/', '/media/file/') : videoUrl)}" style="width:100%;max-height:70vh;background:#000;margin:16px 0;"></video><p><a href="${safeUrl(videoUrl)}" target="_blank" rel="noopener">Open video</a></p></div>`
+        : `<p class="story-video-link"><a href="${safeUrl(videoUrl)}" target="_blank" rel="noopener">Watch video →</a></p>`)
+      : '';
 
-    res.set('Cache-Control', 'public, max-age=120');
+    res.set('Cache-Control', 'public, max-age=60');
     res.status(200).type('html').send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(story.title)} | 256 Newsroom</title>
@@ -161,13 +174,14 @@ router.get('/news/:slug', async (req, res, next) => {
 <script type="application/ld+json">${storyJsonLd(story, canonical, description, imageUrl)}</script>
 <link rel="stylesheet" href="/story.css?v=20260722-dm-serif"></head>
 <body><header class="site-head"><a href="/" class="brand"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a></header>
-<main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>Story summary</span></nav>
+<main class="story-shell"><nav class="crumbs"><a href="/">Home</a> / ${story.category_name ? `<a href="/#${escapeHtml(story.category_slug)}">${escapeHtml(story.category_name)}</a> / ` : ''}<span>${isFirstParty ? 'Story' : 'Story summary'}</span></nav>
 <article><div class="story-kicker">${escapeHtml(story.category_name || 'News')}${story.district_name ? ` · ${escapeHtml(story.district_name)}` : ''}</div>
 <h1>${escapeHtml(story.title)}</h1>
 <div class="publisher"><div class="publisher-logo">${publisherLogo}</div><div><strong>${escapeHtml(story.publisher_name)}</strong><span>${story.author ? `By ${escapeHtml(story.author)} · ` : ''}${escapeHtml(formatDate(story.published_at))}</span></div></div>
-${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>Featured image supplied by or retrieved from ${escapeHtml(story.publisher_name)}.</figcaption></figure>` : ''}
+${imageUrl ? `<figure><img src="${safeUrl(imageUrl)}" alt="${escapeHtml(story.title)}" decoding="async" fetchpriority="high"><figcaption>${escapeHtml(story.image_caption || story.image_credit || `Image · ${story.publisher_name}`)}</figcaption></figure>` : ''}
+${videoBlock}
 <section class="summary"><h2>${story.body ? 'Full report' : 'What the report says'}</h2>${story.body ? renderArticleBody(story.body) : renderSummary(summary || 'A substantive summary is not yet available. Use the publisher link below to read the complete report.')}</section>
-<a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>
+${originalUrl ? `<a class="original-button" href="${originalUrl}" target="_blank" rel="noopener sponsored">Read the full report at ${escapeHtml(story.publisher_name)} →</a>` : ''}
 <section><h2>Other publishers covering this story</h2>${renderCoverage(coverageResult.rows)}</section>
 <section><h2>Related reporting</h2>${renderRelated(relatedResult.rows)}</section>
 </article></main><footer class="story-footer"><a href="/"><img src="/assets/logos/256-newsroom.png" alt="256 Newsroom — Uganda's Digital News Infrastructure"></a><p>256 Newsroom aggregates and attributes reporting. Complete articles remain with their original publishers.</p></footer></body></html>`);
