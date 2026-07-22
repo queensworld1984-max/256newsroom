@@ -37,7 +37,8 @@ Strict rules:
 If there is enough information, respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["...","..."],"disclosure":"...","callToAction":"..."}
 - summary: one or two sentences, under 300 characters.
-- body: 1,100-1,600 words using exactly these markdown sections in this order:
+- body: EVERY 256 AI Systems / ecosystem AI article must be the SAME length band — target about 1,250 words, always between 1,150 and 1,350 words (never shorter stubs, never padded essays past 1,350).
+- body must use exactly these markdown sections in this order:
   ## The problem on the ground
   ## What <platform name> offers
   ## How the service fills the gap
@@ -67,7 +68,7 @@ async function generateArticleFromEvidence({ platformName, websiteUrl, evidence,
     String(evidence.raw_text_snapshot || '').slice(0, EVIDENCE_LIMIT),
   ].filter(Boolean).join('\n');
 
-  const { data } = await chatJson({ system: GENERATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
+  const { data } = await chatJson({ system: GENERATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 120000 });
   return data;
 }
 
@@ -96,11 +97,11 @@ async function validateArticleClaims({ body, headline, summary, sourceText }) {
     `Body: ${body}`,
   ].join('\n');
 
-  const { data } = await chatJson({ system: VALIDATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
+  const { data } = await chatJson({ system: VALIDATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 90000 });
   return data;
 }
 
-const REPAIR_SYSTEM_PROMPT = `You repair a 256 Newsroom service article after fact-checking. Rewrite only what is needed to remove or qualify every listed unsupported claim while retaining a persuasive, useful and complete article. Use only the supplied trusted context and official evidence for platform facts. Preserve the required section structure, supported features, practical problem statement, category-level comparison, Uganda relevance, disclosure and call to action. Never solve a verification issue by inventing replacement detail.
+const REPAIR_SYSTEM_PROMPT = `You repair a 256 Newsroom service article after fact-checking or length review. Rewrite only what is needed to remove or qualify every listed unsupported claim and to hit the required length band while retaining a persuasive, useful and complete article. Use only the supplied trusted context and official evidence for platform facts. Preserve the required section structure, supported features, practical problem statement, category-level comparison, Uganda relevance, disclosure and call to action. Never solve a verification issue by inventing replacement detail. Body length must be 1,150–1,350 words (target ~1,250) for every 256 ecosystem AI article.
 
 Respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["..."],"disclosure":"...","callToAction":"..."}`;
@@ -121,11 +122,25 @@ const REQUIRED_BODY_SECTIONS = [
   'Why this matters for Uganda',
 ];
 
+// All ecosystem AI articles share one fixed length band so platform coverage feels uniform.
+const ECOSYSTEM_TARGET_WORDS = 1250;
+const ECOSYSTEM_MIN_WORDS = 1150;
+const ECOSYSTEM_MAX_WORDS = 1350;
+
 function articleStructureIssues(draft) {
   const body = String(draft?.body || '');
   const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
   const issues = [];
-  if (wordCount < 1000) issues.push(`Article body is too brief (${wordCount} words); expand it to at least 1,100 words with sourced detail.`);
+  if (wordCount < ECOSYSTEM_MIN_WORDS) {
+    issues.push(
+      `Article body is too brief (${wordCount} words); expand to ${ECOSYSTEM_MIN_WORDS}–${ECOSYSTEM_MAX_WORDS} words (target ~${ECOSYSTEM_TARGET_WORDS}) with sourced detail.`,
+    );
+  }
+  if (wordCount > ECOSYSTEM_MAX_WORDS) {
+    issues.push(
+      `Article body is too long (${wordCount} words); trim to ${ECOSYSTEM_MIN_WORDS}–${ECOSYSTEM_MAX_WORDS} words (target ~${ECOSYSTEM_TARGET_WORDS}) without inventing new claims.`,
+    );
+  }
   for (const section of REQUIRED_BODY_SECTIONS) {
     if (!body.includes(`## ${section}`)) issues.push(`Missing required section beginning "## ${section}".`);
   }
@@ -145,7 +160,7 @@ async function repairArticleClaims({ draft, unsupportedClaims, sourceText }) {
     'Draft to repair:',
     JSON.stringify(draft),
   ].join('\n');
-  const { data } = await chatJson({ system: REPAIR_SYSTEM_PROMPT, user, model: GENERATION_MODEL });
+  const { data } = await chatJson({ system: REPAIR_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 120000 });
   return data;
 }
 

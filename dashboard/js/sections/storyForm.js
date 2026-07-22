@@ -253,38 +253,88 @@ function buildAiDrafterCard(pageWrap) {
   const card = el('div', { class: 'dash-card' });
   card.appendChild(el('h3', { text: 'AI story drafter' }));
   card.appendChild(el('p', {
-    style: 'margin-bottom:10px;color:var(--grey);font-size:13px;',
-    text: 'Paste notes or facts. The drafter fills title, summary, body, and tags — it will not invent events not in your notes. Always edit before publishing.',
+    style: 'margin-bottom:10px;color:var(--grey);font-size:13px;line-height:1.5;',
+    text: 'Paste notes or facts, choose how long the article should be, then generate. The AI expands notes into a full newsroom draft (title, summary, body, tags). It must not invent events, quotes, or figures not in your notes. Always edit before publishing.',
   }));
 
-  const notes = el('textarea', { name: 'aiNotes', rows: '5', placeholder: 'Who / what / where / when — quotes, figures, source names…', style: 'width:100%;' });
+  const lengthRow = el('div', { class: 'ai-length-row' });
+  lengthRow.innerHTML = `
+    <label class="ai-length-label">Article length (words)
+      <select name="aiWordCountPreset" id="ai-word-preset">
+        <option value="short">Short — ~400 words</option>
+        <option value="medium">Medium — ~700 words</option>
+        <option value="long" selected>Long (recommended) — ~1,100 words</option>
+        <option value="feature">Feature — ~1,500 words</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <label class="ai-length-label ai-custom-words" hidden>Custom word count
+      <input type="number" name="aiWordCountCustom" id="ai-word-custom" min="300" max="2500" step="50" value="1100" placeholder="e.g. 900">
+    </label>
+  `;
+  const presetSelect = lengthRow.querySelector('#ai-word-preset');
+  const customWrap = lengthRow.querySelector('.ai-custom-words');
+  const customInput = lengthRow.querySelector('#ai-word-custom');
+  presetSelect.addEventListener('change', () => {
+    customWrap.hidden = presetSelect.value !== 'custom';
+  });
+
+  const notes = el('textarea', {
+    name: 'aiNotes',
+    rows: '6',
+    placeholder: 'Who / what / where / when — quotes, figures, source names, programme lists, context… More detail = smarter draft.',
+    style: 'width:100%;',
+  });
   const actions = el('div', { class: 'dash-actions' });
   const btn = el('button', { type: 'button', class: 'secondary', text: 'Generate draft' });
   const status = el('span', { style: 'color:var(--grey);font-size:12.5px;' });
   actions.appendChild(btn);
   actions.appendChild(status);
+  card.appendChild(lengthRow);
   card.appendChild(notes);
   card.appendChild(actions);
 
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    status.textContent = 'Drafting…';
+    const preset = presetSelect.value;
+    let targetLabel = preset;
+    const payload = {
+      notes: notes.value,
+      wordCountPreset: preset === 'custom' ? undefined : preset,
+    };
+    if (preset === 'custom') {
+      const n = Number(customInput.value);
+      if (!Number.isFinite(n) || n < 300) {
+        toast(pageWrap, 'Enter a custom word count between 300 and 2,500.');
+        btn.disabled = false;
+        return;
+      }
+      payload.wordCount = Math.min(2500, Math.round(n));
+      targetLabel = `~${payload.wordCount} words`;
+    } else {
+      const map = { short: 400, medium: 700, long: 1100, feature: 1500 };
+      targetLabel = `~${map[preset] || 1100} words`;
+    }
+
+    status.textContent = `Drafting ${targetLabel}… this can take up to a minute.`;
     try {
-      const form = pageWrap.querySelector('form.dash-form');
-      const { draft, warning } = await api.post('/ai/draft-story', {
-        notes: notes.value,
-        title: form?.title?.value || '',
-        category: form?.categorySlug?.selectedOptions?.[0]?.textContent || '',
-        district: form?.districtSlug?.selectedOptions?.[0]?.textContent || '',
-      });
+      const form = pageWrap.querySelector('#story-editor-form') || pageWrap.querySelector('form.dash-form');
+      payload.title = form?.title?.value || '';
+      payload.category = form?.categorySlug?.selectedOptions?.[0]?.textContent || '';
+      payload.district = form?.districtSlug?.selectedOptions?.[0]?.textContent || '';
+
+      const { draft, warning } = await api.post('/ai/draft-story', payload);
       if (form) {
         if (draft.title) form.title.value = draft.title;
         if (draft.summary) form.summary.value = draft.summary;
         if (draft.body) form.body.value = draft.body;
         if (draft.tags?.length && form.tags) form.tags.value = draft.tags.join(', ');
       }
-      status.textContent = warning || 'Draft applied — review carefully.';
-      toast(pageWrap, warning || 'AI draft applied to the form.', warning ? 'error' : 'success');
+      const wc = draft.wordCount || (draft.body || '').trim().split(/\s+/).filter(Boolean).length;
+      const msg = warning
+        || `Draft applied (~${wc} words; target ${draft.targetWords || targetLabel}). Review carefully.`;
+      status.textContent = msg;
+      toast(pageWrap, msg, warning ? 'error' : 'success');
     } catch (err) {
       status.textContent = '';
       toast(pageWrap, err instanceof ApiError ? err.message : 'AI draft failed.');

@@ -8,7 +8,7 @@
 // gpt-5.5 is a reasoning-tier model and only supports the default
 // temperature (1) — passing any other value is rejected outright, so it's
 // omitted entirely rather than hardcoded to 1.
-async function chatJson({ system, user, model = 'gpt-5.5' }) {
+async function chatJson({ system, user, model = 'gpt-5.5', timeoutMs = 60000 }) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not configured.');
   }
@@ -27,7 +27,8 @@ async function chatJson({ system, user, model = 'gpt-5.5' }) {
         { role: 'user', content: user },
       ],
     }),
-    signal: AbortSignal.timeout(60000),
+    // Long-form journalist drafts need more than 60s; ecosystem pieces also.
+    signal: AbortSignal.timeout(Math.max(15000, Number(timeoutMs) || 60000)),
   });
 
   const body = await res.json();

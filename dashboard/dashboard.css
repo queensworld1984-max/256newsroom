@@ -154,6 +154,9 @@ table.dash-table tr:hover td { background: var(--paper-dim); }
 .attached-media-preview img { display: block; max-height: 240px; object-fit: contain; width: 100%; background: #111; }
 .attached-media-label { color: #eee; font-size: 12px; margin: 0; padding: 8px 10px; word-break: break-all; }
 .story-live-banner { border-left: 4px solid #16783c; }
+.ai-length-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.ai-length-label { color: var(--grey); display: grid; font-family: "Inconsolata", monospace; font-size: 10.5px; font-weight: 700; gap: 5px; letter-spacing: 0.04em; text-transform: uppercase; min-width: 180px; }
+.ai-length-label select, .ai-length-label input { font: inherit; text-transform: none; letter-spacing: 0; font-family: inherit; font-weight: 500; }
 
 @media (max-width: 900px) {
   .onboard-grid { grid-template-columns: 1fr; }
