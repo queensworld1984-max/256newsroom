@@ -1,4 +1,4 @@
-import { api, ApiError, uploadFile } from '../api.js';
+import { api, ApiError } from '../api.js';
 import { el, escapeHtml } from '../util.js';
 import { buildDeviceAttach } from '../deviceUpload.js';
 
@@ -91,21 +91,25 @@ export async function render(container, ctx) {
     }
     pubCard.appendChild(imgSection);
 
-    // Name + short URL form
+    // Name + short URL form — name is always shown first and editable for editors
     const form = el('form', { class: 'dash-form' });
-    const canRename = nameChange.canChangeNow !== false;
+    const canRename = Boolean(ctx.isEditor) && nameChange.canChangeNow !== false;
     const nextName = nameChange.nextAllowedAt
       ? new Date(nameChange.nextAllowedAt).toLocaleDateString('en-UG', { dateStyle: 'medium' })
       : null;
 
     form.innerHTML = `
-      <label class="full">Publisher name
-        <input name="name" maxlength="200" value="${escapeHtml(org.name || '')}" ${canRename && ctx.isEditor ? '' : 'disabled'}>
+      <label class="full"><strong>Organization / publisher name</strong>
+        <input name="name" required maxlength="200" value="${escapeHtml(org.name || '')}"
+          ${canRename ? '' : 'readonly'}
+          style="font-size:16px;font-weight:600;">
       </label>
       <p class="full" style="margin:0 0 12px;color:var(--grey);font-size:12.5px;">
-        ${canRename
-    ? 'You can change the public name now. After saving, the next rename is allowed in 30 days.'
-    : `Name was changed recently. Next rename available after ${escapeHtml(nextName || '30 days')}.`}
+        ${!ctx.isEditor
+    ? 'Only an owner or editor can change the organization name. Ask your publisher owner, or sign in as owner/editor.'
+    : canRename
+      ? 'Fix spelling here (e.g. Systems not Syatems), then click Save. After a rename, the next change is allowed in 30 days.'
+      : `Name was changed recently. Next rename available after ${escapeHtml(nextName || '30 days')}. Contact a 256 Newsroom admin if you need an urgent correction.`}
       </p>
       <label class="full">Desired public URL
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -142,15 +146,17 @@ export async function render(container, ctx) {
           tagline: raw.tagline,
           shortPath: (raw.shortPath || '').trim() || null,
         };
-        if (canRename && raw.name && raw.name.trim() !== org.name) {
-          body.name = raw.name.trim();
+        // Always send name when the field is editable so typo fixes are not dropped.
+        if (canRename && raw.name) {
+          body.name = String(raw.name).trim();
         }
         try {
           const r = await api.patch(`/publishers/${ctx.orgId}`, body);
           msg.style.color = '#16783c';
+          const newName = r.organization?.name || body.name || org.name;
           msg.textContent = r.publicUrl
-            ? `Saved. Public page: ${r.publicUrl}`
-            : 'Saved.';
+            ? `Saved as “${newName}”. Public page: ${r.publicUrl}`
+            : `Saved as “${newName}”.`;
           setTimeout(() => render(container, ctx), 700);
         } catch (err) {
           msg.style.color = 'var(--red)';

@@ -112,17 +112,20 @@ router.patch('/:orgId(\\d+)', async (req, res, next) => {
       }
     }
 
-    // Display name — at most once every 30 days
+    // Display name — at most once every 30 days (first correction always allowed).
+    // Global admins may always force a rename (typo / legal corrections).
     if (fields.name !== undefined) {
       const newName = String(fields.name || '').trim().slice(0, 200);
       if (!newName) return res.status(400).json({ error: 'Publisher name cannot be empty.' });
       if (newName !== current.name) {
-        if (current.name_changed_at) {
+        const isGlobalAdmin = (req.user?.roles || []).some((r) =>
+          ['super_admin', 'newsroom_admin'].includes(r.key));
+        if (current.name_changed_at && !isGlobalAdmin) {
           const nextAllowed = new Date(current.name_changed_at);
           nextAllowed.setDate(nextAllowed.getDate() + NAME_CHANGE_COOLDOWN_DAYS);
           if (nextAllowed > new Date()) {
             return res.status(429).json({
-              error: `Publisher name can only be changed once every ${NAME_CHANGE_COOLDOWN_DAYS} days. Next change allowed after ${nextAllowed.toISOString().slice(0, 10)}.`,
+              error: `Publisher name can only be changed once every ${NAME_CHANGE_COOLDOWN_DAYS} days. Next change allowed after ${nextAllowed.toISOString().slice(0, 10)}. Ask a 256 Newsroom admin for an urgent spelling fix.`,
               nextAllowedAt: nextAllowed.toISOString(),
               cooldownDays: NAME_CHANGE_COOLDOWN_DAYS,
             });

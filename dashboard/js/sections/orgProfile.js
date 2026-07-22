@@ -33,6 +33,17 @@ export async function render(container, ctx) {
     ? org.areas_of_practice.join(', ')
     : (org.areas_of_practice || '');
   form.innerHTML = `
+    <label class="full"><strong>Organization name</strong>
+      <input name="name" maxlength="200" required value="${escapeHtml(org.name || '')}"
+        ${ctx.isEditor ? '' : 'readonly'}
+        style="font-size:16px;font-weight:600;"
+        placeholder="Correct spelling of your organization">
+    </label>
+    <p class="full" style="margin:0 0 10px;color:var(--grey);font-size:12.5px;">
+      ${ctx.isEditor
+    ? 'You can correct the public name here (once every 30 days). Example: change Syatems → Systems.'
+    : 'Only an owner or editor can rename the organization.'}
+    </p>
     <label class="full">Tagline <input name="tagline" maxlength="200" value="${escapeHtml(org.tagline || '')}" placeholder="Short public line under your name"></label>
     <label class="full">Short description <textarea name="description" rows="3">${escapeHtml(org.description || '')}</textarea></label>
     <label class="full">Biography (full about) <textarea name="biography" rows="6" placeholder="Tell readers who you are, your mission, and editorial focus…">${escapeHtml(org.biography || '')}</textarea></label>
@@ -58,11 +69,13 @@ export async function render(container, ctx) {
       event.preventDefault();
       const raw = Object.fromEntries(new FormData(form).entries());
       try {
-        await api.patch(`/publishers/${ctx.orgId}`, {
+        const payload = {
           ...raw,
           yearsInJournalism: raw.yearsInJournalism === '' ? null : Number(raw.yearsInJournalism),
           foundedYear: raw.foundedYear === '' ? null : Number(raw.foundedYear),
-        });
+        };
+        if (raw.name) payload.name = String(raw.name).trim();
+        await api.patch(`/publishers/${ctx.orgId}`, payload);
         render(container, ctx);
       } catch (err) {
         alert(err instanceof ApiError ? err.message : 'Something went wrong.');
