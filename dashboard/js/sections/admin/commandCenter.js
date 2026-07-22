@@ -1,17 +1,23 @@
 import { api, ApiError } from '../../api.js';
 import { el, formatDate } from '../../util.js';
 
-export async function render(container) {
-  const data = await api.get('/admin/people/summary');
-  const wrap = el('div', { class: 'admin-command' });
+function rolesText(roles) {
+  if (Array.isArray(roles)) return roles.join(', ') || 'none';
+  if (roles == null) return 'none';
+  return String(roles);
+}
 
+export async function render(container) {
+  // Paint a shell immediately so the page never sits on a bare "Loading..." forever.
+  container.innerHTML = '';
+  const wrap = el('div', { class: 'admin-command' });
   wrap.appendChild(el('div', { class: 'admin-hero' }, [
     el('div', {}, [
       el('p', { class: 'admin-kicker', text: '256 Newsroom · Control room' }),
       el('h1', { text: 'Platform operations' }),
       el('p', {
         class: 'admin-lede',
-        text: 'Oversee every account, independent journalist, publisher application, and authored story. This is the admin surface — not a single outlet’s publisher workspace.',
+        text: 'Oversee every account, independent journalist, publisher application, and authored story. This is the admin surface — not a single outlet publisher workspace.',
       }),
     ]),
     el('div', { class: 'admin-hero-actions' }, [
@@ -21,6 +27,22 @@ export async function render(container) {
       el('a', { class: 'admin-pill secondary', href: '#/admin/ecosystem/overview', text: 'Ecosystem automation' }),
     ]),
   ]));
+  const status = el('p', { class: 'dash-empty', text: 'Loading control-room metrics…' });
+  wrap.appendChild(status);
+  container.appendChild(wrap);
+
+  let data;
+  try {
+    data = await api.get('/admin/people/summary');
+  } catch (err) {
+    status.className = 'dash-toast error';
+    status.textContent = err instanceof ApiError
+      ? `Could not load admin metrics: ${err.message}`
+      : 'Could not load admin metrics. Check that you are logged in as newsroom admin.';
+    return;
+  }
+
+  status.remove();
 
   const kpi = el('div', { class: 'admin-kpi-grid' });
   const cards = [
@@ -43,7 +65,6 @@ export async function render(container) {
 
   const grid = el('div', { class: 'admin-split' });
 
-  // Recent signups
   const usersCard = el('div', { class: 'dash-card admin-panel' }, [
     el('div', { class: 'admin-panel-head' }, [
       el('h3', { text: 'Newest accounts' }),
@@ -60,7 +81,7 @@ export async function render(container) {
       tbody.appendChild(el('tr', {}, [
         el('td', { text: u.email }),
         el('td', { text: u.display_name || '—' }),
-        el('td', { text: (u.roles || []).join(', ') || 'none' }),
+        el('td', { text: rolesText(u.roles) }),
         el('td', { text: formatDate(u.created_at) }),
       ]));
     }
@@ -69,7 +90,6 @@ export async function render(container) {
   }
   grid.appendChild(usersCard);
 
-  // Recent journalists
   const jCard = el('div', { class: 'dash-card admin-panel' }, [
     el('div', { class: 'admin-panel-head' }, [
       el('h3', { text: 'Newest journalist profiles' }),
@@ -94,10 +114,8 @@ export async function render(container) {
     jCard.appendChild(table);
   }
   grid.appendChild(jCard);
-
   wrap.appendChild(grid);
 
-  // Pending stories with actions
   const queue = el('div', { class: 'dash-card admin-panel' }, [
     el('div', { class: 'admin-panel-head' }, [
       el('h3', { text: 'Author story queue (needs attention)' }),
@@ -143,10 +161,7 @@ export async function render(container) {
     el('h3', { text: 'About this dashboard' }),
     el('p', {
       style: 'color:var(--grey);font-size:13.5px;line-height:1.55;margin:0;',
-      text: 'If you also own a publisher organization, that workspace is under “My outlet” in the sidebar. Publishing as an unverified outlet stays locked until you approve the application. Independent journalists and admin force-publish are separate paths.',
+      text: 'If you also own a publisher organization, that workspace is under "My outlet" in the sidebar. Publishing as an unverified outlet stays locked until you approve the application. Independent journalists and admin force-publish are separate paths.',
     }),
   ]));
-
-  container.innerHTML = '';
-  container.appendChild(wrap);
 }

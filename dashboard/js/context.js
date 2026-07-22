@@ -12,25 +12,32 @@ export async function loadContext() {
   const orgRole = user.roles.find((r) => ORG_ROLES.has(r.key) && r.organizationId);
   const isIndependentJournalist = user.roles.some((r) => r.key === 'independent_journalist');
 
+  // Global admins default into the control room unless they explicitly switch workspace.
+  if (isGlobalAdmin && !sessionStorage.getItem('nr_workspace')) {
+    sessionStorage.setItem('nr_workspace', 'admin');
+  }
+
   let organization = null;
   let isEditor = isGlobalAdmin;
   if (orgRole) {
-    const { organization: org } = await api.get(`/publishers/${orgRole.organizationId}`);
-    organization = org;
-    isEditor = isEditor || EDITOR_ROLES.has(orgRole.key);
+    try {
+      const { organization: org } = await api.get(`/publishers/${orgRole.organizationId}`);
+      organization = org;
+      isEditor = isEditor || EDITOR_ROLES.has(orgRole.key);
+    } catch (err) {
+      // Never block the whole dashboard if the personal outlet profile fails to load.
+      console.warn('Could not load organization workspace', err);
+      organization = null;
+    }
   }
 
   const orgApproved = Boolean(
     organization && (organization.verification_status === 'approved' || organization.is_official),
   );
 
-  // Workspace mode:
-  // - Global admins land in the platform control room (not a shallow publisher shell).
-  // - They can still open their personal outlet via ?workspace=org when needed.
-  let mode = 'onboarding';
-  const workspaceHint = new URLSearchParams(window.location.hash.split('?')[1] || '').get('workspace')
-    || sessionStorage.getItem('nr_workspace');
+  const workspaceHint = sessionStorage.getItem('nr_workspace');
 
+  let mode = 'onboarding';
   if (isGlobalAdmin && workspaceHint !== 'org' && workspaceHint !== 'independent') {
     mode = 'admin';
   } else if (organization && orgApproved) {
@@ -53,7 +60,7 @@ export async function loadContext() {
     isIndependentJournalist,
     canPublish: isIndependentJournalist || orgApproved || isGlobalAdmin,
     mode,
-    hasOrgWorkspace: Boolean(organization),
+    hasOrgWorkspace: Boolean(organization) || Boolean(orgRole),
   };
 }
 
