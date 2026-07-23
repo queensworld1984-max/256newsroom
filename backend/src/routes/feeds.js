@@ -206,6 +206,20 @@ router.post('/:orgId(\\d+)/feeds/:id/verify/check', loadSubscription, async (req
     if (!verified) return res.status(400).json({ error: 'Verification token not found on the website homepage.' });
 
     await pool.query('update external_feed_subscriptions set domain_verified_at = now(), updated_at = now() where id = $1', [req.subscription.id]);
+
+    try {
+      const { notifyOrgMembers } = require('../notifications');
+      await notifyOrgMembers(req.subscription.organization_id, {
+        kind: 'feed_domain_verified',
+        title: 'Feed website domain verified',
+        body: `Domain verification succeeded for feed “${req.subscription.name || req.subscription.feed_url}”. Auto-publish can unlock when your rules allow it.`,
+        href: '/dashboard/#/external-rss',
+        meta: { feedId: req.subscription.id, feedUrl: req.subscription.feed_url },
+      });
+    } catch (notifyErr) {
+      console.error('[notifications] feed domain verified', notifyErr.message);
+    }
+
     res.json({ ok: true, domainVerifiedAt: new Date().toISOString() });
   } catch (err) {
     next(err);

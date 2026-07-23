@@ -221,6 +221,26 @@ router.post('/:id/website-verification/check', requireAuth, async (req, res, nex
     if (!verified) return res.status(400).json({ error: 'Verification token not found on the website homepage.' });
 
     await pool.query('update publisher_applications set website_verified_at = now() where id = $1', [application.id]);
+
+    // Notify applicant + org members in-dashboard
+    try {
+      const { notifyApplicantAndOrg } = require('../notifications');
+      const { rows: orgRows } = await pool.query(
+        'select name from organizations where id = $1',
+        [application.organization_id],
+      );
+      const orgName = orgRows[0]?.name || 'your outlet';
+      await notifyApplicantAndOrg(application, {
+        kind: 'website_verified',
+        title: 'Website verified',
+        body: `The website for ${orgName} has been verified successfully. You can continue the verification process and publish on 256 Newsroom.`,
+        href: '/dashboard/#/verification',
+        meta: { websiteUrl: application.website_url, applicationId: application.id },
+      });
+    } catch (notifyErr) {
+      console.error('[notifications] website verified', notifyErr.message);
+    }
+
     res.json({ ok: true, websiteVerifiedAt: new Date().toISOString() });
   } catch (err) {
     next(err);
@@ -306,6 +326,25 @@ adminRouter.post('/:id/advance', requireRole('super_admin', 'newsroom_admin'), a
       [application.id, application.stage, nextStage, req.user.id, note],
     );
     await client.query('commit');
+
+    try {
+      const { notifyApplicantAndOrg } = require('../notifications');
+      const { rows: orgRows } = await pool.query('select name from organizations where id = $1', [application.organization_id]);
+      const orgName = orgRows[0]?.name || 'your outlet';
+      const approved = nextStage === 'approved';
+      await notifyApplicantAndOrg(application, {
+        kind: approved ? 'application_approved' : 'application_stage',
+        title: approved ? 'Publisher application approved' : `Application advanced: ${nextStage.replace(/_/g, ' ')}`,
+        body: approved
+          ? `${orgName} is now a verified publisher on 256 Newsroom. You can publish with a verified badge.`
+          : `Your application for ${orgName} moved from ${application.stage.replace(/_/g, ' ')} to ${nextStage.replace(/_/g, ' ')}.${note ? ` Note: ${note}` : ''}`,
+        href: approved ? '/dashboard/#/overview' : '/dashboard/#/verification',
+        meta: { fromStage: application.stage, toStage: nextStage, applicationId: application.id },
+      });
+    } catch (notifyErr) {
+      console.error('[notifications] application advance', notifyErr.message);
+    }
+
     res.json({ ok: true, stage: nextStage });
   } catch (err) {
     await client.query('rollback');
@@ -338,6 +377,22 @@ adminRouter.post('/:id/reject', requireRole('super_admin', 'newsroom_admin'), as
       [application.id, application.stage, req.user.id, note],
     );
     await client.query('commit');
+
+    try {
+      const { notifyApplicantAndOrg } = require('../notifications');
+      const { rows: orgRows } = await pool.query('select name from organizations where id = $1', [application.organization_id]);
+      const orgName = orgRows[0]?.name || 'your outlet';
+      await notifyApplicantAndOrg(application, {
+        kind: 'application_rejected',
+        title: 'Publisher application not approved',
+        body: `The application for ${orgName} was not approved.${note ? ` Reason: ${note}` : ' Contact the newsroom team if you need more detail.'}`,
+        href: '/dashboard/#/verification',
+        meta: { applicationId: application.id },
+      });
+    } catch (notifyErr) {
+      console.error('[notifications] application reject', notifyErr.message);
+    }
+
     res.json({ ok: true, stage: 'rejected' });
   } catch (err) {
     await client.query('rollback');

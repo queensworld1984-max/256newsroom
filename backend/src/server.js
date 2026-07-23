@@ -77,6 +77,7 @@ app.use('/api/publishers', feedRoutes);
 app.use('/api/admin/feeds', feedRoutes.adminRouter);
 app.use('/api/publishers', publisherProfileRoutes);
 app.use('/api/me/stories', meStoryRoutes);
+app.use('/api/me', require('./routes/meNotifications'));
 app.use('/api', taxonomyRoutes);
 app.use('/rss', rssRoutes);
 app.use('/api/admin/ecosystem', ecosystemAdminRoutes);

@@ -18,6 +18,7 @@ import * as verification from './sections/verification.js';
 import * as rssDistribution from './sections/rssDistribution.js';
 import * as settings from './sections/settings.js';
 import * as journalistProfile from './sections/journalistProfile.js';
+import { mountNotifications } from './notifications.js';
 
 import * as adminCommandCenter from './sections/admin/commandCenter.js';
 import * as adminPeople from './sections/admin/people.js';
@@ -216,6 +217,7 @@ function renderTopbar() {
   topbarUserEl.textContent = ctx.user.displayName || ctx.user.email;
   document.body.classList.toggle('is-admin-mode', ctx.mode === 'admin');
   document.title = ctx.mode === 'admin' ? '256 Newsroom — Platform Admin' : '256 Newsroom — Dashboard';
+  mountNotifications(topbarUserEl);
 }
 
 async function route() {
