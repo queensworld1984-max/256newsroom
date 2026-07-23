@@ -162,10 +162,16 @@ export async function render(container, ctx, { id }) {
       text: story?.status === 'published' ? 'Save & keep live' : 'Publish live now',
     });
     actions.appendChild(publishBtn);
+    if (ctx.mode === 'org' && !ctx.orgApproved && ctx.orgHasActiveWebsite) {
+      actions.appendChild(el('span', {
+        style: 'align-self:center;color:var(--grey);font-size:12px;',
+        text: 'Publishing enabled via your active website. Formal verification may still be reviewed by admins.',
+      }));
+    }
   } else if (ctx.mode === 'org') {
     actions.appendChild(el('span', {
       style: 'align-self:center;color:var(--red);font-size:12.5px;font-weight:700;',
-      text: 'Publishing locked: this organization is not approved yet. You can still save drafts and attach media.',
+      text: 'Publishing locked: add an active public website on Organization Profile (or wait for admin verification). Drafts and media still work.',
     }));
   }
   form.appendChild(actions);

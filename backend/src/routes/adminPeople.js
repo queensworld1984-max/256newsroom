@@ -189,15 +189,12 @@ router.post('/stories/:id/publish', async (req, res, next) => {
     );
     if (!before.length) return res.status(404).json({ error: 'Story not found.' });
 
-    // Prefer independent byline when org is not approved so the piece can go live.
+    // Keep org byline when the outlet may publish (verified OR active website).
+    // Only strip org linkage when the outlet cannot publish under current rules.
     if (before[0].organization_id) {
-      const { rows: orgRows } = await pool.query(
-        'select verification_status, is_official from organizations where id = $1',
-        [before[0].organization_id],
-      );
-      const org = orgRows[0];
-      const approved = org && (org.verification_status === 'approved' || org.is_official);
-      if (!approved) {
+      const { canOrgPublish } = require('../storiesCore');
+      const allowed = await canOrgPublish(before[0].organization_id);
+      if (!allowed) {
         let journalistId = before[0].journalist_id;
         if (!journalistId && before[0].created_by_user_id) {
           const { rows: j } = await pool.query(

@@ -68,17 +68,33 @@ async function previewFeed(feedUrl, limit = 10) {
 // domain_verified_at plus an approved org unlocks auto-publish; an admin can
 // also unlock it per-feed via admin_auto_publish_override regardless of org
 // verification status.
+function orgMayAutoPublish(org) {
+  if (!org || org.active === false) return false;
+  if (org.verification_status === 'approved' || org.is_official) return true;
+  const url = String(org.website_url || '').trim();
+  if (!url) return false;
+  try {
+    const parsed = new URL(url.includes('://') ? url : `https://${url}`);
+    return ['http:', 'https:'].includes(parsed.protocol) && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function resolveEffectivePublishMode(rule, subscription, org) {
   if (rule.publish_mode !== 'auto_publish') return 'draft';
-  const orgApproved = org && (org.verification_status === 'approved' || org.is_official);
   const domainAuthorized = Boolean(subscription.domain_verified_at);
   if (subscription.admin_auto_publish_override) return 'auto_publish';
-  if (orgApproved && domainAuthorized) return 'auto_publish';
+  // Domain must still be verified for auto-import; org may publish via website or formal approval.
+  if (orgMayAutoPublish(org) && domainAuthorized) return 'auto_publish';
   return 'draft';
 }
 
 async function importSubscription(subscription) {
-  const { rows: orgRows } = await pool.query('select verification_status, is_official from organizations where id = $1', [subscription.organization_id]);
+  const { rows: orgRows } = await pool.query(
+    'select verification_status, is_official, active, website_url from organizations where id = $1',
+    [subscription.organization_id],
+  );
   const org = orgRows[0];
   const { rows: ruleRows } = await pool.query('select * from feed_import_rules where subscription_id = $1 and active = true limit 1', [subscription.id]);
   const rule = ruleRows[0] || { content_mode: 'headline_summary_image', category_id: null, district_id: null, publish_mode: 'draft' };

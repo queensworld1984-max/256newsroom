@@ -19,7 +19,7 @@ export async function render(container, ctx) {
 
   const formCard = el('div', { class: 'dash-card' }, [
     el('h3', { text: 'Connect a feed' }),
-    el('p', { style: 'margin:8px 0 12px;color:var(--grey);font-size:12.5px;', text: 'New feeds always start in draft mode. You can turn on auto-publish afterward once your organization is approved and the feed’s website is domain-verified.' }),
+    el('p', { style: 'margin:8px 0 12px;color:var(--grey);font-size:12.5px;', text: 'New feeds start in draft mode. Auto-publish is available once your domain is verified and your outlet has an active website (or is formally verified by admins).' }),
   ]);
   const form = el('form', { class: 'dash-form' });
   form.innerHTML = `

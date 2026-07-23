@@ -34,18 +34,31 @@ export async function loadContext() {
   const orgApproved = Boolean(
     organization && (organization.verification_status === 'approved' || organization.is_official),
   );
+  // Publishers with an active website may post immediately; formal verification is admin/AI-driven.
+  const orgHasActiveWebsite = (() => {
+    const url = String(organization?.website_url || '').trim();
+    if (!url) return false;
+    try {
+      const parsed = new URL(url.includes('://') ? url : `https://${url}`);
+      return ['http:', 'https:'].includes(parsed.protocol) && Boolean(parsed.hostname);
+    } catch {
+      return false;
+    }
+  })();
+  const orgCanPublish = Boolean(
+    organization && organization.active !== false
+    && (orgApproved || orgHasActiveWebsite),
+  );
 
   const workspaceHint = sessionStorage.getItem('nr_workspace');
 
   let mode = 'onboarding';
   if (isGlobalAdmin && workspaceHint !== 'org' && workspaceHint !== 'independent') {
     mode = 'admin';
-  } else if (organization && orgApproved) {
+  } else if (organization) {
     mode = 'org';
   } else if (isIndependentJournalist) {
     mode = 'independent';
-  } else if (organization) {
-    mode = 'org';
   } else if (isGlobalAdmin) {
     mode = 'admin';
   }
@@ -57,8 +70,10 @@ export async function loadContext() {
     organization,
     orgId: orgRole ? orgRole.organizationId : null,
     orgApproved,
+    orgHasActiveWebsite,
+    orgCanPublish,
     isIndependentJournalist,
-    canPublish: isIndependentJournalist || orgApproved || isGlobalAdmin,
+    canPublish: isIndependentJournalist || orgCanPublish || isGlobalAdmin,
     mode,
     hasOrgWorkspace: Boolean(organization) || Boolean(orgRole),
   };

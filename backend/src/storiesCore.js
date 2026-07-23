@@ -170,10 +170,44 @@ async function approveStory(articleId, approvedByUserId) {
   return rows[0];
 }
 
+function hasActiveWebsite(websiteUrl) {
+  const url = String(websiteUrl || '').trim();
+  if (!url) return false;
+  try {
+    const parsed = new URL(url.includes('://') ? url : `https://${url}`);
+    return ['http:', 'https:'].includes(parsed.protocol) && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Verified badge / official status (admin or formal approval). */
 async function isOrgApproved(organizationId) {
   if (!organizationId) return true; // independent journalists — no org-level gate
-  const { rows } = await pool.query('select verification_status, is_official from organizations where id = $1', [organizationId]);
+  const { rows } = await pool.query(
+    'select verification_status, is_official from organizations where id = $1',
+    [organizationId],
+  );
   return rows[0] && (rows[0].verification_status === 'approved' || rows[0].is_official);
+}
+
+/**
+ * May publish live stories:
+ * - independents: always
+ * - orgs: approved/official OR active public website listed
+ * Verification remains an admin process (e.g. after AI flags activity).
+ */
+async function canOrgPublish(organizationId) {
+  if (!organizationId) return true;
+  const { rows } = await pool.query(
+    `select verification_status, is_official, active, website_url
+     from organizations where id = $1`,
+    [organizationId],
+  );
+  const org = rows[0];
+  if (!org || org.active === false) return false;
+  if (org.verification_status === 'approved' || org.is_official) return true;
+  return hasActiveWebsite(org.website_url);
 }
 
 async function publishStory(articleId) {
@@ -184,12 +218,14 @@ async function publishStory(articleId) {
   const article = rows[0];
   if (!article) throw Object.assign(new Error('Story not found.'), { status: 404 });
 
-  // Independent journalist stories (no organization) publish immediately — no admin gate.
-  // Organization stories still require the outlet to be approved / official.
+  // Independent journalist stories (no organization) publish immediately.
+  // Orgs may publish when verified/official OR when they list an active website.
   if (article.organization_id) {
-    const approved = await isOrgApproved(article.organization_id);
-    if (!approved) {
-      throw Object.assign(new Error('This organization is not yet an approved publisher and cannot publish stories.'), { status: 403 });
+    const allowed = await canOrgPublish(article.organization_id);
+    if (!allowed) {
+      throw Object.assign(new Error(
+        'Add an active public website on your organization profile to start publishing, or wait for admin verification.',
+      ), { status: 403 });
     }
   }
 
@@ -278,5 +314,7 @@ module.exports = {
   archiveStory,
   addCorrection,
   isOrgApproved,
+  canOrgPublish,
+  hasActiveWebsite,
   STORY_STATUSES,
 };
