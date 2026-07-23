@@ -6,6 +6,11 @@ const { hostnameOf } = require('./contentDiscovery');
 const GENERATION_MODEL = 'gpt-5.5';
 const EVIDENCE_LIMIT = 24000;
 const MAX_REPAIR_ATTEMPTS = 2;
+const MAX_LENGTH_REPAIR_ATTEMPTS = 4;
+/** Long-form ecosystem pieces need more headroom than short API calls. */
+const GENERATION_TIMEOUT_MS = 180000;
+const REPAIR_TIMEOUT_MS = 150000;
+const VALIDATION_TIMEOUT_MS = 120000;
 
 const PERMITTED_CONTENT_TYPES = [
   'Official Update', 'Company Announcement', 'Product Update', 'Platform Guide',
@@ -37,7 +42,7 @@ Strict rules:
 If there is enough information, respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["...","..."],"disclosure":"...","callToAction":"..."}
 - summary: one or two sentences, under 300 characters.
-- body: EVERY 256 AI Systems / ecosystem AI article must be the SAME length band — target about 1,250 words, always between 1,150 and 1,350 words (never shorter stubs, never padded essays past 1,350).
+- body: EVERY 256 AI Systems / ecosystem AI article must be the SAME length band — hard target about 1,220–1,250 words, always between 1,150 and 1,350 words (never shorter stubs, never padded essays past 1,350). Prefer ~1,230 so natural overshoot still stays under 1,350. Count body words carefully before returning JSON; if over 1,350, cut redundancy first rather than adding filler.
 - body must use exactly these markdown sections in this order:
   ## The problem on the ground
   ## What <platform name> offers
@@ -68,7 +73,12 @@ async function generateArticleFromEvidence({ platformName, websiteUrl, evidence,
     String(evidence.raw_text_snapshot || '').slice(0, EVIDENCE_LIMIT),
   ].filter(Boolean).join('\n');
 
-  const { data } = await chatJson({ system: GENERATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 120000 });
+  const { data } = await chatJson({
+    system: GENERATION_SYSTEM_PROMPT,
+    user,
+    model: GENERATION_MODEL,
+    timeoutMs: GENERATION_TIMEOUT_MS,
+  });
   return data;
 }
 
@@ -97,11 +107,23 @@ async function validateArticleClaims({ body, headline, summary, sourceText }) {
     `Body: ${body}`,
   ].join('\n');
 
-  const { data } = await chatJson({ system: VALIDATION_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 90000 });
+  const { data } = await chatJson({
+    system: VALIDATION_SYSTEM_PROMPT,
+    user,
+    model: GENERATION_MODEL,
+    timeoutMs: VALIDATION_TIMEOUT_MS,
+  });
   return data;
 }
 
-const REPAIR_SYSTEM_PROMPT = `You repair a 256 Newsroom service article after fact-checking or length review. Rewrite only what is needed to remove or qualify every listed unsupported claim and to hit the required length band while retaining a persuasive, useful and complete article. Use only the supplied trusted context and official evidence for platform facts. Preserve the required section structure, supported features, practical problem statement, category-level comparison, Uganda relevance, disclosure and call to action. Never solve a verification issue by inventing replacement detail. Body length must be 1,150–1,350 words (target ~1,250) for every 256 ecosystem AI article.
+const REPAIR_SYSTEM_PROMPT = `You repair a 256 Newsroom service article after fact-checking or length review. Rewrite only what is needed to remove or qualify every listed unsupported claim and to hit the required length band while retaining a persuasive, useful and complete article. Use only the supplied trusted context and official evidence for platform facts. Preserve the required section structure, supported features, practical problem statement, category-level comparison, Uganda relevance, disclosure and call to action. Never solve a verification issue by inventing replacement detail. Body length must be 1,150–1,350 words (hard target ~1,230) for every 256 ecosystem AI article. Count body words before returning; if currently over the max, cut repetition and secondary detail first — do not expand.
+
+Respond with exactly this JSON shape and nothing else:
+{"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["..."],"disclosure":"...","callToAction":"..."}`;
+
+const LENGTH_REPAIR_SYSTEM_PROMPT = `You adjust ONLY the length of a 256 Newsroom ecosystem service article. Preserve all required markdown section headings, factual accuracy, disclosure and call to action. Do not invent new claims. Prefer cutting redundancy, repeated benefit phrasing and secondary elaboration when too long; when too short, expand only with detail already supported by the trusted evidence.
+
+Body word count MUST land between 1,150 and 1,350 inclusive (prefer ~1,230). Count carefully. Return the full article JSON.
 
 Respond with exactly this JSON shape and nothing else:
 {"headline":"...","summary":"...","body":"...","contentType":"...","category":"...","tags":["..."],"disclosure":"...","callToAction":"..."}`;
@@ -127,9 +149,13 @@ const ECOSYSTEM_TARGET_WORDS = 1250;
 const ECOSYSTEM_MIN_WORDS = 1150;
 const ECOSYSTEM_MAX_WORDS = 1350;
 
+function countWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
 function articleStructureIssues(draft) {
   const body = String(draft?.body || '');
-  const wordCount = body.trim().split(/\s+/).filter(Boolean).length;
+  const wordCount = countWords(body);
   const issues = [];
   if (wordCount < ECOSYSTEM_MIN_WORDS) {
     issues.push(
@@ -149,10 +175,67 @@ function articleStructureIssues(draft) {
   return issues;
 }
 
+function lengthOnlyIssues(draft) {
+  return articleStructureIssues(draft).filter((issue) => /too (brief|long)/i.test(issue));
+}
+
+/**
+ * Last-resort deterministic trim when the model keeps overshooting the max.
+ * Removes trailing sentences from the longest non-heading paragraphs until
+ * under ECOSYSTEM_MAX_WORDS, without inventing text or dropping ## headings.
+ */
+function trimBodyToMaxWords(body, maxWords = ECOSYSTEM_MAX_WORDS) {
+  let text = String(body || '').trim();
+  if (countWords(text) <= maxWords) return text;
+
+  const blocks = text.split(/\n\n+/);
+  const isHeading = (block) => /^#{1,3}\s+\S/.test(block.trim());
+
+  // Prefer trimming longer body paragraphs first (not headings).
+  for (let safety = 0; safety < 400 && countWords(text) > maxWords; safety += 1) {
+    let longestIdx = -1;
+    let longestLen = 0;
+    for (let i = 0; i < blocks.length; i += 1) {
+      const block = blocks[i];
+      if (!block || isHeading(block)) continue;
+      const len = countWords(block);
+      if (len > longestLen && len > 25) {
+        longestLen = len;
+        longestIdx = i;
+      }
+    }
+    if (longestIdx < 0) break;
+
+    const block = blocks[longestIdx];
+    // Drop the last sentence-like chunk.
+    const trimmed = block
+      .replace(/\s+[^.!?\n]{12,}[.!?]\s*$/u, '')
+      .replace(/\s+[^.!?\n]{20,}\s*$/u, '')
+      .trim();
+    if (!trimmed || trimmed === block.trim() || countWords(trimmed) < 12) {
+      // If we can't shorten further, drop the whole paragraph (keep structure via headings).
+      blocks.splice(longestIdx, 1);
+    } else {
+      blocks[longestIdx] = trimmed;
+    }
+    text = blocks.filter(Boolean).join('\n\n').trim();
+  }
+
+  // Absolute floor: hard-cut words only if still over (rare).
+  if (countWords(text) > maxWords) {
+    const words = text.split(/\s+/);
+    text = words.slice(0, maxWords).join(' ').trim();
+  }
+  return text;
+}
+
 async function repairArticleClaims({ draft, unsupportedClaims, sourceText }) {
+  const wc = countWords(draft?.body);
   const user = [
     'Trusted context and official evidence:',
     String(sourceText || '').slice(0, EVIDENCE_LIMIT),
+    '',
+    `Current body word count: ${wc}. Required band: ${ECOSYSTEM_MIN_WORDS}–${ECOSYSTEM_MAX_WORDS} (target ~${ECOSYSTEM_TARGET_WORDS}, prefer ~1230).`,
     '',
     'Unsupported claims identified by fact-checking:',
     JSON.stringify(unsupportedClaims || []),
@@ -160,8 +243,71 @@ async function repairArticleClaims({ draft, unsupportedClaims, sourceText }) {
     'Draft to repair:',
     JSON.stringify(draft),
   ].join('\n');
-  const { data } = await chatJson({ system: REPAIR_SYSTEM_PROMPT, user, model: GENERATION_MODEL, timeoutMs: 120000 });
+  const { data } = await chatJson({
+    system: REPAIR_SYSTEM_PROMPT,
+    user,
+    model: GENERATION_MODEL,
+    timeoutMs: REPAIR_TIMEOUT_MS,
+  });
   return data;
+}
+
+async function repairArticleLength({ draft, sourceText, issues }) {
+  const wc = countWords(draft?.body);
+  const user = [
+    'Trusted context and official evidence (use only if expanding a short draft):',
+    String(sourceText || '').slice(0, EVIDENCE_LIMIT),
+    '',
+    `CRITICAL LENGTH TASK: Current body word count is ${wc}.`,
+    `You must produce a body with ${ECOSYSTEM_MIN_WORDS}–${ECOSYSTEM_MAX_WORDS} words (prefer ~1230).`,
+    issues?.length ? `Issues: ${issues.join('; ')}` : '',
+    wc > ECOSYSTEM_MAX_WORDS
+      ? `Cut about ${wc - ECOSYSTEM_TARGET_WORDS} words of redundancy. Do not invent claims.`
+      : `Expand with sourced detail only if under minimum; target ~${ECOSYSTEM_TARGET_WORDS}.`,
+    '',
+    'Draft to length-adjust:',
+    JSON.stringify(draft),
+  ].filter(Boolean).join('\n');
+
+  const { data } = await chatJson({
+    system: LENGTH_REPAIR_SYSTEM_PROMPT,
+    user,
+    model: GENERATION_MODEL,
+    timeoutMs: REPAIR_TIMEOUT_MS,
+  });
+  return data;
+}
+
+/**
+ * Keep calling length repair (and finally a deterministic trim) until body
+ * word count is in band or attempts are exhausted.
+ */
+async function ensureBodyLengthBand(draft, sourceText) {
+  let next = draft;
+  for (let attempt = 0; attempt < MAX_LENGTH_REPAIR_ATTEMPTS; attempt += 1) {
+    const issues = lengthOnlyIssues(next);
+    if (!issues.length) return next;
+    next = await repairArticleLength({ draft: next, sourceText, issues });
+    if (!next?.body) throw new Error('Length repair returned an empty body.');
+    if (!PERMITTED_CONTENT_TYPES.includes(next.contentType) && draft.contentType) {
+      next.contentType = draft.contentType;
+    }
+    if (!PERMITTED_CATEGORIES.includes(next.category)) next.category = draft.category || 'ecosystem';
+    // Preserve CTA/disclosure if the model drops them during a pure length edit.
+    if (!next.callToAction && draft.callToAction) next.callToAction = draft.callToAction;
+    if (!next.disclosure && draft.disclosure) next.disclosure = draft.disclosure;
+    if (!next.headline && draft.headline) next.headline = draft.headline;
+    if (!next.summary && draft.summary) next.summary = draft.summary;
+  }
+
+  // Deterministic last resort for overshoot only (never invents; only cuts).
+  if (countWords(next.body) > ECOSYSTEM_MAX_WORDS) {
+    next = {
+      ...next,
+      body: trimBodyToMaxWords(next.body, ECOSYSTEM_MAX_WORDS),
+    };
+  }
+  return next;
 }
 
 async function findExistingArticleByHash(organizationId, contentHash) {
@@ -255,12 +401,27 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
   let validation;
   let articleBody = composeArticleBody(draft);
   try {
-    const initialStructureIssues = articleStructureIssues(draft);
-    if (initialStructureIssues.length) {
-      draft = await repairArticleClaims({ draft, unsupportedClaims: initialStructureIssues, sourceText: validationSource });
-      articleBody = composeArticleBody(draft);
+    // Length first: models routinely overshoot the 1150–1350 band; run a
+    // dedicated length loop (plus deterministic trim) before fact-check.
+    draft = await ensureBodyLengthBand(draft, validationSource);
+
+    const nonLengthStructure = articleStructureIssues(draft).filter((i) => !/too (brief|long)/i.test(i));
+    if (nonLengthStructure.length) {
+      draft = await repairArticleClaims({
+        draft,
+        unsupportedClaims: nonLengthStructure,
+        sourceText: validationSource,
+      });
+      draft = await ensureBodyLengthBand(draft, validationSource);
     }
-    validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
+
+    articleBody = composeArticleBody(draft);
+    validation = await validateArticleClaims({
+      body: articleBody,
+      headline: draft.headline,
+      summary: draft.summary,
+      sourceText: validationSource,
+    });
     for (let attempt = 0; !validation.allSupported && attempt < MAX_REPAIR_ATTEMPTS; attempt += 1) {
       draft = await repairArticleClaims({
         draft,
@@ -271,12 +432,19 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
         throw new Error('Repaired draft was missing required fields or used an invalid content type.');
       }
       if (!PERMITTED_CATEGORIES.includes(draft.category)) draft.category = 'ecosystem';
-      const structureIssues = articleStructureIssues(draft);
+      draft = await ensureBodyLengthBand(draft, validationSource);
+      const structureIssues = articleStructureIssues(draft).filter((i) => !/too (brief|long)/i.test(i));
       if (structureIssues.length) {
         draft = await repairArticleClaims({ draft, unsupportedClaims: structureIssues, sourceText: validationSource });
+        draft = await ensureBodyLengthBand(draft, validationSource);
       }
       articleBody = composeArticleBody(draft);
-      validation = await validateArticleClaims({ body: articleBody, headline: draft.headline, summary: draft.summary, sourceText: validationSource });
+      validation = await validateArticleClaims({
+        body: articleBody,
+        headline: draft.headline,
+        summary: draft.summary,
+        sourceText: validationSource,
+      });
     }
   } catch (err) {
     job = await fail('failed', `Validation or repair call failed: ${err.message}`);
@@ -338,7 +506,14 @@ module.exports = {
   generateArticleFromEvidence,
   validateArticleClaims,
   repairArticleClaims,
+  repairArticleLength,
+  ensureBodyLengthBand,
   composeArticleBody,
   articleStructureIssues,
+  countWords,
+  trimBodyToMaxWords,
   runGenerationJob,
+  ECOSYSTEM_MIN_WORDS,
+  ECOSYSTEM_MAX_WORDS,
+  ECOSYSTEM_TARGET_WORDS,
 };
