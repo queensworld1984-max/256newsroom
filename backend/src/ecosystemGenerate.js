@@ -22,10 +22,78 @@ const PERMITTED_CONTENT_TYPES = [
 
 const PERMITTED_CATEGORIES = ['business', 'ecosystem', 'education', 'health', 'national', 'politics', 'sports', 'consumer-technology', 'world'];
 
+/**
+ * Operator-provided identity that official public pages may brand differently.
+ * Fact-checker and generator must treat these as supported facts so we do not
+ * reject "256 Corporate" merely because 256.co.ug says "256 AI Systems".
+ */
+const ECOSYSTEM_TRUSTED_IDENTITY = {
+  '256-corporate': {
+    newsroomName: '256 Corporate',
+    publicBrands: ['256 AI Systems', '256 Artificial Intelligence Technologies Co. Ltd', '256 Corporate'],
+    legalName: '256 Artificial Intelligence Technologies Co. Ltd',
+    role: 'Main company and corporate arm of 256 AI Systems; built and operates the broader 256 ecosystem of platforms.',
+    services: [
+      'Enterprise software and large-scale systems development',
+      'Websites and digital product engineering',
+      'Cybersecurity and digital protection',
+      'Cloud infrastructure and DevOps',
+      'AI and intelligence tools',
+      'Data analytics and institutional platforms',
+    ],
+    website: 'https://256.co.ug',
+    alternateWebsites: ['https://enterprise.256.co.ug', 'https://256.co.ug'],
+    notes: [
+      'The public website often brands as “256 AI Systems” and does not always print the newsroom name “256 Corporate”.',
+      '“256 Corporate” is the approved 256 Newsroom publisher name for this corporate arm; it is the same organization as the 256 AI Systems enterprise company on 256.co.ug.',
+      'Service lines and institutional positioning on 256.co.ug / enterprise.256.co.ug describe this corporate arm’s offerings.',
+      'Sister consumer/product platforms (Mall, Express, Heart, AI product sites, etc.) are part of the ecosystem this company builds and operates; do not invent metrics for those platforms unless the evidence states them.',
+    ],
+  },
+};
+
+function resolveTrustedIdentity(org) {
+  if (!org) return null;
+  const bySlug = ECOSYSTEM_TRUSTED_IDENTITY[String(org.slug || '').toLowerCase()];
+  if (bySlug) return bySlug;
+  const nameKey = String(org.name || '').trim().toLowerCase();
+  if (nameKey === '256 corporate') return ECOSYSTEM_TRUSTED_IDENTITY['256-corporate'];
+  return null;
+}
+
+function formatTrustedIdentityBlock(org, trusted) {
+  if (!trusted) {
+    return [
+      `Platform name (newsroom): ${org.name}`,
+      `Official platform website: ${org.website_url || '(none)'}`,
+      org.description ? `Platform description: ${org.description}` : '',
+    ].filter(Boolean).join('\n');
+  }
+  return [
+    '=== TRUSTED PLATFORM IDENTITY (operator-approved; treat as supported facts) ===',
+    `Newsroom platform name: ${trusted.newsroomName}`,
+    `Public brand names that refer to the same organization: ${trusted.publicBrands.join('; ')}`,
+    trusted.legalName ? `Legal / registered company name: ${trusted.legalName}` : '',
+    `Role: ${trusted.role}`,
+    `Enterprise service lines (corporate arm): ${trusted.services.join('; ')}`,
+    `Primary official website: ${trusted.website}`,
+    trusted.alternateWebsites?.length
+      ? `Accepted official website aliases: ${trusted.alternateWebsites.join(', ')}`
+      : '',
+    org.description ? `Newsroom description: ${org.description}` : '',
+    ...trusted.notes.map((n) => `Note: ${n}`),
+    'When the scraped page says “256 AI Systems” (or the legal company name) and the article says “256 Corporate”, treat those as the same entity — do not flag as unsupported solely for the name difference.',
+    'Cautious paraphrases of trusted identity (e.g. Uganda-based enterprise digital infrastructure company) are supported when they match the trusted role/services or official page positioning.',
+    '=== END TRUSTED PLATFORM IDENTITY ===',
+  ].filter(Boolean).join('\n');
+}
+
 const GENERATION_SYSTEM_PROMPT = `You are the service-news writer for 256 Newsroom, preparing a substantial, persuasive but factual article about one platform in the 256 Ecosystem. The article should market the service by clearly explaining its usefulness, while maintaining newsroom accuracy. You are given trusted platform identity plus extracted information from the platform's official public website.
 
 Strict rules:
-- Every claim about the platform, its features, prices, availability, coverage, performance or users must be supported by the supplied evidence.
+- Trusted platform identity supplied in the user message is authoritative for the organization's name, role, legal name, website and high-level service lines. Use the newsroom platform name (e.g. “256 Corporate”) even when the public website brands as “256 AI Systems”.
+- Every specific claim about products, prices, availability, coverage, performance, users or one-off events must still be supported by the supplied page evidence (or trusted identity). Do not invent metrics or testimonials.
+- Every claim about the platform, its features, prices, availability, coverage, performance or users must be supported by the supplied evidence or trusted identity.
 - You may frame an everyday service problem in cautious, general language without statistics (for example, that people need a simpler way to find a service). Do not claim how widespread, severe or costly a problem is unless the evidence states it.
 - Comparisons must be category-level and evidence-led: explain how the listed features differ from a conventional or fragmented way of accessing the service. Do not name competitors, claim superiority, or invent competitor features, prices or shortcomings.
 - Never invent subscriber/user counts, revenue or financial figures, partnerships, awards, endorsements, certifications, launches, or events.
@@ -62,13 +130,20 @@ If there is enough information, respond with exactly this JSON shape and nothing
 - disclosure: one sentence noting this was prepared from the official platform's published information.
 - callToAction: one short sentence directing readers to the platform, referencing its real URL.`;
 
-async function generateArticleFromEvidence({ platformName, websiteUrl, evidence, rotationHint }) {
+async function generateArticleFromEvidence({
+  platformName,
+  websiteUrl,
+  evidence,
+  rotationHint,
+  trustedIdentityBlock = null,
+}) {
   const user = [
-    `Platform: ${platformName}`,
-    `Platform website: ${websiteUrl}`,
+    trustedIdentityBlock || `Platform: ${platformName}\nPlatform website: ${websiteUrl}`,
     `Source page title: ${evidence.source_page_title || '(none)'}`,
     `Source page URL: ${evidence.canonical_url || evidence.source_url}`,
     rotationHint ? `Today's suggested content focus (soft preference only — factual availability always overrides this): ${rotationHint}` : '',
+    '',
+    'Write using the newsroom platform name from trusted identity. If the scraped page brands differently (e.g. 256 AI Systems vs 256 Corporate), treat them as the same organization and prefer the newsroom name in the article while reflecting the real website URL.',
     '',
     'Source page text:',
     String(evidence.raw_text_snapshot || '').slice(0, EVIDENCE_LIMIT),
@@ -87,11 +162,14 @@ const VALIDATION_SYSTEM_PROMPT = `You are a precise fact-checker for a service n
 
 Apply these rules:
 - Accept faithful paraphrases and summaries; support does not require the same words or sentence structure.
-- Platform name, official website, official source URL and source-page title in the trusted context are supported facts.
+- Platform name, official website, official source URL, source-page title, legal name, role, and service-line facts in the TRUSTED PLATFORM IDENTITY block are supported facts even when the scraped page uses a different brand string.
+- CRITICAL brand alias rule: “256 Corporate”, “256 AI Systems”, and “256 Artificial Intelligence Technologies Co. Ltd” may refer to the same corporate organization when the trusted identity says so. Do NOT reject an article for using the newsroom name “256 Corporate” if the page only says “256 AI Systems” (or the legal company name), and do not reject “published under / operated by” language that matches the trusted legal or brand names.
+- Descriptions that match trusted identity positioning (e.g. Uganda-based enterprise digital infrastructure / enterprise software, websites, cybersecurity) are supported even if the exact marketing phrase does not appear verbatim on the page.
+- Cybersecurity and other service claims are supported when they match trusted service lines or page evidence about those services; institutional/critical-systems framing is acceptable as cautious category language when the source discusses institutions, governments, banks or similar clients.
 - A cautious, non-quantified statement of an everyday user need is framing, not a factual claim requiring a statistic.
 - A category-level comparison is acceptable only when it contrasts an evidenced feature with a generic process and makes no factual claim about a named competitor.
 - Cautious statements of potential relevance using "can", "could", "may" or "is designed to" are acceptable when the mechanism is an evidenced feature. Claims of measured impact are not.
-- Reject invented specifics, unsupported superlatives, ungrounded availability, or inference presented as established fact.
+- Reject invented specifics, unsupported superlatives, ungrounded availability, or inference presented as established fact — but never reject solely for brand-name alias differences documented in trusted identity.
 - Do not reject a supported claim merely because extracted web text has compressed spacing or navigation labels.
 
 Respond with exactly this JSON shape and nothing else:
@@ -99,7 +177,7 @@ Respond with exactly this JSON shape and nothing else:
 
 async function validateArticleClaims({ body, headline, summary, sourceText }) {
   const user = [
-    'Source text:',
+    'Trusted context and source evidence (includes TRUSTED PLATFORM IDENTITY when provided):',
     String(sourceText || '').slice(0, EVIDENCE_LIMIT),
     '',
     'Generated article:',
@@ -366,13 +444,18 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
     return rows[0];
   }
 
+  const trusted = resolveTrustedIdentity(org);
+  const trustedIdentityBlock = formatTrustedIdentityBlock(org, trusted);
+  const websiteUrl = trusted?.website || org.website_url;
+
   let draft;
   try {
     draft = await generateArticleFromEvidence({
       platformName: org.name,
-      websiteUrl: org.website_url,
+      websiteUrl,
       evidence,
       rotationHint,
+      trustedIdentityBlock,
     });
   } catch (err) {
     job = await fail('failed', `Generation call failed: ${err.message}`);
@@ -390,17 +473,15 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
   }
   if (!PERMITTED_CATEGORIES.includes(draft.category)) draft.category = 'ecosystem';
 
-  // Platform identity, approved official URL and page title are trusted
-  // discovery context, not invented article claims. Include them in the
-  // validation corpus so accurate identity/attribution is not rejected just
-  // because a page's visible <main> omits its brand name or <title>.
+  // Platform identity (including brand aliases) is trusted operator context.
+  // Scraped pages may brand as “256 AI Systems” while newsroom name is
+  // “256 Corporate” — validation must accept that alias mapping.
   const validationSource = [
-    `Platform name: ${org.name}`,
-    `Official platform website: ${org.website_url}`,
-    org.description ? `Platform description: ${org.description}` : '',
+    trustedIdentityBlock,
     `Official source page: ${evidence.canonical_url || evidence.source_url}`,
     `Source page title: ${evidence.source_page_title || ''}`,
     '',
+    '=== SCRAPED PAGE TEXT ===',
     evidence.raw_text_snapshot || '',
   ].filter(Boolean).join('\n');
 
@@ -521,6 +602,9 @@ async function runGenerationJob({ organizationId, sourceEvidenceId, triggeredBy 
 module.exports = {
   PERMITTED_CONTENT_TYPES,
   PERMITTED_CATEGORIES,
+  ECOSYSTEM_TRUSTED_IDENTITY,
+  resolveTrustedIdentity,
+  formatTrustedIdentityBlock,
   generateArticleFromEvidence,
   validateArticleClaims,
   repairArticleClaims,

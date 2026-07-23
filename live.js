@@ -514,7 +514,7 @@ function setEcosystem(items) {
     { platform:'256 Mall', description:'Commerce and verified marketplace services', link:'https://256mall.com' },
     { platform:'256 Express', description:'Transport, delivery and logistics', link:'https://256express.com' },
     { platform:'256 Heart', description:'Dating and matchmaking platform', link:'https://256heart.com' },
-    { platform:'256 Corporate', description:'Business, talent and technology services', link:'https://enterprise.256.co.ug' },
+    { platform:'256 Corporate', description:'Main 256 AI Systems company — enterprise software, websites, cybersecurity', link:'https://256.co.ug' },
     { platform:'256Shield', description:'Cybersecurity and digital protection', link:'https://shield.256.co.ug' },
     { platform:'256LinkShield', description:'Link and website reputation checking', link:'https://linkshield.256.co.ug' },
   ];
